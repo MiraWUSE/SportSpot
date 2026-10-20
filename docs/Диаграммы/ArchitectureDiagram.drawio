@@ -1,0 +1,125 @@
+<mxfile host="Electron">
+  <diagram name="Страница-1" id="D3Od7IobcYAOyGEbNUZ7">
+    <mxGraphModel dx="1518" dy="832" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="" vertex="1">
+          <mxGeometry height="250" width="360" x="120" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-2" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Presentation Интерфейс приложения" vertex="1">
+          <mxGeometry height="30" width="230" x="130" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-16" edge="1" parent="1" source="KWdeNehBFHvaj3TwTVnY-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="KWdeNehBFHvaj3TwTVnY-4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-3" parent="1" style="html=1;whiteSpace=wrap;" value="Экраны" vertex="1">
+          <mxGeometry height="50" width="110" x="250" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-4" parent="1" style="html=1;whiteSpace=wrap;" value="viewModel&lt;div&gt;UIState&lt;/div&gt;" vertex="1">
+          <mxGeometry height="50" width="110" x="250" y="225" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-6" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="" vertex="1">
+          <mxGeometry height="270" width="360" x="120" y="390" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-7" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="domain Логика" vertex="1">
+          <mxGeometry height="30" width="130" x="120" y="390" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-20" edge="1" parent="1" source="KWdeNehBFHvaj3TwTVnY-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="KWdeNehBFHvaj3TwTVnY-9">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-21" edge="1" parent="1" source="KWdeNehBFHvaj3TwTVnY-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="KWdeNehBFHvaj3TwTVnY-10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-8" parent="1" style="html=1;whiteSpace=wrap;" value="usecase" vertex="1">
+          <mxGeometry height="50" width="110" x="320" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-9" parent="1" style="html=1;whiteSpace=wrap;" value="models" vertex="1">
+          <mxGeometry height="50" width="110" x="320" y="535" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-10" parent="1" style="html=1;whiteSpace=wrap;" value="interface, repository, gps, camera" vertex="1">
+          <mxGeometry height="50" width="110" x="140" y="535" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-11" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="" vertex="1">
+          <mxGeometry height="290" width="450" x="-400" y="390" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-12" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Data Работа с данными" vertex="1">
+          <mxGeometry height="30" width="140" x="-310" y="390" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-24" edge="1" parent="1" source="KWdeNehBFHvaj3TwTVnY-13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="KWdeNehBFHvaj3TwTVnY-10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-26" edge="1" parent="1" source="KWdeNehBFHvaj3TwTVnY-13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="KWdeNehBFHvaj3TwTVnY-14">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-32" edge="1" parent="1" source="KWdeNehBFHvaj3TwTVnY-13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="KWdeNehBFHvaj3TwTVnY-30">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-42" edge="1" parent="1" source="KWdeNehBFHvaj3TwTVnY-13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.25;entryY=0;entryDx=0;entryDy=0;" target="KWdeNehBFHvaj3TwTVnY-40">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="-100" y="535" />
+              <mxPoint x="-112.5" y="535" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-13" parent="1" style="html=1;whiteSpace=wrap;" value="Реализация интерфейсов и репозиториев" vertex="1">
+          <mxGeometry height="50" width="110" x="-110" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-14" parent="1" style="html=1;whiteSpace=wrap;" value="Локальные источники, Room" vertex="1">
+          <mxGeometry height="50" width="110" x="-60" y="525" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-17" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Выбор действия у пользователя" vertex="1">
+          <mxGeometry height="30" width="110" x="190" y="183" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-19" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Вызов сценария" vertex="1">
+          <mxGeometry height="30" width="60" x="390" y="345" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-18" edge="1" parent="1" source="KWdeNehBFHvaj3TwTVnY-4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="KWdeNehBFHvaj3TwTVnY-8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-22" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Использование" vertex="1">
+          <mxGeometry height="30" width="60" x="390" y="488" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-23" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Обращение" vertex="1">
+          <mxGeometry height="30" width="60" x="220" y="488" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-25" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Реализует интерфейсы и репозитории" vertex="1">
+          <mxGeometry height="30" width="90" x="30" y="400" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-35" edge="1" parent="1" source="KWdeNehBFHvaj3TwTVnY-29" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.25;entryDx=0;entryDy=0;" target="KWdeNehBFHvaj3TwTVnY-13">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="-190" y="487.5" />
+              <mxPoint x="-190" y="432.5" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-29" parent="1" style="html=1;whiteSpace=wrap;" value="&lt;div&gt;OverpassApi&lt;/div&gt;" vertex="1">
+          <mxGeometry height="75" width="140" x="-370" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-30" parent="1" style="html=1;whiteSpace=wrap;" value="&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;Supabase&lt;/span&gt;" vertex="1">
+          <mxGeometry height="75" width="140" x="-370" y="557.5" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-36" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="OverpassApi -&amp;gt; Реализацию интерфейсов&lt;div&gt;Предоставляет данные о плщадках&lt;/div&gt;" vertex="1">
+          <mxGeometry height="30" width="300" x="-330" y="225" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-37" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="OpenStreetMap -&amp;gt; Реализацию интерфейсов&lt;div&gt;Предоставляет данные локаций&lt;/div&gt;" vertex="1">
+          <mxGeometry height="30" width="300" x="-325" y="280" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-38" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="SupaBase &amp;lt;- Реализацию интерфейсов&lt;div&gt;Получает и хранит данные&lt;/div&gt;" vertex="1">
+          <mxGeometry height="30" width="300" x="-320" y="345" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-40" parent="1" style="html=1;whiteSpace=wrap;" value="GPS, CameraX" vertex="1">
+          <mxGeometry height="50" width="110" x="-140" y="600" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-44" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Реализацию интерфейсов -&amp;gt; GPS, cameraX&lt;div&gt;Работает с оборудованием&lt;/div&gt;" vertex="1">
+          <mxGeometry height="30" width="300" x="-205" y="690" as="geometry" />
+        </mxCell>
+        <mxCell id="KWdeNehBFHvaj3TwTVnY-45" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Реализацию интерфейсов -&amp;gt; Room&lt;div&gt;Хранит данные локально&lt;/div&gt;" vertex="1">
+          <mxGeometry height="30" width="300" x="-205" y="740" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
