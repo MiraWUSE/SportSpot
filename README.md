@@ -103,7 +103,7 @@
 
 ## Макет дизайна Figma
 - [Figma](https://www.figma.com/design/v3COfj4osGD2BVW9cRv4TU/SportSpot-%E2%80%94-Design-System?node-id=3-3&t=UQBEZMSwYiklGhFR-1)
-- [Интерактивный прототип]() 
+- [Интерактивный прототип](https://www.figma.com/design/2CjXbfqPr2buaQvJbLwsIU/SportSpot-%E2%80%94-%D0%9C%D0%B0%D0%BA%D0%B5%D1%82%D1%8B-%D1%8D%D0%BA%D1%80%D0%B0%D0%BD%D0%BE%D0%B2?node-id=0-1&t=TlOpIlIz9jEJUwGP-1) 
 
 ## Источники данных
 
