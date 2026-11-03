@@ -1,0 +1,1511 @@
+openapi: 3.0.3
+info:
+  title: SportSpot — API серверной части
+  version: 1.0.0
+  description: 'Проектная спецификация API SportSpot. Описывает 12 операций Supabase
+    REST (PostgREST) и двух Edge Functions. Спецификация фиксирует контракт будущей реализации, а не подтверждает
+    доступность сервера. Учётные записи и вход выполняются отдельно через Supabase Auth. Клиент использует только
+    publishable/anon ключ, никогда secret/service_role. Для POST/PATCH ниже предусмотрен Prefer: return=representation.
+    RLS должна обеспечивать доступ только к собственным записям. Для объектов OSM в spots.id используется формат
+    osm:node:12345, для опубликованных пользовательских площадок — community:UUID.'
+servers:
+  - url: https://{projectRef}.supabase.co
+    description: Supabase project URL
+    variables:
+      projectRef:
+        default: your-project-ref
+        description: Идентификатор проекта Supabase
+tags:
+  - name: Поиск
+    description: Поиск площадок во внешнем источнике
+  - name: Площадки
+    description: Сохранённые площадки
+  - name: Отзывы
+    description: Отзывы пользователей
+  - name: Избранное
+    description: Избранные площадки
+  - name: Предложения
+    description: Предложения новых площадок
+  - name: Модерация
+    description: Модерация предложений
+paths:
+  /functions/v1/spots-search-v1:
+    get:
+      tags:
+        - Поиск
+      summary: Поиск спортивных площадок через Overpass API
+      operationId: searchSpots
+      security:
+        - publishableKey: []
+      description: Публичная Edge Function. При реализации настроить доступ по publishable key без пользовательского
+        JWT, проверку координат, кеширование, лимиты и пагинацию. Функция ещё не развернута.
+      parameters:
+        - name: latitude
+          in: query
+          required: true
+          description: Широта
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+          example: 56.32
+        - name: longitude
+          in: query
+          required: true
+          description: Долгота
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+          example: 44.0
+        - name: radius_m
+          in: query
+          required: true
+          description: Радиус поиска в метрах
+          schema:
+            type: integer
+            minimum: 100
+            maximum: 20000
+          example: 3000
+        - name: sport_type
+          in: query
+          required: false
+          description: Вид спорта
+          schema:
+            type: string
+          example: basketball
+        - name: page
+          in: query
+          required: false
+          description: Номер страницы
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          example: 1
+        - name: limit
+          in: query
+          required: false
+          description: Количество на странице
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          example: 20
+      responses:
+        '200':
+          description: Результаты поиска
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpotSearchResult'
+              example:
+                data:
+                  - id: osm:node:12345
+                    name: Спортивная площадка
+                    sport_type: basketball
+                    latitude: 56.32
+                    longitude: 44.0
+                    source: osm
+                page: 1
+                limit: 20
+                has_more: false
+        '400':
+          description: Некорректные параметры или тело запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunctionError'
+              example:
+                code: INVALID_COORDINATES
+                message: Некорректные координаты
+        '429':
+          description: Превышен лимит запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunctionError'
+              example:
+                code: INVALID_COORDINATES
+                message: Некорректные координаты
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunctionError'
+              example:
+                code: INVALID_COORDINATES
+                message: Некорректные координаты
+        '502':
+          description: Ошибка внешнего Overpass API
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunctionError'
+              example:
+                code: INVALID_COORDINATES
+                message: Некорректные координаты
+  /rest/v1/spots:
+    get:
+      tags:
+        - Площадки
+      summary: Получение сохранённых площадок
+      operationId: listSpots
+      security:
+        - publishableKey: []
+      description: Список площадок. Для одной площадки используйте id=eq.osm%3Anode%3A12345. PostgREST может вернуть
+        200 с [] при отсутствии совпадений.
+      parameters:
+        - name: select
+          in: query
+          required: false
+          description: Список полей PostgREST
+          schema:
+            type: string
+          example: id,name,sport_type
+        - name: limit
+          in: query
+          required: false
+          description: Максимальное число строк
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          example: 20
+        - name: offset
+          in: query
+          required: false
+          description: Число пропущенных строк
+          schema:
+            type: integer
+            minimum: 0
+          example: 0
+        - name: order
+          in: query
+          required: false
+          description: Сортировка PostgREST
+          schema:
+            type: string
+          example: name.asc
+        - name: id
+          in: query
+          required: false
+          description: Фильтр PostgREST по полю id, значение с префиксом eq.
+          schema:
+            type: string
+          example: eq.osm:node:12345
+      responses:
+        '200':
+          description: Список площадок
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Spot'
+              example:
+                - id: osm:node:12345
+                  name: Спортивная площадка
+                  sport_type: basketball
+          headers:
+            Content-Range:
+              description: Диапазон и (при запросе count) общее число строк
+              schema:
+                type: string
+        '400':
+          description: Некорректные параметры или тело запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+  /rest/v1/reviews:
+    get:
+      tags:
+        - Отзывы
+      summary: Отзывы о площадке
+      operationId: listReviews
+      security:
+        - publishableKey: []
+      description: При фильтрации указывается spot_id=eq.osm%3Anode%3A12345.
+      parameters:
+        - name: spot_id
+          in: query
+          required: false
+          description: Фильтр PostgREST по полю spot_id, значение с префиксом eq.
+          schema:
+            type: string
+          example: eq.osm:node:12345
+        - name: select
+          in: query
+          required: false
+          description: Список полей PostgREST
+          schema:
+            type: string
+          example: id,name,sport_type
+        - name: limit
+          in: query
+          required: false
+          description: Максимальное число строк
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          example: 20
+        - name: offset
+          in: query
+          required: false
+          description: Число пропущенных строк
+          schema:
+            type: integer
+            minimum: 0
+          example: 0
+      responses:
+        '200':
+          description: Список отзывов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Review'
+              example:
+                - id: 22222222-2222-4222-8222-222222222222
+                  spot_id: osm:node:12345
+                  rating: 5
+                  text: Хорошая площадка
+        '400':
+          description: Некорректные параметры или тело запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+    post:
+      tags:
+        - Отзывы
+      summary: Добавить отзыв
+      operationId: createReview
+      security:
+        - publishableKey: []
+          bearerAuth: []
+      description: Автор автоматически задаётся сервером через auth.uid(); повторный отзыв для той же площадки не
+        допускается.
+      parameters:
+        - name: select
+          in: query
+          required: false
+          description: Поля возвращаемой записи
+          schema:
+            type: string
+          example: id,rating,text
+        - name: Prefer
+          in: header
+          required: true
+          schema:
+            type: string
+            enum:
+              - return=representation
+          description: Чтобы получить сохранённую запись в теле ответа
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewReview'
+            example:
+              spot_id: osm:node:12345
+              rating: 5
+              text: Хорошая площадка
+      responses:
+        '201':
+          description: Отзыв создан, возвращается массив из одной записи
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Review'
+              example:
+                - id: 22222222-2222-4222-8222-222222222222
+                  spot_id: osm:node:12345
+                  rating: 5
+                  text: Хорошая площадка
+        '400':
+          description: Некорректные параметры или тело запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '409':
+          description: Конфликт данных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+    patch:
+      tags:
+        - Отзывы
+      summary: Редактировать свой отзыв
+      operationId: updateReview
+      security:
+        - publishableKey: []
+          bearerAuth: []
+      description: Обязателен фильтр id, RLS разрешает изменение только своего отзыва.
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: Фильтр PostgREST по полю id, значение с префиксом eq.
+          schema:
+            type: string
+          example: eq.22222222-2222-4222-8222-222222222222
+        - name: Prefer
+          in: header
+          required: true
+          schema:
+            type: string
+            enum:
+              - return=representation
+          description: Возвратить изменённую запись
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateReview'
+            example:
+              rating: 4
+              text: Хорошая площадка, но слабое освещение
+      responses:
+        '200':
+          description: Массив изменённых отзывов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Review'
+              example:
+                - id: 22222222-2222-4222-8222-222222222222
+                  spot_id: osm:node:12345
+                  rating: 4
+                  text: Хорошая площадка, но слабое освещение
+        '400':
+          description: Некорректные параметры или тело запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+    delete:
+      tags:
+        - Отзывы
+      summary: Удалить свой отзыв
+      operationId: deleteReview
+      security:
+        - publishableKey: []
+          bearerAuth: []
+      description: Обязателен фильтр по id; RLS ограничивает удаление своим отзывом.
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: Фильтр PostgREST по полю id, значение с префиксом eq.
+          schema:
+            type: string
+          example: eq.22222222-2222-4222-8222-222222222222
+      responses:
+        '204':
+          description: Удаление выполнено; тело отсутствует
+        '400':
+          description: Некорректные параметры или тело запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+  /rest/v1/favorites:
+    get:
+      tags:
+        - Избранное
+      summary: Избранные площадки пользователя
+      operationId: listFavorites
+      security:
+        - publishableKey: []
+          bearerAuth: []
+      description: RLS возвращает только избранное текущего пользователя.
+      parameters:
+        - name: select
+          in: query
+          required: false
+          description: Список полей PostgREST
+          schema:
+            type: string
+          example: id,name,sport_type
+        - name: limit
+          in: query
+          required: false
+          description: Максимальное число строк
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          example: 20
+        - name: offset
+          in: query
+          required: false
+          description: Число пропущенных строк
+          schema:
+            type: integer
+            minimum: 0
+          example: 0
+      responses:
+        '200':
+          description: Избранное пользователя
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Favorite'
+              example:
+                - spot_id: osm:node:12345
+                  created_at: '2026-11-02T10:00:00Z'
+        '400':
+          description: Некорректные параметры или тело запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+    post:
+      tags:
+        - Избранное
+      summary: Добавить площадку в избранное
+      operationId: addFavorite
+      security:
+        - publishableKey: []
+          bearerAuth: []
+      description: user_id назначается сервером; пара (user_id, spot_id) уникальна.
+      parameters:
+        - name: Prefer
+          in: header
+          required: true
+          schema:
+            type: string
+            enum:
+              - return=representation
+          description: Получить созданную запись
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewFavorite'
+            example:
+              spot_id: osm:node:12345
+      responses:
+        '201':
+          description: Площадка добавлена
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Favorite'
+              example:
+                - spot_id: osm:node:12345
+        '400':
+          description: Некорректные параметры или тело запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '409':
+          description: Конфликт данных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+    delete:
+      tags:
+        - Избранное
+      summary: Убрать площадку из избранного
+      operationId: removeFavorite
+      security:
+        - publishableKey: []
+          bearerAuth: []
+      description: Только для текущего пользователя (RLS).
+      parameters:
+        - name: spot_id
+          in: query
+          required: true
+          description: Фильтр PostgREST по полю spot_id, значение с префиксом eq.
+          schema:
+            type: string
+          example: eq.osm:node:12345
+      responses:
+        '204':
+          description: Удаление выполнено; тело отсутствует
+        '400':
+          description: Некорректные параметры или тело запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+  /rest/v1/spot_proposals:
+    get:
+      tags:
+        - Предложения
+      summary: Получить предложения площадок
+      operationId: listSpotProposals
+      security:
+        - publishableKey: []
+          bearerAuth: []
+      description: 'RLS: пользователь видит свои предложения, модератор — доступные ему предложения.'
+      parameters:
+        - name: select
+          in: query
+          required: false
+          description: Список полей PostgREST
+          schema:
+            type: string
+          example: id,name,sport_type
+        - name: limit
+          in: query
+          required: false
+          description: Максимальное число строк
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          example: 20
+        - name: offset
+          in: query
+          required: false
+          description: Число пропущенных строк
+          schema:
+            type: integer
+            minimum: 0
+          example: 0
+        - name: status
+          in: query
+          required: false
+          description: Фильтр PostgREST по полю status, значение с префиксом eq.
+          schema:
+            type: string
+          example: eq.pending
+      responses:
+        '200':
+          description: Список предложений
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SpotProposal'
+              example:
+                - id: 33333333-3333-4333-8333-333333333333
+                  name: Баскетбольная площадка
+                  status: pending
+                  sport_type: basketball
+                  latitude: 56.32
+                  longitude: 44.0
+        '400':
+          description: Некорректные параметры или тело запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+    post:
+      tags:
+        - Предложения
+      summary: Предложить новую площадку
+      operationId: createSpotProposal
+      security:
+        - publishableKey: []
+          bearerAuth: []
+      description: user_id назначается сервером; status по умолчанию pending. Клиент не передаёт решение модератора.
+      parameters:
+        - name: Prefer
+          in: header
+          required: true
+          schema:
+            type: string
+            enum:
+              - return=representation
+          description: Вернуть созданное предложение
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewSpotProposal'
+            example:
+              name: Баскетбольная площадка
+              sport_type: basketball
+              latitude: 56.32
+              longitude: 44.0
+      responses:
+        '201':
+          description: Предложение создано
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SpotProposal'
+              example:
+                - id: 33333333-3333-4333-8333-333333333333
+                  name: Баскетбольная площадка
+                  status: pending
+                  sport_type: basketball
+                  latitude: 56.32
+                  longitude: 44.0
+        '400':
+          description: Некорректные параметры или тело запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '409':
+          description: Конфликт данных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              example:
+                code: '23505'
+                message: duplicate key value violates unique constraint
+                details: null
+                hint: null
+  /functions/v1/moderate-spot-proposal-v1:
+    post:
+      tags:
+        - Модерация
+      summary: Модерация предложения площадки
+      operationId: moderateSpotProposal
+      security:
+        - publishableKey: []
+          bearerAuth: []
+      description: Edge Function проверяет JWT и роль moderator. Одобрение атомарно создаёт spots с id community:UUID
+        и меняет status; отклонение сохраняет reject_reason. Успех — объект JSON.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModerationRequest'
+            example:
+              proposal_id: 33333333-3333-4333-8333-333333333333
+              decision: approved
+      responses:
+        '200':
+          description: Решение применено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationResponse'
+              example:
+                proposal_id: 33333333-3333-4333-8333-333333333333
+                status: approved
+                spot_id: community:44444444-4444-4444-8444-444444444444
+        '400':
+          description: Некорректные параметры или тело запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunctionError'
+              example:
+                code: INVALID_COORDINATES
+                message: Некорректные координаты
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunctionError'
+              example:
+                code: INVALID_COORDINATES
+                message: Некорректные координаты
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunctionError'
+              example:
+                code: INVALID_COORDINATES
+                message: Некорректные координаты
+        '404':
+          description: Ресурс не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunctionError'
+              example:
+                code: INVALID_COORDINATES
+                message: Некорректные координаты
+        '409':
+          description: Конфликт данных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunctionError'
+              example:
+                code: INVALID_COORDINATES
+                message: Некорректные координаты
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunctionError'
+              example:
+                code: INVALID_COORDINATES
+                message: Некорректные координаты
+components:
+  securitySchemes:
+    publishableKey:
+      type: apiKey
+      in: header
+      name: apikey
+      description: Публичный ключ Supabase (sb_publishable_... или legacy anon). Не использовать secret/service_role.
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token пользователя, полученный через Supabase Auth.
+  schemas:
+    Spot:
+      type: object
+      description: Площадка, сохранённая в PostgreSQL
+      properties:
+        id:
+          type: string
+          description: 'SpotId: osm:TYPE:OSM_ID либо community:UUID'
+          example: osm:node:12345
+        name:
+          type: string
+          example: Спортивная площадка
+        sport_type:
+          type: string
+          example: basketball
+        latitude:
+          type: number
+          example: 56.32
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          example: 44.0
+          minimum: -180
+          maximum: 180
+        address:
+          type: string
+          example: Нижний Новгород
+          nullable: true
+        surface:
+          type: string
+          example: asphalt
+          nullable: true
+        lighting:
+          type: boolean
+          description: null — неизвестно
+          nullable: true
+        equipment:
+          type: string
+          nullable: true
+        source:
+          type: string
+          example: osm
+          enum:
+            - osm
+            - community
+        osm_type:
+          type: string
+          nullable: true
+          enum:
+            - node
+            - way
+            - relation
+        osm_id:
+          type: integer
+          format: int64
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - sport_type
+    Review:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 22222222-2222-4222-8222-222222222222
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        spot_id:
+          type: string
+          example: osm:node:12345
+        rating:
+          type: integer
+          example: 5
+          minimum: 1
+          maximum: 5
+        text:
+          type: string
+          example: Хорошая площадка
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - spot_id
+        - rating
+        - text
+    NewReview:
+      type: object
+      required:
+        - spot_id
+        - rating
+        - text
+      properties:
+        spot_id:
+          type: string
+          example: osm:node:12345
+        rating:
+          type: integer
+          example: 5
+          minimum: 1
+          maximum: 5
+        text:
+          type: string
+          example: Хорошая площадка
+      additionalProperties: false
+      description: user_id назначается базой по auth.uid() и не передаётся клиентом.
+    UpdateReview:
+      type: object
+      minProperties: 1
+      properties:
+        rating:
+          type: integer
+          example: 4
+          minimum: 1
+          maximum: 5
+        text:
+          type: string
+          example: Хорошая площадка, но слабое освещение
+      additionalProperties: false
+    Favorite:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        spot_id:
+          type: string
+          example: osm:node:12345
+        created_at:
+          type: string
+          example: '2026-11-02T10:00:00Z'
+          format: date-time
+      required:
+        - spot_id
+    NewFavorite:
+      type: object
+      properties:
+        spot_id:
+          type: string
+          example: osm:node:12345
+      required:
+        - spot_id
+      additionalProperties: false
+      description: user_id берётся из auth.uid()
+    SpotProposal:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 33333333-3333-4333-8333-333333333333
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Баскетбольная площадка
+        sport_type:
+          type: string
+          example: basketball
+        latitude:
+          type: number
+          example: 56.32
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          example: 44.0
+          minimum: -180
+          maximum: 180
+        address:
+          type: string
+          nullable: true
+        surface:
+          type: string
+          nullable: true
+        lighting:
+          type: boolean
+          nullable: true
+        equipment:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          example: pending
+          enum:
+            - pending
+            - approved
+            - rejected
+        reject_reason:
+          type: string
+          nullable: true
+        moderator_id:
+          type: string
+          format: uuid
+          nullable: true
+        reviewed_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - sport_type
+        - latitude
+        - longitude
+        - status
+    NewSpotProposal:
+      type: object
+      required:
+        - name
+        - sport_type
+        - latitude
+        - longitude
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          example: Баскетбольная площадка
+          minLength: 1
+        sport_type:
+          type: string
+          example: basketball
+        latitude:
+          type: number
+          example: 56.32
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          example: 44.0
+          minimum: -180
+          maximum: 180
+        address:
+          type: string
+          nullable: true
+        surface:
+          type: string
+          nullable: true
+        lighting:
+          type: boolean
+          nullable: true
+        equipment:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+      description: user_id берётся из auth.uid(), status по умолчанию pending; клиент не может указывать решение
+        модератора.
+    ModerationRequest:
+      type: object
+      required:
+        - proposal_id
+        - decision
+      additionalProperties: false
+      properties:
+        proposal_id:
+          type: string
+          example: 33333333-3333-4333-8333-333333333333
+          format: uuid
+        decision:
+          type: string
+          example: approved
+          enum:
+            - approved
+            - rejected
+        reason:
+          type: string
+          description: Обязателен для rejected; проверяется в Edge Function.
+    ModerationResponse:
+      type: object
+      required:
+        - proposal_id
+        - status
+      properties:
+        proposal_id:
+          type: string
+          example: 33333333-3333-4333-8333-333333333333
+          format: uuid
+        status:
+          type: string
+          example: approved
+          enum:
+            - approved
+            - rejected
+        spot_id:
+          type: string
+          description: Присутствует только после одобрения
+          example: community:44444444-4444-4444-8444-444444444444
+          nullable: true
+        reject_reason:
+          type: string
+          nullable: true
+    SpotSearchResult:
+      type: object
+      required:
+        - data
+        - page
+        - limit
+        - has_more
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Spot'
+        page:
+          type: integer
+          example: 1
+          minimum: 1
+        limit:
+          type: integer
+          example: 20
+          minimum: 1
+          maximum: 100
+        has_more:
+          type: boolean
+          example: false
+    RestError:
+      type: object
+      properties:
+        code:
+          type: string
+          example: '23505'
+        message:
+          type: string
+          example: duplicate key value violates unique constraint
+        details:
+          type: string
+          nullable: true
+        hint:
+          type: string
+          nullable: true
+      required:
+        - code
+        - message
+    FunctionError:
+      type: object
+      properties:
+        code:
+          type: string
+          example: INVALID_COORDINATES
+        message:
+          type: string
+          example: Некорректные координаты
+      required:
+        - code
+        - message
