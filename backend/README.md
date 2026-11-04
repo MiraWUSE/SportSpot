@@ -144,7 +144,7 @@ SportSpot использует Overpass API для поиска спортивн
 Адрес:
 
 ```text
-https://ВАШ_PROJECT_REF.supabase.co/functions/v1/search-sports-spots-v1
+https://tnqkaamvvxwsimfydurg.supabase.co/functions/v1/search-sports-spots-v1?lat=56.3269&lon=44.0059&radius=1000&sport=all
 ```
 
 Параметры запроса:
