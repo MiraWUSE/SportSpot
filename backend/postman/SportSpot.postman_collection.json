@@ -1,0 +1,168 @@
+{
+  "info": {
+    "_postman_id": "c3a75ea1-6534-4d8a-9e64-510b36fe7616",
+    "name": "SportSpot",
+    "description": "### Welcome to Postman! This is your first collection. \n\nCollections are your starting point for building and testing APIs. You can use this one to:\n\n• Group related requests\n• Test your API in real-world scenarios\n• Document and share your requests\n\nUpdate the name and overview whenever you’re ready to make it yours.\n\n[Learn more about Postman Collections.](https://learning.postman.com/docs/collections/collections-overview/)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "59513347",
+    "_collection_link": "https://go.postman.co/collection/59513347-c3a75ea1-6534-4d8a-9e64-510b36fe7616?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "GET - Search Sports Spots",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "\npm.test(\"Статус ответа 200 OK\", function () {\n    pm.response.to.have.status(200);\n});\n\npm.test(\"Ответ содержит массив площадок\", function () {\n    const data = pm.response.json();\n\n    pm.expect(data.spots).to.be.an(\"array\");\n});\n\npm.test(\"Количество площадок совпадает\", function () {\n    const data = pm.response.json();\n\n    pm.expect(data.count).to.eql(data.spots.length);\n});\n\npm.test(\"Источник данных - Overpass API\", function () {\n    const data = pm.response.json();\n\n    pm.expect(data.source).to.eql(\"Overpass API\");\n});\n"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://tnqkaamvvxwsimfydurg.supabase.co/functions/v1/search-sports-spots-v1?lat=56.3269&lon=44.0059&radius=1000&sport=all",
+          "protocol": "https",
+          "host": [
+            "tnqkaamvvxwsimfydurg",
+            "supabase",
+            "co"
+          ],
+          "path": [
+            "functions",
+            "v1",
+            "search-sports-spots-v1"
+          ],
+          "query": [
+            {
+              "key": "lat",
+              "value": "56.3269"
+            },
+            {
+              "key": "lon",
+              "value": "44.0059"
+            },
+            {
+              "key": "radius",
+              "value": "1000"
+            },
+            {
+              "key": "sport",
+              "value": "all"
+            }
+          ]
+        },
+        "description": "This is a GET request and it is used to \"get\" data from an endpoint. There is no request body for a GET request, but you can use query parameters to help specify the resource you want data on (e.g., in this request, we have `id=1`).\n\nA successful GET response will have a `200 OK` status, and should include some kind of response body - for example, HTML web content or JSON data."
+      },
+      "response": []
+    },
+    {
+      "name": "GET - Invalid Coordinates (400)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "\npm.test(\"Статус ответа 400\", function () {\n    pm.response.to.have.status(400);\n});\n\npm.test(\"Код ошибки INVALID_REQUEST\", function () {\n    const data = pm.response.json();\n\n    pm.expect(data.error.code).to.eql(\"INVALID_REQUEST\");\n});\n\npm.test(\"Ответ содержит request_id\", function () {\n    const data = pm.response.json();\n\n    pm.expect(data.error.request_id).to.be.a(\"string\");\n});\n"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://tnqkaamvvxwsimfydurg.supabase.co/functions/v1/search-sports-spots-v1?lat=999&lon=44.0059&radius=1000&sport=all",
+          "protocol": "https",
+          "host": [
+            "tnqkaamvvxwsimfydurg",
+            "supabase",
+            "co"
+          ],
+          "path": [
+            "functions",
+            "v1",
+            "search-sports-spots-v1"
+          ],
+          "query": [
+            {
+              "key": "lat",
+              "value": "999"
+            },
+            {
+              "key": "lon",
+              "value": "44.0059"
+            },
+            {
+              "key": "radius",
+              "value": "1000"
+            },
+            {
+              "key": "sport",
+              "value": "all"
+            }
+          ]
+        },
+        "description": "This is a GET request and it is used to \"get\" data from an endpoint. There is no request body for a GET request, but you can use query parameters to help specify the resource you want data on (e.g., in this request, we have `id=1`).\n\nA successful GET response will have a `200 OK` status, and should include some kind of response body - for example, HTML web content or JSON data."
+      },
+      "response": []
+    },
+    {
+      "name": "POST - Method Not Allowed (405)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "\npm.test(\"Статус ответа 405\", function () {\n    pm.response.to.have.status(405);\n});\n\npm.test(\"Код ошибки METHOD_NOT_ALLOWED\", function () {\n    const data = pm.response.json();\n\n    pm.expect(data.error.code).to.eql(\"METHOD_NOT_ALLOWED\");\n});\n\npm.test(\"Сообщение Use GET\", function () {\n    const data = pm.response.json();\n\n    pm.expect(data.error.message).to.eql(\"Use GET\");\n});\n"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "https://tnqkaamvvxwsimfydurg.supabase.co/functions/v1/search-sports-spots-v1?lat=999&lon=44.0059&radius=1000&sport=all",
+          "protocol": "https",
+          "host": [
+            "tnqkaamvvxwsimfydurg",
+            "supabase",
+            "co"
+          ],
+          "path": [
+            "functions",
+            "v1",
+            "search-sports-spots-v1"
+          ],
+          "query": [
+            {
+              "key": "lat",
+              "value": "999"
+            },
+            {
+              "key": "lon",
+              "value": "44.0059"
+            },
+            {
+              "key": "radius",
+              "value": "1000"
+            },
+            {
+              "key": "sport",
+              "value": "all"
+            }
+          ]
+        },
+        "description": "This is a GET request and it is used to \"get\" data from an endpoint. There is no request body for a GET request, but you can use query parameters to help specify the resource you want data on (e.g., in this request, we have `id=1`).\n\nA successful GET response will have a `200 OK` status, and should include some kind of response body - for example, HTML web content or JSON data."
+      },
+      "response": []
+    }
+  ]
+}
