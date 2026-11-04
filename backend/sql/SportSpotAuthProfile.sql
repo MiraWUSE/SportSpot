@@ -1,31 +1,36 @@
-begin;
+BEGIN;
 
-create schema if not exists app_private;
-revoke all on schema app_private from public;
+CREATE SCHEMA IF NOT EXISTS app_private;
+REVOKE ALL ON SCHEMA app_private FROM PUBLIC, anon, authenticated, service_role;
 
-create or replace function app_private.create_profile_for_new_auth_user()
-returns trigger
-language plpgsql
-security definer
-set search_path = ''
-as $$
-begin
-  insert into public.profiles (id, name, role)
-  values (
-    new.id,
-    coalesce(left(nullif(btrim(new.raw_user_meta_data ->> 'name'), ''), 80), ''),
+CREATE OR REPLACE FUNCTION app_private.create_profile_for_new_auth_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+BEGIN
+  INSERT INTO public.profiles (id, name, role)
+  VALUES (
+    NEW.id,
+    COALESCE(
+      NULLIF(btrim(NEW.raw_user_meta_data ->> 'name'), ''),
+      NULLIF(btrim(NEW.email), ''),
+      ''
+    ),
     'user'
   )
-  on conflict (id) do nothing;
-  return new;
-end;
-$$;
+  ON CONFLICT (id) DO NOTHING;
+  RETURN NEW;
+END;
+$function$;
 
-revoke all on function app_private.create_profile_for_new_auth_user() from public;
+REVOKE ALL ON FUNCTION app_private.create_profile_for_new_auth_user()
+FROM PUBLIC, anon, authenticated, service_role;
 
-create trigger sportspot_auth_user_created
-after insert on auth.users
-for each row
-execute function app_private.create_profile_for_new_auth_user();
+CREATE TRIGGER sportspot_auth_user_created
+AFTER INSERT ON auth.users
+FOR EACH ROW
+EXECUTE FUNCTION app_private.create_profile_for_new_auth_user();
 
-commit;
+COMMIT;
