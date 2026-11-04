@@ -1,0 +1,4 @@
+project_id = "sportspot-backend"
+
+[functions.moderate-spot-proposal-v1]
+verify_jwt = true
