@@ -13,11 +13,11 @@ function response(body: unknown, status = 200): Response {
   });
 }
 
-function failure(code: string, message: string, status: number): Response {
-  return response({ code, message }, status);
-}
-
 Deno.serve(async (req: Request): Promise<Response> => {
+  const requestId = crypto.randomUUID();
+  const failure = (code: string, message: string, status: number): Response =>
+    response({ error: { code, message, request_id: requestId } }, status);
+
   if (req.method !== "POST") {
     return failure("METHOD_NOT_ALLOWED", "Use POST", 405);
   }
@@ -69,7 +69,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
   };
 
   try {
-    // Validate the user's actual access token using Supabase Auth.
     const authResponse = await fetch(`${URL}/auth/v1/user`, {
       headers: { apikey: SERVICE_KEY, authorization: `Bearer ${token}` },
     });
@@ -81,7 +80,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return failure("UNAUTHORIZED", "Invalid user identity", 401);
     }
 
-    // Roles are server-owned: never use mutable user_metadata or body.role.
     const roleResponse = await fetch(
       `${URL}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=role&limit=1`,
       { headers: adminHeaders },
@@ -94,7 +92,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return failure("FORBIDDEN", "Moderator role required", 403);
     }
 
-    // One database transaction: lock proposal, publish/reject, mark reviewed.
+
     const rpcResponse = await fetch(`${URL}/rest/v1/rpc/moderate_spot_proposal`, {
       method: "POST",
       headers: { ...adminHeaders, "content-type": "application/json" },

@@ -18,13 +18,14 @@ if(lat===null||lon===null||!/^\d+$/.test(r)||Number(r)<100||Number(r)>3000||!SPO
 if(!BASE||!KEY)return err("INTERNAL_ERROR","Service not configured",500);
 const externalKey=Deno.env.get("OVERPASS_CH_KEY");
 if(!externalKey)return err("SERVER_CONFIG_ERROR","Overpass API key is not configured",500);
-const a=Math.round(lat*1000)/1000,b=Math.round(lon*1000)/1000,radius=Math.ceil(Number(r)/500)*500,key="v1:"+a+":"+b+":"+radius+":"+sport;
+
+const radius=Number(r),key="v2:"+lat.toFixed(6)+":"+lon.toFixed(6)+":"+radius+":"+sport;
 try{
 const q=await rpc("spot_search_take_quota",{p_scope:"search-global",p_period:"minute",p_limit:60});if(!q.ok)throw Error("Quota unavailable");if(await q.json()!==true)return err("RATE_LIMITED","Too many requests",429,{"retry-after":"60"});
 const c=await rpc("spot_search_cache_read",{p_key:key});if(!c.ok)throw Error("Cache unavailable");const saved=await c.json();if(saved&&typeof saved==="object"){log(200,"CACHE_HIT",saved.count||0);return send({...saved,cache:"hit"},200,{"x-request-id":id});}
 const outbound=await rpc("spot_search_take_quota",{p_scope:"overpass-outbound",p_period:"minute",p_limit:5});if(!outbound.ok)throw Error("Outbound quota unavailable");if(await outbound.json()!==true)return err("RATE_LIMITED","External API is busy",429,{"retry-after":"60"});
 const daily=await rpc("spot_search_take_quota",{p_scope:"overpass-outbound-daily",p_period:"day",p_limit:500});if(!daily.ok)throw Error("Daily quota unavailable");if(await daily.json()!==true)return err("RATE_LIMITED","Daily external API limit reached",429,{"retry-after":"3600"});
-// Use two independently operated public Overpass instances. Avoid hammering a failing endpoint.
+// Use the configured Overpass.ch provider; failures return a controlled error.
 const endpoints=[
   {name:"overpass-ch",url:"https://api.overpass.ch/v1/interpreter"},
 ];
@@ -39,7 +40,7 @@ for(const ep of endpoints){
         "X-API-Key":externalKey,
         "user-agent":"SportSpot/1.0 (+https://github.com/MiraWUSE/SportSpot; educational sports map app)"
       },
-      body:new URLSearchParams({data:query(a,b,radius,sport)}),
+      body:new URLSearchParams({data:query(lat,lon,radius,sport)}),
       signal:AbortSignal.timeout(18000)
     });
     if(!res.ok){

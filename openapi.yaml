@@ -2,18 +2,13 @@ openapi: 3.0.3
 info:
   title: SportSpot — API серверной части
   version: 1.0.0
-  description: 'Проектная спецификация API SportSpot. Описывает 12 операций Supabase
-    REST (PostgREST) и двух Edge Functions. Спецификация фиксирует контракт будущей реализации, а не подтверждает
-    доступность сервера. Учётные записи и вход выполняются отдельно через Supabase Auth. Клиент использует только
-    publishable/anon ключ, никогда secret/service_role. Для POST/PATCH ниже предусмотрен Prefer: return=representation.
-    RLS должна обеспечивать доступ только к собственным записям. Для объектов OSM в spots.id используется формат
-    osm:node:12345, для опубликованных пользовательских площадок — community:UUID.'
+  description: >-
 servers:
   - url: https://{projectRef}.supabase.co
     description: Supabase project URL
     variables:
       projectRef:
-        default: your-project-ref
+        default: tnqkaamvvxwsimfydurg
         description: Идентификатор проекта Supabase
 tags:
   - name: Поиск
@@ -29,124 +24,155 @@ tags:
   - name: Модерация
     description: Модерация предложений
 paths:
-  /functions/v1/spots-search-v1:
+  /functions/v1/search-sports-spots-v1:
     get:
       tags:
         - Поиск
-      summary: Поиск спортивных площадок через Overpass API
+      summary: Поиск спортивных площадок через Overpass.ch
       operationId: searchSpots
-      security:
-        - publishableKey: []
-      description: Публичная Edge Function. При реализации настроить доступ по publishable key без пользовательского
-        JWT, проверку координат, кеширование, лимиты и пагинацию. Функция ещё не развернута.
+      security: []
+      description: >-
+        Опубликованная публичная Supabase Edge Function (Verify JWT отключён).
+        Для успешного запроса обязательны параметры lat и lon. Параметры radius
+        и sport необязательны. Неизвестные и повторяющиеся параметры запрещены.
+        Результаты кешируются на один час. Ответ может содержать до 100 объектов
+        OpenStreetMap. Постраничной навигации у этой функции нет.
+        Поиск зависит от доступности внешнего Overpass.ch и ограничений вызовов.
       parameters:
-        - name: latitude
+        - name: lat
           in: query
           required: true
-          description: Широта
+          description: Широта, число в диапазоне от -90 до 90 (максимум 6 десятичных знаков)
           schema:
             type: number
             minimum: -90
             maximum: 90
-          example: 56.32
-        - name: longitude
+          example: 56.3269
+        - name: lon
           in: query
           required: true
-          description: Долгота
+          description: Долгота, число в диапазоне от -180 до 180 (максимум 6 десятичных знаков)
           schema:
             type: number
             minimum: -180
             maximum: 180
-          example: 44.0
-        - name: radius_m
+          example: 44.0059
+        - name: radius
           in: query
-          required: true
-          description: Радиус поиска в метрах
+          required: false
+          description: >-
+            Точный радиус поиска в метрах: значение передаётся в Overpass
+            без округления. Координаты также используются без округления.
           schema:
             type: integer
             minimum: 100
-            maximum: 20000
-          example: 3000
-        - name: sport_type
+            maximum: 3000
+            default: 1000
+          example: 1000
+        - name: sport
           in: query
           required: false
           description: Вид спорта
           schema:
             type: string
+            enum: [all, soccer, basketball, volleyball, tennis, fitness]
+            default: all
           example: basketball
-        - name: page
-          in: query
-          required: false
-          description: Номер страницы
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-          example: 1
-        - name: limit
-          in: query
-          required: false
-          description: Количество на странице
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 20
-          example: 20
       responses:
         '200':
-          description: Результаты поиска
+          description: Результаты поиска спортивных площадок
+          headers:
+            X-Request-Id:
+              description: Идентификатор запроса (включая ответы из кеша)
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SpotSearchResult'
               example:
-                data:
+                spots:
                   - id: osm:node:12345
+                    source: osm
+                    osm_type: node
+                    osm_id: 12345
                     name: Спортивная площадка
                     sport_type: basketball
-                    latitude: 56.32
-                    longitude: 44.0
-                    source: osm
-                page: 1
-                limit: 20
-                has_more: false
+                    latitude: 56.3269
+                    longitude: 44.0059
+                    address: null
+                    surface: asphalt
+                    lighting: null
+                    equipment: null
+                count: 1
+                source: Overpass API
+                attribution: © OpenStreetMap contributors
+                cache: miss
         '400':
-          description: Некорректные параметры или тело запроса
+          description: Некорректные, неизвестные или повторяющиеся параметры
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/FunctionError'
               example:
-                code: INVALID_COORDINATES
-                message: Некорректные координаты
+                error:
+                  code: INVALID_REQUEST
+                  message: Invalid coordinates, radius or sport
+                  request_id: 4c59e8fc-1342-4f15-aa3f-4ecc97f0d1c2
+        '405':
+          description: Разрешён только метод GET
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunctionError'
+              example:
+                error:
+                  code: METHOD_NOT_ALLOWED
+                  message: Use GET
+                  request_id: 4c59e8fc-1342-4f15-aa3f-4ecc97f0d1c2
         '429':
           description: Превышен лимит запросов
+          headers:
+            Retry-After:
+              description: Время ожидания в секундах
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/FunctionError'
               example:
-                code: INVALID_COORDINATES
-                message: Некорректные координаты
+                error:
+                  code: RATE_LIMITED
+                  message: Too many requests
+                  request_id: 4c59e8fc-1342-4f15-aa3f-4ecc97f0d1c2
         '500':
-          description: Внутренняя ошибка
+          description: Ошибка конфигурации сервера
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/FunctionError'
               example:
-                code: INVALID_COORDINATES
-                message: Некорректные координаты
-        '502':
-          description: Ошибка внешнего Overpass API
+                error:
+                  code: SERVER_CONFIG_ERROR
+                  message: Overpass API key is not configured
+                  request_id: 4c59e8fc-1342-4f15-aa3f-4ecc97f0d1c2
+        '503':
+          description: Внешний Overpass API или серверные зависимости временно недоступны
+          headers:
+            Retry-After:
+              description: Повторить запрос через заданное число секунд
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/FunctionError'
               example:
-                code: INVALID_COORDINATES
-                message: Некорректные координаты
+                error:
+                  code: UPSTREAM_UNAVAILABLE
+                  message: Sports data providers temporarily unavailable
+                  request_id: 4c59e8fc-1342-4f15-aa3f-4ecc97f0d1c2
   /rest/v1/spots:
     get:
       tags:
@@ -1049,13 +1075,18 @@ paths:
     post:
       tags:
         - Модерация
-      summary: Модерация предложения площадки
+      summary: Одобрение или отклонение предложения площадки
       operationId: moderateSpotProposal
       security:
         - publishableKey: []
           bearerAuth: []
-      description: Edge Function проверяет JWT и роль moderator. Одобрение атомарно создаёт spots с id community:UUID
-        и меняет status; отклонение сохраняет reject_reason. Успех — объект JSON.
+      description: >-
+        Защищённая Edge Function (Verify JWT включён). Требуются JWT пользователя
+        и роль moderator. Сервер проверяет токен, роль из profiles и выполняет
+        атомарную RPC-модерацию. Ошибки, сформированные кодом функции, имеют общий формат
+        {error: {code, message, request_id}}.
+        Внимание: ошибки, сформированные шлюзом Supabase до запуска функции,
+        могут иметь другой формат.
       requestBody:
         required: true
         content:
@@ -1067,7 +1098,7 @@ paths:
               decision: approved
       responses:
         '200':
-          description: Решение применено
+          description: Решение успешно применено
           content:
             application/json:
               schema:
@@ -1075,61 +1106,84 @@ paths:
               example:
                 proposal_id: 33333333-3333-4333-8333-333333333333
                 status: approved
-                spot_id: community:44444444-4444-4444-8444-444444444444
+                spot_id: community:33333333-3333-4333-8333-333333333333
         '400':
-          description: Некорректные параметры или тело запроса
+          description: Неверное JSON-тело или данные запроса
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/FunctionError'
               example:
-                code: INVALID_COORDINATES
-                message: Некорректные координаты
+                error:
+                  code: INVALID_REQUEST
+                  message: Invalid proposal, decision, or rejection reason
+                  request_id: 4c59e8fc-1342-4f15-aa3f-4ecc97f0d1c2
         '401':
-          description: Не авторизован
+          description: Отсутствует или неверен JWT; шлюз Supabase может вернуть свой формат
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/FunctionError'
               example:
-                code: INVALID_COORDINATES
-                message: Некорректные координаты
+                error:
+                  code: UNAUTHORIZED
+                  message: User access token required
+                  request_id: 4c59e8fc-1342-4f15-aa3f-4ecc97f0d1c2
         '403':
-          description: Недостаточно прав
+          description: Пользователь не имеет прав модератора
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/FunctionError'
               example:
-                code: INVALID_COORDINATES
-                message: Некорректные координаты
+                error:
+                  code: FORBIDDEN
+                  message: Moderator role required
+                  request_id: 4c59e8fc-1342-4f15-aa3f-4ecc97f0d1c2
         '404':
-          description: Ресурс не найден
+          description: Предложение площадки не найдено
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/FunctionError'
               example:
-                code: INVALID_COORDINATES
-                message: Некорректные координаты
+                error:
+                  code: PROPOSAL_NOT_FOUND
+                  message: Proposal does not exist
+                  request_id: 4c59e8fc-1342-4f15-aa3f-4ecc97f0d1c2
+        '405':
+          description: Разрешён только метод POST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunctionError'
+              example:
+                error:
+                  code: METHOD_NOT_ALLOWED
+                  message: Use POST
+                  request_id: 4c59e8fc-1342-4f15-aa3f-4ecc97f0d1c2
         '409':
-          description: Конфликт данных
+          description: Заявка уже обработана или обнаружен конфликт
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/FunctionError'
               example:
-                code: INVALID_COORDINATES
-                message: Некорректные координаты
+                error:
+                  code: PROPOSAL_ALREADY_REVIEWED
+                  message: Proposal is already reviewed
+                  request_id: 4c59e8fc-1342-4f15-aa3f-4ecc97f0d1c2
         '500':
-          description: Внутренняя ошибка
+          description: Ошибка внутренней логики/конфигурации сервера
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/FunctionError'
               example:
-                code: INVALID_COORDINATES
-                message: Некорректные координаты
+                error:
+                  code: SERVER_ERROR
+                  message: Moderation failed
+                  request_id: 4c59e8fc-1342-4f15-aa3f-4ecc97f0d1c2
 components:
   securitySchemes:
     publishableKey:
@@ -1455,30 +1509,89 @@ components:
         reject_reason:
           type: string
           nullable: true
+    SearchSpot:
+      type: object
+      description: Объект спортивной площадки, нормализованный из Overpass API
+      required:
+        - id
+        - source
+        - osm_type
+        - osm_id
+        - name
+        - sport_type
+        - latitude
+        - longitude
+        - address
+        - surface
+        - lighting
+        - equipment
+      properties:
+        id:
+          type: string
+          example: osm:node:12345
+        source:
+          type: string
+          enum: [osm]
+        osm_type:
+          type: string
+          enum: [node, way, relation]
+        osm_id:
+          type: integer
+          format: int64
+          example: 12345
+        name:
+          type: string
+          example: Спортивная площадка
+        sport_type:
+          type: string
+          example: basketball
+        latitude:
+          type: number
+          example: 56.3269
+        longitude:
+          type: number
+          example: 44.0059
+        address:
+          type: string
+          nullable: true
+        surface:
+          type: string
+          nullable: true
+        lighting:
+          type: boolean
+          nullable: true
+        equipment:
+          type: string
+          nullable: true
     SpotSearchResult:
       type: object
       required:
-        - data
-        - page
-        - limit
-        - has_more
+        - spots
+        - count
+        - source
+        - attribution
+        - cache
       properties:
-        data:
+        spots:
           type: array
+          maxItems: 100
           items:
-            $ref: '#/components/schemas/Spot'
-        page:
+            $ref: '#/components/schemas/SearchSpot'
+        count:
           type: integer
-          example: 1
-          minimum: 1
-        limit:
-          type: integer
-          example: 20
-          minimum: 1
+          minimum: 0
           maximum: 100
-        has_more:
-          type: boolean
-          example: false
+          example: 1
+        source:
+          type: string
+          enum: [Overpass API]
+        attribution:
+          type: string
+          example: © OpenStreetMap contributors
+        cache:
+          type: string
+          enum: [hit, miss]
+          example: miss
     RestError:
       type: object
       properties:
@@ -1499,13 +1612,24 @@ components:
         - message
     FunctionError:
       type: object
-      properties:
-        code:
-          type: string
-          example: INVALID_COORDINATES
-        message:
-          type: string
-          example: Некорректные координаты
+      description: Ошибка, сформированная кодом Edge Function SportSpot
       required:
-        - code
-        - message
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+            - request_id
+          properties:
+            code:
+              type: string
+              example: INVALID_REQUEST
+            message:
+              type: string
+              example: Invalid coordinates, radius or sport
+            request_id:
+              type: string
+              format: uuid
+              example: 4c59e8fc-1342-4f15-aa3f-4ecc97f0d1c2
