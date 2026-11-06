@@ -1,4 +1,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import {
+  mapModerationRpcError,
+  parseBearerToken,
+  validateModerationBody,
+} from "./moderation-logic.ts";
 
 const URL = Deno.env.get("SUPABASE_URL");
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -26,49 +31,31 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return failure("SERVER_CONFIG_ERROR", "Server is not configured", 500);
   }
 
-  const authorization = req.headers.get("authorization") ?? "";
-  if (!/^Bearer\s+\S+$/i.test(authorization)) {
+  const token = parseBearerToken(req.headers.get("authorization"));
+  if (token === null) {
     return failure("UNAUTHORIZED", "User access token required", 401);
   }
 
-  const token = authorization.replace(/^Bearer\s+/i, "").trim();
-
-  let body: Record<string, unknown>;
+  let parsed: unknown;
   try {
-    const parsed: unknown = await req.json();
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return failure("INVALID_BODY", "Expected a JSON object", 400);
-    }
-    body = parsed as Record<string, unknown>;
+    parsed = await req.json();
   } catch {
     return failure("INVALID_BODY", "Invalid JSON", 400);
   }
 
-  const allowedKeys = new Set(["proposal_id", "decision", "reason"]);
-  if (Object.keys(body).some((key) => !allowedKeys.has(key))) {
-    return failure("INVALID_BODY", "Unknown request fields", 400);
+  const validation = validateModerationBody(parsed);
+  if (!validation.ok) {
+    return failure(validation.code, validation.message, 400);
   }
 
-  const proposalId = body.proposal_id;
-  const decision = body.decision;
-  const reason = body.reason;
-
-  if (
-    typeof proposalId !== "string" ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(proposalId) ||
-    (decision !== "approved" && decision !== "rejected") ||
-    (reason !== undefined && typeof reason !== "string") ||
-    (decision === "rejected" && (typeof reason !== "string" || reason.trim().length === 0 || reason.length > 1000))
-  ) {
-    return failure("INVALID_REQUEST", "Invalid proposal, decision, or rejection reason", 400);
-  }
-
+  const { proposalId, decision, reason } = validation.value;
   const adminHeaders = {
     apikey: SERVICE_KEY,
     authorization: `Bearer ${SERVICE_KEY}`,
   };
 
   try {
+    // Supabase Auth verifies the real user access token.
     const authResponse = await fetch(`${URL}/auth/v1/user`, {
       headers: { apikey: SERVICE_KEY, authorization: `Bearer ${token}` },
     });
@@ -80,6 +67,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return failure("UNAUTHORIZED", "Invalid user identity", 401);
     }
 
+    // The moderator role is read from server-owned profiles, not user input.
     const roleResponse = await fetch(
       `${URL}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=role&limit=1`,
       { headers: adminHeaders },
@@ -92,7 +80,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return failure("FORBIDDEN", "Moderator role required", 403);
     }
 
-
+    // Atomic database operation: approve/reject and mark the proposal reviewed.
     const rpcResponse = await fetch(`${URL}/rest/v1/rpc/moderate_spot_proposal`, {
       method: "POST",
       headers: { ...adminHeaders, "content-type": "application/json" },
@@ -100,27 +88,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
         p_proposal_id: proposalId,
         p_moderator_id: user.id,
         p_decision: decision,
-        p_reason: reason ?? null,
+        p_reason: reason,
       }),
     });
 
     if (!rpcResponse.ok) {
-      const error: { code?: string; message?: string } = await rpcResponse.json().catch(() => ({}));
-      switch (error.message) {
-        case "NOT_MODERATOR":
-          return failure("FORBIDDEN", "Moderator role required", 403);
-        case "PROPOSAL_NOT_FOUND":
-          return failure("PROPOSAL_NOT_FOUND", "Proposal does not exist", 404);
-        case "PROPOSAL_ALREADY_REVIEWED":
-          return failure("PROPOSAL_ALREADY_REVIEWED", "Proposal is already reviewed", 409);
-        case "REASON_REQUIRED":
-        case "INVALID_DECISION":
-          return failure("INVALID_REQUEST", "Invalid moderation request", 400);
-      }
-      if (error.code === "23505") {
-        return failure("CONFLICT", "Conflicting published spot", 409);
-      }
-      return failure("SERVER_ERROR", "Moderation failed", 500);
+      const error: unknown = await rpcResponse.json().catch(() => ({}));
+      const mapped = mapModerationRpcError(error);
+      return failure(mapped.code, mapped.message, mapped.status);
     }
 
     const result: unknown = await rpcResponse.json();
