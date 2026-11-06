@@ -1,11 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { SPORTS, coord, query, convert, makeCacheKey } from "./search-logic.ts";
 const BASE=Deno.env.get("SUPABASE_URL"), KEY=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-const SPORTS=new Set(["all","soccer","basketball","volleyball","tennis","fitness"]);
 const send=(obj:unknown,status=200,extra:Record<string,string>={})=>new Response(JSON.stringify(obj),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store",...extra}});
-function coord(v:string|null,limit:number){if(!v||!/^-?\d{1,3}(\.\d{1,6})?$/.test(v))return null;const n=Number(v);return Math.abs(n)<=limit?n:null;}
 async function rpc(name:string, body:Record<string,unknown>){return fetch(BASE+"/rest/v1/rpc/"+name,{method:"POST",headers:{apikey:KEY!,"authorization":"Bearer "+KEY,"content-type":"application/json"},body:JSON.stringify(body),signal:AbortSignal.timeout(3500)});}
-function query(lat:number,lon:number,radius:number,sport:string){const filter=sport==="all"?'["leisure"="pitch"]':sport==="fitness"?'["leisure"="fitness_station"]':'["leisure"="pitch"]["sport"~"(^|;)'+sport+'(;|$)"]';return '[out:json][timeout:20];(node(around:'+radius+','+lat+','+lon+')'+filter+';way(around:'+radius+','+lat+','+lon+')'+filter+';relation(around:'+radius+','+lat+','+lon+')'+filter+';);out center 100;';}
-function convert(v:unknown){if(!v||typeof v!=="object"||Array.isArray(v))return null;const x=v as Record<string,unknown>;if(!["node","way","relation"].includes(String(x.type))||!Number.isSafeInteger(x.id))return null;const c=(x.center&&typeof x.center==="object"?x.center:x) as Record<string,unknown>;if(typeof c.lat!=="number"||Math.abs(c.lat)>90||typeof c.lon!=="number"||Math.abs(c.lon)>180)return null;const t=(x.tags&&typeof x.tags==="object"?x.tags:{}) as Record<string,unknown>;const str=(k:string)=>typeof t[k]==="string"?String(t[k]).slice(0,250):null;return {id:"osm:"+x.type+":"+x.id,source:"osm",osm_type:x.type,osm_id:x.id,name:str("name")||"Спортивная площадка",sport_type:str("sport")||(t.leisure==="fitness_station"?"fitness":"unspecified"),latitude:c.lat,longitude:c.lon,address:[str("addr:street"),str("addr:housenumber")].filter(Boolean).join(", ")||null,surface:str("surface"),lighting:t.lit==="yes"?true:t.lit==="no"?false:null,equipment:str("fitness_station")};}
 Deno.serve(async(req)=>{
 const id=crypto.randomUUID(),start=Date.now();
 const log=(status:number,code:string,count=0)=>console.log(JSON.stringify({request_id:id,status,code,count,duration_ms:Date.now()-start}));
@@ -18,8 +15,7 @@ if(lat===null||lon===null||!/^\d+$/.test(r)||Number(r)<100||Number(r)>3000||!SPO
 if(!BASE||!KEY)return err("INTERNAL_ERROR","Service not configured",500);
 const externalKey=Deno.env.get("OVERPASS_CH_KEY");
 if(!externalKey)return err("SERVER_CONFIG_ERROR","Overpass API key is not configured",500);
-
-const radius=Number(r),key="v2:"+lat.toFixed(6)+":"+lon.toFixed(6)+":"+radius+":"+sport;
+const radius=Number(r),key=makeCacheKey(lat,lon,radius,sport);
 try{
 const q=await rpc("spot_search_take_quota",{p_scope:"search-global",p_period:"minute",p_limit:60});if(!q.ok)throw Error("Quota unavailable");if(await q.json()!==true)return err("RATE_LIMITED","Too many requests",429,{"retry-after":"60"});
 const c=await rpc("spot_search_cache_read",{p_key:key});if(!c.ok)throw Error("Cache unavailable");const saved=await c.json();if(saved&&typeof saved==="object"){log(200,"CACHE_HIT",saved.count||0);return send({...saved,cache:"hit"},200,{"x-request-id":id});}
