@@ -1,0 +1,91 @@
+name: SportSpot - server tests
+
+on:
+  push:
+    branches:
+      - master
+      - feature/practice-11-server-testing
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+    inputs:
+      run_postman:
+        description: "Run Postman tests against deployed Supabase"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    name: Deno unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Check search Edge Function types
+        run: deno check backend/supabase/functions/search-sports-spots-v1/index.ts
+
+      - name: Check moderation Edge Function types
+        run: deno check backend/supabase/functions/moderate-spot-proposal-v1/index.ts
+
+      - name: Run unit tests
+        run: deno test server/tests/
+
+      - name: Validate Postman collection JSON
+        run: python3 -m json.tool backend/postman/SportSpot.postman_collection.json > /dev/null
+
+  postman-tests:
+    name: Postman API tests (manual)
+    needs: unit-tests
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_postman }}
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check publishable key
+        shell: bash
+        run: |
+          if [ -z "$SUPABASE_PUBLISHABLE_KEY" ]; then
+            echo "::error::Configure SUPABASE_PUBLISHABLE_KEY in GitHub Actions secrets."
+            exit 1
+          fi
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Newman
+        run: npm install --global newman@6
+
+      - name: Run Postman collection
+        env:
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          newman run backend/postman/SportSpot.postman_collection.json \
+            --env-var "publishableKey=$SUPABASE_PUBLISHABLE_KEY" \
+            --reporters cli,junit \
+            --reporter-junit-export postman-results.xml
+
+      - name: Save Postman report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sportspot-postman-report
+          path: postman-results.xml
+          if-no-files-found: ignore

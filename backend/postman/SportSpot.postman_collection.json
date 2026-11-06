@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "c3a75ea1-6534-4d8a-9e64-510b36fe7616",
     "name": "SportSpot",
-    "description": "### Welcome to Postman! This is your first collection. \n\nCollections are your starting point for building and testing APIs. You can use this one to:\n\n• Group related requests\n• Test your API in real-world scenarios\n• Document and share your requests\n\nUpdate the name and overview whenever you’re ready to make it yours.\n\n[Learn more about Postman Collections.](https://learning.postman.com/docs/collections/collections-overview/)",
+    "description": "Коллекция API-тестов SportSpot: публичный поиск, негативные проверки PostgREST и Edge Functions.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_exporter_id": "59513347",
     "_collection_link": "https://go.postman.co/collection/59513347-c3a75ea1-6534-4d8a-9e64-510b36fe7616?source=collection_link"
@@ -163,6 +163,627 @@
         "description": "This is a GET request and it is used to \"get\" data from an endpoint. There is no request body for a GET request, but you can use query parameters to help specify the resource you want data on (e.g., in this request, we have `id=1`).\n\nA successful GET response will have a `200 OK` status, and should include some kind of response body - for example, HTML web content or JSON data."
       },
       "response": []
+    },
+    {
+      "name": "GET - Unknown Parameter (400)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Поиск: неизвестный параметр возвращает 400\", function () {",
+              "    pm.response.to.have.status(400);",
+              "});",
+              "",
+              "pm.test(\"Поиск: возвращается INVALID_REQUEST и request_id\", function () {",
+              "    const data = pm.response.json();",
+              "    pm.expect(data.error.code).to.eql(\"INVALID_REQUEST\");",
+              "    pm.expect(data.error.request_id).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/functions/v1/search-sports-spots-v1?lat=56.3269&lon=44.0059&radius=1000&sport=all&unexpected=1",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "functions",
+            "v1",
+            "search-sports-spots-v1"
+          ],
+          "query": [
+            {
+              "key": "lat",
+              "value": "56.3269"
+            },
+            {
+              "key": "lon",
+              "value": "44.0059"
+            },
+            {
+              "key": "radius",
+              "value": "1000"
+            },
+            {
+              "key": "sport",
+              "value": "all"
+            },
+            {
+              "key": "unexpected",
+              "value": "1"
+            }
+          ]
+        },
+        "description": "Безопасный негативный тест: код должен отклонить неизвестный query-параметр до запроса к Overpass."
+      },
+      "response": []
+    },
+    {
+      "name": "GET - Invalid Latitude (400)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Площадки: неверная широта возвращает 400\", function () {",
+              "    pm.response.to.have.status(400);",
+              "});",
+              "",
+              "pm.test(\"Площадки: ошибка PostgREST содержит код\", function () {",
+              "    const data = pm.response.json();",
+              "    pm.expect(data).to.be.an(\"object\");",
+              "    pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/rest/v1/spots?select=id,name&latitude=eq.not-a-number",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "rest",
+            "v1",
+            "spots"
+          ],
+          "query": [
+            {
+              "key": "select",
+              "value": "id,name"
+            },
+            {
+              "key": "latitude",
+              "value": "eq.not-a-number"
+            }
+          ]
+        },
+        "description": "Безопасный негативный тест: в числовое поле spots.latitude передана строка. PostgREST должен отклонить преобразование типа с HTTP 400."
+      },
+      "response": []
+    },
+    {
+      "name": "GET - Invalid Review UUID (400)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Отзывы: некорректный UUID возвращает 400\", function () {",
+              "    pm.response.to.have.status(400);",
+              "});",
+              "",
+              "pm.test(\"Отзывы: ошибка PostgREST содержит код\", function () {",
+              "    const data = pm.response.json();",
+              "    pm.expect(data).to.be.an(\"object\");",
+              "    pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/rest/v1/reviews?select=id,rating&id=eq.not-a-uuid",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "rest",
+            "v1",
+            "reviews"
+          ],
+          "query": [
+            {
+              "key": "select",
+              "value": "id,rating"
+            },
+            {
+              "key": "id",
+              "value": "eq.not-a-uuid"
+            }
+          ]
+        },
+        "description": "Безопасный негативный тест чтения: неверный UUID для reviews.id. Укажи publishableKey в переменных коллекции."
+      },
+      "response": []
+    },
+    {
+      "name": "POST - Unauthorized Review (401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Отзывы: создание: запрос без JWT возвращает 401\", function () {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test(\"Отзывы: создание: сервер возвращает код ошибки\", function () {",
+              "    const data = pm.response.json();",
+              "    pm.expect(data).to.be.an(\"object\");",
+              "    pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Prefer",
+            "value": "return=minimal",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"spot_id\": \"test:nonexistent:unauthorized-review-2026\", \"rating\": 5, \"text\": \"Проверка запрета создания отзыва без JWT\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/rest/v1/reviews",
+        "description": "Негативная проверка POST /reviews: только publishable apikey, без пользовательского JWT. По правам SportSpot запись доступна лишь authenticated. Несуществующий spot_id предотвращает реальное создание, даже при ошибочной конфигурации прав."
+      },
+      "response": []
+    },
+    {
+      "name": "PATCH - Unauthorized Review (401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Отзывы: редактирование: запрос без JWT возвращает 401\", function () {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test(\"Отзывы: редактирование: сервер возвращает код ошибки\", function () {",
+              "    const data = pm.response.json();",
+              "    pm.expect(data).to.be.an(\"object\");",
+              "    pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Prefer",
+            "value": "return=minimal",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"text\": \"Проверка запрета изменения отзыва без JWT\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/rest/v1/reviews?id=eq.00000000-0000-4000-8000-000000000000",
+        "description": "Негативная проверка PATCH /reviews без JWT. Используется заведомо тестовый UUID, чтобы не изменить реальные отзывы."
+      },
+      "response": []
+    },
+    {
+      "name": "DELETE - Unauthorized Review (401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Отзывы: удаление: запрос без JWT возвращает 401\", function () {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test(\"Отзывы: удаление: сервер возвращает код ошибки\", function () {",
+              "    const data = pm.response.json();",
+              "    pm.expect(data).to.be.an(\"object\");",
+              "    pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Prefer",
+            "value": "return=minimal",
+            "type": "text"
+          }
+        ],
+        "url": "{{baseUrl}}/rest/v1/reviews?id=eq.00000000-0000-4000-8000-000000000000",
+        "description": "Негативная проверка DELETE /reviews без JWT. Используется заведомо тестовый UUID; запрос не должен удалять данные."
+      },
+      "response": []
+    },
+    {
+      "name": "GET - Unauthorized Favorites (401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Избранное: чтение без JWT возвращает 401\", function () {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test(\"Избранное: чтение возвращает код ошибки\", function () {",
+              "    const data = pm.response.json();",
+              "    pm.expect(data).to.be.an(\"object\");",
+              "    pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          }
+        ],
+        "url": "{{baseUrl}}/rest/v1/favorites?select=spot_id&limit=1",
+        "description": "Негативная проверка без пользовательского JWT. Используется только publishable API key; операция должна быть отклонена правами Supabase. Данные в базе не изменяются."
+      },
+      "response": []
+    },
+    {
+      "name": "POST - Unauthorized Favorite (401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Избранное: добавление без JWT возвращает 401\", function () {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test(\"Избранное: добавление возвращает код ошибки\", function () {",
+              "    const data = pm.response.json();",
+              "    pm.expect(data).to.be.an(\"object\");",
+              "    pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Prefer",
+            "value": "return=minimal",
+            "type": "text"
+          }
+        ],
+        "url": "{{baseUrl}}/rest/v1/favorites",
+        "description": "Негативная проверка без пользовательского JWT. Используется только publishable API key; операция должна быть отклонена правами Supabase. Данные в базе не изменяются.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"spot_id\": \"osm:node:999999999999\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "DELETE - Unauthorized Favorite (401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Избранное: удаление без JWT возвращает 401\", function () {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test(\"Избранное: удаление возвращает код ошибки\", function () {",
+              "    const data = pm.response.json();",
+              "    pm.expect(data).to.be.an(\"object\");",
+              "    pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          }
+        ],
+        "url": "{{baseUrl}}/rest/v1/favorites?spot_id=eq.osm:node:999999999999",
+        "description": "Негативная проверка без пользовательского JWT. Используется только publishable API key; операция должна быть отклонена правами Supabase. Данные в базе не изменяются."
+      },
+      "response": []
+    },
+    {
+      "name": "GET - Unauthorized Proposals (401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Предложения: чтение без JWT возвращает 401\", function () {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test(\"Предложения: чтение возвращает код ошибки\", function () {",
+              "    const data = pm.response.json();",
+              "    pm.expect(data).to.be.an(\"object\");",
+              "    pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          }
+        ],
+        "url": "{{baseUrl}}/rest/v1/spot_proposals?select=id,name,status&limit=1",
+        "description": "Негативный тест: пользователь без JWT не может читать предложения площадок. Не изменяет данные."
+      },
+      "response": []
+    },
+    {
+      "name": "POST - Unauthorized Proposal (401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Предложения: создание без JWT возвращает 401\", function () {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test(\"Предложения: создание возвращает код ошибки\", function () {",
+              "    const data = pm.response.json();",
+              "    pm.expect(data).to.be.an(\"object\");",
+              "    pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Prefer",
+            "value": "return=minimal",
+            "type": "text"
+          }
+        ],
+        "url": "{{baseUrl}}/rest/v1/spot_proposals",
+        "description": "Негативный тест: невозможно создать предложение без JWT. Тело корректное, но у роли anon нет прав INSERT.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Тестовая площадка без авторизации\",\n  \"sport_type\": \"soccer\",\n  \"latitude\": 56.3269,\n  \"longitude\": 44.0059\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "POST - Unauthorized Moderation (401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Модерация: запрос без JWT возвращает 401\", function () {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test(\"Модерация: ошибка содержит код и сообщение\", function () {",
+              "    const data = pm.response.json();",
+              "    const error = data.error && typeof data.error === \"object\" ? data.error : data;",
+              "    pm.expect(error.code).to.be.a(\"string\").and.not.empty;",
+              "    pm.expect(error.message).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": "{{baseUrl}}/functions/v1/moderate-spot-proposal-v1",
+        "description": "Негативный тест: запрос одобрения с несуществующим UUID без JWT. Supabase gateway должен вернуть 401; ничего в базе не меняется.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"proposal_id\": \"00000000-0000-4000-8000-000000000000\",\n  \"decision\": \"approved\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://tnqkaamvvxwsimfydurg.supabase.co",
+      "type": "string"
+    },
+    {
+      "key": "publishableKey",
+      "value": "",
+      "type": "string"
     }
   ]
 }
