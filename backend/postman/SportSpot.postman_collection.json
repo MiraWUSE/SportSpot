@@ -491,6 +491,139 @@
         "description": "Негативная проверка DELETE /reviews без JWT. Используется заведомо тестовый UUID; запрос не должен удалять данные."
       },
       "response": []
+    },
+    {
+      "name": "GET - Unauthorized Favorites (401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Избранное: чтение без JWT возвращает 401\", function () {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test(\"Избранное: чтение возвращает код ошибки\", function () {",
+              "    const data = pm.response.json();",
+              "    pm.expect(data).to.be.an(\"object\");",
+              "    pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          }
+        ],
+        "url": "{{baseUrl}}/rest/v1/favorites?select=spot_id&limit=1",
+        "description": "Негативная проверка без пользовательского JWT. Используется только publishable API key; операция должна быть отклонена правами Supabase. Данные в базе не изменяются."
+      },
+      "response": []
+    },
+    {
+      "name": "POST - Unauthorized Favorite (401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Избранное: добавление без JWT возвращает 401\", function () {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test(\"Избранное: добавление возвращает код ошибки\", function () {",
+              "    const data = pm.response.json();",
+              "    pm.expect(data).to.be.an(\"object\");",
+              "    pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Prefer",
+            "value": "return=minimal",
+            "type": "text"
+          }
+        ],
+        "url": "{{baseUrl}}/rest/v1/favorites",
+        "description": "Негативная проверка без пользовательского JWT. Используется только publishable API key; операция должна быть отклонена правами Supabase. Данные в базе не изменяются.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"spot_id\": \"osm:node:999999999999\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "DELETE - Unauthorized Favorite (401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Избранное: удаление без JWT возвращает 401\", function () {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test(\"Избранное: удаление возвращает код ошибки\", function () {",
+              "    const data = pm.response.json();",
+              "    pm.expect(data).to.be.an(\"object\");",
+              "    pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          }
+        ],
+        "url": "{{baseUrl}}/rest/v1/favorites?spot_id=eq.osm:node:999999999999",
+        "description": "Негативная проверка без пользовательского JWT. Используется только publishable API key; операция должна быть отклонена правами Supabase. Данные в базе не изменяются."
+      },
+      "response": []
     }
   ],
   "variable": [
