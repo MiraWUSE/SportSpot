@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "c3a75ea1-6534-4d8a-9e64-510b36fe7616",
     "name": "SportSpot",
-    "description": "Коллекция API-тестов SportSpot: поиск площадок и негативные проверки Supabase REST API.",
+    "description": "Коллекция API-тестов SportSpot: публичный поиск, негативные проверки PostgREST и Edge Functions.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_exporter_id": "59513347",
     "_collection_link": "https://go.postman.co/collection/59513347-c3a75ea1-6534-4d8a-9e64-510b36fe7616?source=collection_link"
@@ -622,6 +622,154 @@
         ],
         "url": "{{baseUrl}}/rest/v1/favorites?spot_id=eq.osm:node:999999999999",
         "description": "Негативная проверка без пользовательского JWT. Используется только publishable API key; операция должна быть отклонена правами Supabase. Данные в базе не изменяются."
+      },
+      "response": []
+    },
+    {
+      "name": "GET - Unauthorized Proposals (401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Предложения: чтение без JWT возвращает 401\", function () {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test(\"Предложения: чтение возвращает код ошибки\", function () {",
+              "    const data = pm.response.json();",
+              "    pm.expect(data).to.be.an(\"object\");",
+              "    pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          }
+        ],
+        "url": "{{baseUrl}}/rest/v1/spot_proposals?select=id,name,status&limit=1",
+        "description": "Негативный тест: пользователь без JWT не может читать предложения площадок. Не изменяет данные."
+      },
+      "response": []
+    },
+    {
+      "name": "POST - Unauthorized Proposal (401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Предложения: создание без JWT возвращает 401\", function () {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test(\"Предложения: создание возвращает код ошибки\", function () {",
+              "    const data = pm.response.json();",
+              "    pm.expect(data).to.be.an(\"object\");",
+              "    pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Prefer",
+            "value": "return=minimal",
+            "type": "text"
+          }
+        ],
+        "url": "{{baseUrl}}/rest/v1/spot_proposals",
+        "description": "Негативный тест: невозможно создать предложение без JWT. Тело корректное, но у роли anon нет прав INSERT.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Тестовая площадка без авторизации\",\n  \"sport_type\": \"soccer\",\n  \"latitude\": 56.3269,\n  \"longitude\": 44.0059\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "POST - Unauthorized Moderation (401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Модерация: запрос без JWT возвращает 401\", function () {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test(\"Модерация: ошибка содержит код и сообщение\", function () {",
+              "    const data = pm.response.json();",
+              "    const error = data.error && typeof data.error === \"object\" ? data.error : data;",
+              "    pm.expect(error.code).to.be.a(\"string\").and.not.empty;",
+              "    pm.expect(error.message).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": "{{baseUrl}}/functions/v1/moderate-spot-proposal-v1",
+        "description": "Негативный тест: запрос одобрения с несуществующим UUID без JWT. Supabase gateway должен вернуть 401; ничего в базе не меняется.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"proposal_id\": \"00000000-0000-4000-8000-000000000000\",\n  \"decision\": \"approved\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
       },
       "response": []
     }
