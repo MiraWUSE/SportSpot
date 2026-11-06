@@ -334,6 +334,163 @@
         "description": "Безопасный негативный тест чтения: неверный UUID для reviews.id. Укажи publishableKey в переменных коллекции."
       },
       "response": []
+    },
+    {
+      "name": "POST - Unauthorized Review (401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Отзывы: создание: запрос без JWT возвращает 401\", function () {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test(\"Отзывы: создание: сервер возвращает код ошибки\", function () {",
+              "    const data = pm.response.json();",
+              "    pm.expect(data).to.be.an(\"object\");",
+              "    pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Prefer",
+            "value": "return=minimal",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"spot_id\": \"test:nonexistent:unauthorized-review-2026\", \"rating\": 5, \"text\": \"Проверка запрета создания отзыва без JWT\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/rest/v1/reviews",
+        "description": "Негативная проверка POST /reviews: только publishable apikey, без пользовательского JWT. По правам SportSpot запись доступна лишь authenticated. Несуществующий spot_id предотвращает реальное создание, даже при ошибочной конфигурации прав."
+      },
+      "response": []
+    },
+    {
+      "name": "PATCH - Unauthorized Review (401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Отзывы: редактирование: запрос без JWT возвращает 401\", function () {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test(\"Отзывы: редактирование: сервер возвращает код ошибки\", function () {",
+              "    const data = pm.response.json();",
+              "    pm.expect(data).to.be.an(\"object\");",
+              "    pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Prefer",
+            "value": "return=minimal",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"text\": \"Проверка запрета изменения отзыва без JWT\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/rest/v1/reviews?id=eq.00000000-0000-4000-8000-000000000000",
+        "description": "Негативная проверка PATCH /reviews без JWT. Используется заведомо тестовый UUID, чтобы не изменить реальные отзывы."
+      },
+      "response": []
+    },
+    {
+      "name": "DELETE - Unauthorized Review (401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Отзывы: удаление: запрос без JWT возвращает 401\", function () {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test(\"Отзывы: удаление: сервер возвращает код ошибки\", function () {",
+              "    const data = pm.response.json();",
+              "    pm.expect(data).to.be.an(\"object\");",
+              "    pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Prefer",
+            "value": "return=minimal",
+            "type": "text"
+          }
+        ],
+        "url": "{{baseUrl}}/rest/v1/reviews?id=eq.00000000-0000-4000-8000-000000000000",
+        "description": "Негативная проверка DELETE /reviews без JWT. Используется заведомо тестовый UUID; запрос не должен удалять данные."
+      },
+      "response": []
     }
   ],
   "variable": [
