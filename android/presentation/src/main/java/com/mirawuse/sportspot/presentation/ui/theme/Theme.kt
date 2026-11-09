@@ -78,6 +78,7 @@ fun SportSpotTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = SportSpotTypography,
+        shapes = SportSpotShapes,
         content = content,
     )
 }
