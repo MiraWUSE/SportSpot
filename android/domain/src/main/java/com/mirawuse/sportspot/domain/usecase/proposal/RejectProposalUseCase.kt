@@ -1,10 +1,12 @@
 
 package com.mirawuse.sportspot.domain.usecase.proposal
 
-import com.mirawuse.sportspot.domain.model.auth.AuthState
 import com.mirawuse.sportspot.domain.model.proposal.SpotProposal
+import com.mirawuse.sportspot.domain.policy.AuthorizationPolicy
 import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.SpotProposalRepository
+import com.mirawuse.sportspot.domain.result.DomainError
+import com.mirawuse.sportspot.domain.result.DomainResult
 
 class RejectProposalUseCase(
     private val authRepository: AuthRepository,
@@ -13,27 +15,36 @@ class RejectProposalUseCase(
     suspend operator fun invoke(
         proposalId: String,
         reason: String,
-    ): SpotProposal {
+    ): DomainResult<SpotProposal> {
         val authState = authRepository.getAuthState()
+        val accessError = AuthorizationPolicy.moderatorError(authState)
 
-        check(
-            authState is AuthState.Authenticated &&
-                authState.profile.isModerator(),
-        ) {
-            "Отклонять предложения может только модератор"
+        if (accessError != null) {
+            return DomainResult.Failure(accessError)
         }
 
-        require(proposalId.isNotBlank()) {
-            "Идентификатор предложения не может быть пустым"
+        if (proposalId.isBlank()) {
+            return DomainResult.Failure(
+                DomainError.Validation(
+                    "Идентификатор предложения не может быть пустым",
+                ),
+            )
         }
 
-        require(reason.isNotBlank()) {
-            "Причина отклонения не может быть пустой"
+        if (reason.isBlank()) {
+            return DomainResult.Failure(
+                DomainError.Validation(
+                    "Причина отклонения не может быть пустой",
+                ),
+            )
         }
 
-        return proposalRepository.rejectProposal(
-            proposalId = proposalId.trim(),
-            reason = reason.trim(),
-        )
+        val proposal =
+            proposalRepository.rejectProposal(
+                proposalId = proposalId.trim(),
+                reason = reason.trim(),
+            )
+
+        return DomainResult.Success(proposal)
     }
 }

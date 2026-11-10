@@ -1,12 +1,14 @@
 
 package com.mirawuse.sportspot.domain.usecase.proposal
 
-import com.mirawuse.sportspot.domain.model.auth.AuthState
 import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.proposal.SpotProposal
 import com.mirawuse.sportspot.domain.model.spot.SportType
+import com.mirawuse.sportspot.domain.policy.AuthorizationPolicy
 import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.SpotProposalRepository
+import com.mirawuse.sportspot.domain.result.DomainError
+import com.mirawuse.sportspot.domain.result.DomainResult
 
 class CreateProposalUseCase(
     private val authRepository: AuthRepository,
@@ -16,19 +18,29 @@ class CreateProposalUseCase(
         name: String,
         sportType: SportType,
         location: GeoPoint,
-    ): SpotProposal {
-        check(authRepository.getAuthState() is AuthState.Authenticated) {
-            "Для предложения площадки необходимо авторизоваться"
+    ): DomainResult<SpotProposal> {
+        val authState = authRepository.getAuthState()
+        val accessError = AuthorizationPolicy.authenticatedError(authState)
+
+        if (accessError != null) {
+            return DomainResult.Failure(accessError)
         }
 
-        require(name.isNotBlank()) {
-            "Название площадки не может быть пустым"
+        if (name.isBlank()) {
+            return DomainResult.Failure(
+                DomainError.Validation(
+                    "Название площадки не может быть пустым",
+                ),
+            )
         }
 
-        return proposalRepository.createProposal(
-            name = name.trim(),
-            sportType = sportType,
-            location = location,
-        )
+        val proposal =
+            proposalRepository.createProposal(
+                name = name.trim(),
+                sportType = sportType,
+                location = location,
+            )
+
+        return DomainResult.Success(proposal)
     }
 }

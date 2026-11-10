@@ -1,3 +1,4 @@
+
 package com.mirawuse.sportspot.domain.usecase.user
 
 import com.mirawuse.sportspot.domain.model.auth.AuthState
@@ -5,6 +6,8 @@ import com.mirawuse.sportspot.domain.model.user.UserProfile
 import com.mirawuse.sportspot.domain.model.user.UserRole
 import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.UserRepository
+import com.mirawuse.sportspot.domain.result.DomainError
+import com.mirawuse.sportspot.domain.result.DomainResult
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -12,54 +15,71 @@ import org.junit.Test
 
 class GetMyProfileUseCaseTest {
     @Test
-    fun `авторизованный пользователь получает свой профиль`() =
+    fun `пользователь успешно получает свой профиль`() =
         runTest {
             val profile = createProfile(UserRole.USER)
-            val userRepository = FakeUserRepository(profile)
-            val useCase =
-                GetMyProfileUseCase(
-                    FakeAuthRepository(AuthState.Authenticated(profile)),
-                    userRepository,
-                )
+            val repository = FakeUserRepository(profile)
+            val useCase = createUseCase(AuthState.Authenticated(profile), repository)
 
             val result = useCase()
 
-            assertEquals(profile, result)
-            assertEquals(1, userRepository.getProfileCalls)
+            assertEquals(DomainResult.Success(profile), result)
+            assertEquals(1, repository.getProfileCalls)
         }
 
     @Test
-    fun `модератор получает свой профиль`() =
+    fun `модератор успешно получает свой профиль`() =
         runTest {
             val profile = createProfile(UserRole.MODERATOR)
-            val userRepository = FakeUserRepository(profile)
-            val useCase =
-                GetMyProfileUseCase(
-                    FakeAuthRepository(AuthState.Authenticated(profile)),
-                    userRepository,
-                )
+            val repository = FakeUserRepository(profile)
+            val useCase = createUseCase(AuthState.Authenticated(profile), repository)
 
             val result = useCase()
 
-            assertEquals(UserRole.MODERATOR, result.role)
-            assertEquals(1, userRepository.getProfileCalls)
+            assertEquals(DomainResult.Success(profile), result)
+            assertEquals(UserRole.MODERATOR, profile.role)
+            assertEquals(1, repository.getProfileCalls)
         }
 
     @Test
-    fun `гость не может получить профиль`() =
+    fun `гость получает Unauthorized`() =
         runTest {
-            val userRepository = FakeUserRepository(createProfile(UserRole.USER))
-            val useCase =
-                GetMyProfileUseCase(
-                    FakeAuthRepository(AuthState.Guest),
-                    userRepository,
-                )
+            val profile = createProfile(UserRole.USER)
+            val repository = FakeUserRepository(profile)
+            val useCase = createUseCase(AuthState.Guest, repository)
+
+            val result = useCase()
+
+            assertEquals(
+                DomainResult.Failure(DomainError.Unauthorized),
+                result,
+            )
+            assertEquals(0, repository.getProfileCalls)
+        }
+
+    @Test
+    fun `непредвиденная ошибка репозитория не скрывается`() =
+        runTest {
+            val failure = IllegalStateException("Ошибка загрузки профиля")
+            val profile = createProfile(UserRole.USER)
+            val repository = FakeUserRepository(profile, failure)
+            val useCase = createUseCase(AuthState.Authenticated(profile), repository)
 
             val result = runCatching { useCase() }
 
-            assertTrue(result.exceptionOrNull() is IllegalStateException)
-            assertEquals(0, userRepository.getProfileCalls)
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() === failure)
+            assertEquals(1, repository.getProfileCalls)
         }
+
+    private fun createUseCase(
+        state: AuthState,
+        repository: UserRepository,
+    ): GetMyProfileUseCase =
+        GetMyProfileUseCase(
+            authRepository = FakeAuthRepository(state),
+            userRepository = repository,
+        )
 
     private fun createProfile(role: UserRole): UserProfile =
         UserProfile(
@@ -94,11 +114,13 @@ class GetMyProfileUseCaseTest {
 
     private class FakeUserRepository(
         private val profile: UserProfile,
+        private val failure: Throwable? = null,
     ) : UserRepository {
         var getProfileCalls = 0
 
         override suspend fun getMyProfile(): UserProfile {
             getProfileCalls++
+            failure?.let { throw it }
             return profile
         }
 

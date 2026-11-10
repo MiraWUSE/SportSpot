@@ -1,19 +1,26 @@
+
 package com.mirawuse.sportspot.domain.usecase.proposal
 
-import com.mirawuse.sportspot.domain.model.auth.AuthState
 import com.mirawuse.sportspot.domain.model.proposal.SpotProposal
+import com.mirawuse.sportspot.domain.policy.AuthorizationPolicy
 import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.SpotProposalRepository
+import com.mirawuse.sportspot.domain.result.DomainResult
 
 class GetMyProposalsUseCase(
     private val authRepository: AuthRepository,
     private val proposalRepository: SpotProposalRepository,
 ) {
-    suspend operator fun invoke(): List<SpotProposal> {
-        check(authRepository.getAuthState() is AuthState.Authenticated) {
-            "Для просмотра своих предложений необходимо авторизоваться"
+    suspend operator fun invoke(): DomainResult<List<SpotProposal>> {
+        val authState = authRepository.getAuthState()
+        val accessError = AuthorizationPolicy.authenticatedError(authState)
+
+        if (accessError != null) {
+            return DomainResult.Failure(accessError)
         }
 
-        return proposalRepository.getMyProposals()
+        val proposals = proposalRepository.getMyProposals()
+
+        return DomainResult.Success(proposals)
     }
 }

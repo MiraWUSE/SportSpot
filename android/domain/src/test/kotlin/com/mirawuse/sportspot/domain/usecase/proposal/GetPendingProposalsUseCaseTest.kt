@@ -10,6 +10,8 @@ import com.mirawuse.sportspot.domain.model.user.UserProfile
 import com.mirawuse.sportspot.domain.model.user.UserRole
 import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.SpotProposalRepository
+import com.mirawuse.sportspot.domain.result.DomainError
+import com.mirawuse.sportspot.domain.result.DomainResult
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -17,75 +19,76 @@ import org.junit.Test
 
 class GetPendingProposalsUseCaseTest {
     @Test
-    fun `модератор получает список ожидающих предложений`() =
+    fun `модератор получает список предложений`() =
         runTest {
             val proposals =
                 listOf(
                     createProposal("proposal-1"),
                     createProposal("proposal-2"),
                 )
-
             val repository = FakeSpotProposalRepository(proposals)
-            val useCase =
-                GetPendingProposalsUseCase(
-                    FakeAuthRepository(authenticated(UserRole.MODERATOR)),
-                    repository,
-                )
+            val useCase = createUseCase(authenticated(UserRole.MODERATOR), repository)
 
             val result = useCase()
 
-            assertEquals(proposals, result)
-            assertEquals(2, result.size)
-            assertTrue(result.all { it.status == ProposalStatus.PENDING })
+            assertEquals(DomainResult.Success(proposals), result)
             assertEquals(1, repository.getPendingCalls)
         }
 
     @Test
-    fun `модератор получает пустой список если заявок нет`() =
+    fun `пустая очередь возвращает успешный результат`() =
         runTest {
             val repository = FakeSpotProposalRepository(emptyList())
-            val useCase =
-                GetPendingProposalsUseCase(
-                    FakeAuthRepository(authenticated(UserRole.MODERATOR)),
-                    repository,
-                )
+            val useCase = createUseCase(authenticated(UserRole.MODERATOR), repository)
 
             val result = useCase()
 
-            assertTrue(result.isEmpty())
+            assertEquals(DomainResult.Success(emptyList<SpotProposal>()), result)
             assertEquals(1, repository.getPendingCalls)
         }
 
     @Test
-    fun `обычный пользователь не может просматривать очередь модерации`() =
+    fun `обычный пользователь получает Forbidden`() =
         runTest {
             val repository = FakeSpotProposalRepository(emptyList())
-            val useCase =
-                GetPendingProposalsUseCase(
-                    FakeAuthRepository(authenticated(UserRole.USER)),
-                    repository,
-                )
+            val useCase = createUseCase(authenticated(UserRole.USER), repository)
 
-            val result = runCatching { useCase() }
+            val result = useCase()
 
-            assertTrue(result.exceptionOrNull() is IllegalStateException)
+            assertEquals(
+                DomainResult.Failure(DomainError.Forbidden),
+                result,
+            )
             assertEquals(0, repository.getPendingCalls)
         }
 
     @Test
-    fun `гость не может просматривать очередь модерации`() =
+    fun `гость получает Unauthorized`() =
         runTest {
             val repository = FakeSpotProposalRepository(emptyList())
-            val useCase =
-                GetPendingProposalsUseCase(
-                    FakeAuthRepository(AuthState.Guest),
-                    repository,
-                )
+            val useCase = createUseCase(AuthState.Guest, repository)
+
+            val result = useCase()
+
+            assertEquals(
+                DomainResult.Failure(DomainError.Unauthorized),
+                result,
+            )
+            assertEquals(0, repository.getPendingCalls)
+        }
+
+    @Test
+    fun `непредвиденная ошибка репозитория не скрывается`() =
+        runTest {
+            val failure = IllegalStateException("Ошибка репозитория")
+            val repository = FakeSpotProposalRepository(emptyList(), failure)
+            val useCase = createUseCase(authenticated(UserRole.MODERATOR), repository)
 
             val result = runCatching { useCase() }
 
-            assertTrue(result.exceptionOrNull() is IllegalStateException)
-            assertEquals(0, repository.getPendingCalls)
+            assertTrue(result.isFailure)
+            assertEquals(failure, result.exceptionOrNull())
+            assertEquals(1, repository.getPendingCalls)
         }
 
     private fun createProposal(id: String): SpotProposal =
@@ -96,6 +99,15 @@ class GetPendingProposalsUseCaseTest {
             sportType = SportType.FOOTBALL,
             location = GeoPoint(56.3269, 44.0059),
             status = ProposalStatus.PENDING,
+        )
+
+    private fun createUseCase(
+        state: AuthState,
+        repository: SpotProposalRepository,
+    ): GetPendingProposalsUseCase =
+        GetPendingProposalsUseCase(
+            authRepository = FakeAuthRepository(state),
+            proposalRepository = repository,
         )
 
     private fun authenticated(role: UserRole): AuthState =
@@ -133,6 +145,7 @@ class GetPendingProposalsUseCaseTest {
 
     private class FakeSpotProposalRepository(
         private val proposals: List<SpotProposal>,
+        private val failure: Throwable? = null,
     ) : SpotProposalRepository {
         var getPendingCalls = 0
 
@@ -140,6 +153,7 @@ class GetPendingProposalsUseCaseTest {
 
         override suspend fun getPendingProposals(): List<SpotProposal> {
             getPendingCalls++
+            failure?.let { throw it }
             return proposals
         }
 

@@ -1,3 +1,4 @@
+
 package com.mirawuse.sportspot.domain.usecase.favorite
 
 import com.mirawuse.sportspot.domain.model.auth.AuthState
@@ -69,6 +70,25 @@ class IsFavoriteUseCaseTest {
             assertEquals(1, favoriteRepository.checkCalls)
         }
 
+    @Test
+    fun `ошибка репозитория не превращается в false`() =
+        runTest {
+            val failure = IllegalStateException("Ошибка загрузки избранного")
+            val authRepository = FakeAuthRepository(authenticated(UserRole.USER))
+            val favoriteRepository =
+                FakeFavoriteRepository(
+                    favoriteResult = false,
+                    failure = failure,
+                )
+            val useCase = IsFavoriteUseCase(authRepository, favoriteRepository)
+
+            val result = runCatching { useCase(spotId) }
+
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() === failure)
+            assertEquals(1, favoriteRepository.checkCalls)
+        }
+
     private fun authenticated(role: UserRole): AuthState =
         AuthState.Authenticated(
             UserProfile(
@@ -104,6 +124,7 @@ class IsFavoriteUseCaseTest {
 
     private class FakeFavoriteRepository(
         private val favoriteResult: Boolean,
+        private val failure: Throwable? = null,
     ) : FavoriteRepository {
         var checkCalls = 0
         var lastCheckedId: SpotId? = null
@@ -119,6 +140,9 @@ class IsFavoriteUseCaseTest {
         override suspend fun isFavorite(spotId: SpotId): Boolean {
             checkCalls++
             lastCheckedId = spotId
+
+            failure?.let { throw it }
+
             return favoriteResult
         }
     }

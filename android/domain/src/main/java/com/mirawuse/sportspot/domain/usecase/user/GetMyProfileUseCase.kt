@@ -1,19 +1,26 @@
+
 package com.mirawuse.sportspot.domain.usecase.user
 
-import com.mirawuse.sportspot.domain.model.auth.AuthState
 import com.mirawuse.sportspot.domain.model.user.UserProfile
+import com.mirawuse.sportspot.domain.policy.AuthorizationPolicy
 import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.UserRepository
+import com.mirawuse.sportspot.domain.result.DomainResult
 
 class GetMyProfileUseCase(
     private val authRepository: AuthRepository,
     private val userRepository: UserRepository,
 ) {
-    suspend operator fun invoke(): UserProfile {
-        check(authRepository.getAuthState() is AuthState.Authenticated) {
-            "Для просмотра профиля необходимо авторизоваться"
+    suspend operator fun invoke(): DomainResult<UserProfile> {
+        val authState = authRepository.getAuthState()
+        val accessError = AuthorizationPolicy.authenticatedError(authState)
+
+        if (accessError != null) {
+            return DomainResult.Failure(accessError)
         }
 
-        return userRepository.getMyProfile()
+        val profile = userRepository.getMyProfile()
+
+        return DomainResult.Success(profile)
     }
 }

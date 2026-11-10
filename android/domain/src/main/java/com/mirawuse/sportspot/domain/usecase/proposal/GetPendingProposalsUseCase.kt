@@ -1,25 +1,26 @@
 
 package com.mirawuse.sportspot.domain.usecase.proposal
 
-import com.mirawuse.sportspot.domain.model.auth.AuthState
 import com.mirawuse.sportspot.domain.model.proposal.SpotProposal
+import com.mirawuse.sportspot.domain.policy.AuthorizationPolicy
 import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.SpotProposalRepository
+import com.mirawuse.sportspot.domain.result.DomainResult
 
 class GetPendingProposalsUseCase(
     private val authRepository: AuthRepository,
     private val proposalRepository: SpotProposalRepository,
 ) {
-    suspend operator fun invoke(): List<SpotProposal> {
+    suspend operator fun invoke(): DomainResult<List<SpotProposal>> {
         val authState = authRepository.getAuthState()
+        val accessError = AuthorizationPolicy.moderatorError(authState)
 
-        check(
-            authState is AuthState.Authenticated &&
-                authState.profile.isModerator(),
-        ) {
-            "Просматривать предложения на модерации может только модератор"
+        if (accessError != null) {
+            return DomainResult.Failure(accessError)
         }
 
-        return proposalRepository.getPendingProposals()
+        return DomainResult.Success(
+            proposalRepository.getPendingProposals(),
+        )
     }
 }

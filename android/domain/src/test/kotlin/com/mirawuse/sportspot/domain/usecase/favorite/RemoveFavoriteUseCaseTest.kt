@@ -1,3 +1,4 @@
+
 package com.mirawuse.sportspot.domain.usecase.favorite
 
 import com.mirawuse.sportspot.domain.model.auth.AuthState
@@ -7,6 +8,8 @@ import com.mirawuse.sportspot.domain.model.user.UserProfile
 import com.mirawuse.sportspot.domain.model.user.UserRole
 import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.FavoriteRepository
+import com.mirawuse.sportspot.domain.result.DomainError
+import com.mirawuse.sportspot.domain.result.DomainResult
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -16,41 +19,70 @@ class RemoveFavoriteUseCaseTest {
     private val spotId = SpotId("osm", "12345")
 
     @Test
-    fun `авторизованный пользователь может удалить площадку`() =
+    fun `пользователь успешно удаляет площадку из избранного`() =
         runTest {
-            val authRepository = FakeAuthRepository(authenticated(UserRole.USER))
-            val favoriteRepository = FakeFavoriteRepository()
-            val useCase = RemoveFavoriteUseCase(authRepository, favoriteRepository)
+            val repository = FakeFavoriteRepository()
+            val useCase = createUseCase(authenticated(UserRole.USER), repository)
 
-            useCase(spotId)
+            val result = useCase(spotId)
 
-            assertEquals(listOf(spotId), favoriteRepository.removedIds)
+            assertEquals(DomainResult.Success(Unit), result)
+            assertEquals(listOf(spotId), repository.removedIds)
+            assertEquals(1, repository.removeCalls)
         }
 
     @Test
-    fun `модератор может удалить площадку`() =
+    fun `модератор успешно удаляет площадку из избранного`() =
         runTest {
-            val authRepository = FakeAuthRepository(authenticated(UserRole.MODERATOR))
-            val favoriteRepository = FakeFavoriteRepository()
-            val useCase = RemoveFavoriteUseCase(authRepository, favoriteRepository)
+            val repository = FakeFavoriteRepository()
+            val useCase = createUseCase(authenticated(UserRole.MODERATOR), repository)
 
-            useCase(spotId)
+            val result = useCase(spotId)
 
-            assertEquals(listOf(spotId), favoriteRepository.removedIds)
+            assertEquals(DomainResult.Success(Unit), result)
+            assertEquals(listOf(spotId), repository.removedIds)
+            assertEquals(1, repository.removeCalls)
         }
 
     @Test
-    fun `гость не может удалить площадку`() =
+    fun `гость получает Unauthorized`() =
         runTest {
-            val authRepository = FakeAuthRepository(AuthState.Guest)
-            val favoriteRepository = FakeFavoriteRepository()
-            val useCase = RemoveFavoriteUseCase(authRepository, favoriteRepository)
+            val repository = FakeFavoriteRepository()
+            val useCase = createUseCase(AuthState.Guest, repository)
+
+            val result = useCase(spotId)
+
+            assertEquals(
+                DomainResult.Failure(DomainError.Unauthorized),
+                result,
+            )
+            assertEquals(0, repository.removeCalls)
+            assertTrue(repository.removedIds.isEmpty())
+        }
+
+    @Test
+    fun `непредвиденная ошибка репозитория не скрывается`() =
+        runTest {
+            val failure = IllegalStateException("Ошибка удаления")
+            val repository = FakeFavoriteRepository(failure)
+            val useCase = createUseCase(authenticated(UserRole.USER), repository)
 
             val result = runCatching { useCase(spotId) }
 
-            assertTrue(result.exceptionOrNull() is IllegalStateException)
-            assertTrue(favoriteRepository.removedIds.isEmpty())
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() === failure)
+            assertEquals(1, repository.removeCalls)
+            assertTrue(repository.removedIds.isEmpty())
         }
+
+    private fun createUseCase(
+        state: AuthState,
+        repository: FavoriteRepository,
+    ): RemoveFavoriteUseCase =
+        RemoveFavoriteUseCase(
+            authRepository = FakeAuthRepository(state),
+            favoriteRepository = repository,
+        )
 
     private fun authenticated(role: UserRole): AuthState =
         AuthState.Authenticated(
@@ -85,14 +117,19 @@ class RemoveFavoriteUseCaseTest {
         }
     }
 
-    private class FakeFavoriteRepository : FavoriteRepository {
+    private class FakeFavoriteRepository(
+        private val failure: Throwable? = null,
+    ) : FavoriteRepository {
         val removedIds = mutableListOf<SpotId>()
+        var removeCalls = 0
 
         override suspend fun getFavorites(): List<Favorite> = emptyList()
 
         override suspend fun addFavorite(spotId: SpotId): Favorite = error("Метод не используется в тесте")
 
         override suspend fun removeFavorite(spotId: SpotId) {
+            removeCalls++
+            failure?.let { throw it }
             removedIds.add(spotId)
         }
 

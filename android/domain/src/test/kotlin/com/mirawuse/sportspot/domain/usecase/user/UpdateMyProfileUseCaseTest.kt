@@ -1,3 +1,4 @@
+
 package com.mirawuse.sportspot.domain.usecase.user
 
 import com.mirawuse.sportspot.domain.model.auth.AuthState
@@ -5,6 +6,8 @@ import com.mirawuse.sportspot.domain.model.user.UserProfile
 import com.mirawuse.sportspot.domain.model.user.UserRole
 import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.UserRepository
+import com.mirawuse.sportspot.domain.result.DomainError
+import com.mirawuse.sportspot.domain.result.DomainResult
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -12,7 +15,7 @@ import org.junit.Test
 
 class UpdateMyProfileUseCaseTest {
     @Test
-    fun `авторизованный пользователь может изменить имя`() =
+    fun `пользователь успешно изменяет имя`() =
         runTest {
             val profile = createProfile(UserRole.USER)
             val repository = FakeUserRepository(profile)
@@ -20,15 +23,16 @@ class UpdateMyProfileUseCaseTest {
 
             val result = useCase("Александр")
 
-            assertEquals("Александр", result.name)
-            assertEquals(profile.id, result.id)
-            assertEquals(profile.email, result.email)
-            assertEquals(profile.role, result.role)
+            assertEquals(
+                DomainResult.Success(profile.copy(name = "Александр")),
+                result,
+            )
+            assertEquals("Александр", repository.lastName)
             assertEquals(1, repository.updateCalls)
         }
 
     @Test
-    fun `модератор может изменить свое имя`() =
+    fun `модератор изменяет имя без изменения роли`() =
         runTest {
             val profile = createProfile(UserRole.MODERATOR)
             val repository = FakeUserRepository(profile)
@@ -36,8 +40,13 @@ class UpdateMyProfileUseCaseTest {
 
             val result = useCase("Александр")
 
-            assertEquals("Александр", result.name)
-            assertEquals(UserRole.MODERATOR, result.role)
+            assertEquals(
+                DomainResult.Success(profile.copy(name = "Александр")),
+                result,
+            )
+            assertEquals(UserRole.MODERATOR, repository.lastUpdatedProfile?.role)
+            assertEquals(profile.id, repository.lastUpdatedProfile?.id)
+            assertEquals(profile.email, repository.lastUpdatedProfile?.email)
             assertEquals(1, repository.updateCalls)
         }
 
@@ -50,33 +59,62 @@ class UpdateMyProfileUseCaseTest {
 
             val result = useCase("   Александр   ")
 
-            assertEquals("Александр", result.name)
+            assertEquals(
+                DomainResult.Success(profile.copy(name = "Александр")),
+                result,
+            )
             assertEquals("Александр", repository.lastName)
+            assertEquals(1, repository.updateCalls)
         }
 
     @Test
-    fun `пустое имя запрещено`() =
+    fun `пустое имя возвращает Validation`() =
         runTest {
             val profile = createProfile(UserRole.USER)
             val repository = FakeUserRepository(profile)
             val useCase = createUseCase(AuthState.Authenticated(profile), repository)
 
-            val result = runCatching { useCase("   ") }
+            val result = useCase("   ")
 
-            assertTrue(result.exceptionOrNull() is IllegalArgumentException)
+            assertEquals(
+                DomainResult.Failure(
+                    DomainError.Validation(
+                        "Имя пользователя не может быть пустым",
+                    ),
+                ),
+                result,
+            )
             assertEquals(0, repository.updateCalls)
         }
 
     @Test
-    fun `гость не может изменить профиль`() =
+    fun `гость получает Unauthorized`() =
         runTest {
             val repository = FakeUserRepository(createProfile(UserRole.USER))
             val useCase = createUseCase(AuthState.Guest, repository)
 
+            val result = useCase("Александр")
+
+            assertEquals(
+                DomainResult.Failure(DomainError.Unauthorized),
+                result,
+            )
+            assertEquals(0, repository.updateCalls)
+        }
+
+    @Test
+    fun `непредвиденная ошибка репозитория не скрывается`() =
+        runTest {
+            val profile = createProfile(UserRole.USER)
+            val failure = IllegalStateException("Ошибка обновления профиля")
+            val repository = FakeUserRepository(profile, failure)
+            val useCase = createUseCase(AuthState.Authenticated(profile), repository)
+
             val result = runCatching { useCase("Александр") }
 
-            assertTrue(result.exceptionOrNull() is IllegalStateException)
-            assertEquals(0, repository.updateCalls)
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() === failure)
+            assertEquals(1, repository.updateCalls)
         }
 
     private fun createUseCase(
@@ -121,9 +159,11 @@ class UpdateMyProfileUseCaseTest {
 
     private class FakeUserRepository(
         private val profile: UserProfile,
+        private val failure: Throwable? = null,
     ) : UserRepository {
         var updateCalls = 0
         var lastName: String? = null
+        var lastUpdatedProfile: UserProfile? = null
 
         override suspend fun getMyProfile(): UserProfile = error("Метод не используется в тесте")
 
@@ -131,7 +171,12 @@ class UpdateMyProfileUseCaseTest {
             updateCalls++
             lastName = name
 
-            return profile.copy(name = name)
+            failure?.let { throw it }
+
+            val updatedProfile = profile.copy(name = name)
+            lastUpdatedProfile = updatedProfile
+
+            return updatedProfile
         }
     }
 }

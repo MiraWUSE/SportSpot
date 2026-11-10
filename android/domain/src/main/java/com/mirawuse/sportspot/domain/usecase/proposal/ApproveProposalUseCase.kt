@@ -1,29 +1,35 @@
 
 package com.mirawuse.sportspot.domain.usecase.proposal
 
-import com.mirawuse.sportspot.domain.model.auth.AuthState
 import com.mirawuse.sportspot.domain.model.proposal.SpotProposal
+import com.mirawuse.sportspot.domain.policy.AuthorizationPolicy
 import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.SpotProposalRepository
+import com.mirawuse.sportspot.domain.result.DomainError
+import com.mirawuse.sportspot.domain.result.DomainResult
 
 class ApproveProposalUseCase(
     private val authRepository: AuthRepository,
     private val proposalRepository: SpotProposalRepository,
 ) {
-    suspend operator fun invoke(proposalId: String): SpotProposal {
+    suspend operator fun invoke(proposalId: String): DomainResult<SpotProposal> {
         val authState = authRepository.getAuthState()
+        val accessError = AuthorizationPolicy.moderatorError(authState)
 
-        check(
-            authState is AuthState.Authenticated &&
-                authState.profile.isModerator(),
-        ) {
-            "Одобрять предложения может только модератор"
+        if (accessError != null) {
+            return DomainResult.Failure(accessError)
         }
 
-        require(proposalId.isNotBlank()) {
-            "Идентификатор предложения не может быть пустым"
+        if (proposalId.isBlank()) {
+            return DomainResult.Failure(
+                DomainError.Validation(
+                    "Идентификатор предложения не может быть пустым",
+                ),
+            )
         }
 
-        return proposalRepository.approveProposal(proposalId.trim())
+        val proposal = proposalRepository.approveProposal(proposalId.trim())
+
+        return DomainResult.Success(proposal)
     }
 }

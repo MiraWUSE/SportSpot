@@ -1,9 +1,12 @@
+
 package com.mirawuse.sportspot.domain.usecase.review
 
-import com.mirawuse.sportspot.domain.model.auth.AuthState
 import com.mirawuse.sportspot.domain.model.review.Review
+import com.mirawuse.sportspot.domain.policy.AuthorizationPolicy
 import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.ReviewRepository
+import com.mirawuse.sportspot.domain.result.DomainError
+import com.mirawuse.sportspot.domain.result.DomainResult
 
 class UpdateReviewUseCase(
     private val authRepository: AuthRepository,
@@ -13,27 +16,45 @@ class UpdateReviewUseCase(
         reviewId: String,
         rating: Int,
         text: String,
-    ): Review {
-        check(authRepository.getAuthState() is AuthState.Authenticated) {
-            "Для редактирования отзыва необходимо авторизоваться"
+    ): DomainResult<Review> {
+        val authState = authRepository.getAuthState()
+        val accessError = AuthorizationPolicy.authenticatedError(authState)
+
+        if (accessError != null) {
+            return DomainResult.Failure(accessError)
         }
 
-        require(reviewId.isNotBlank()) {
-            "Идентификатор отзыва не может быть пустым"
+        if (reviewId.isBlank()) {
+            return DomainResult.Failure(
+                DomainError.Validation(
+                    "Идентификатор отзыва не может быть пустым",
+                ),
+            )
         }
 
-        require(rating in 1..5) {
-            "Оценка должна быть от 1 до 5"
+        if (rating !in 1..5) {
+            return DomainResult.Failure(
+                DomainError.Validation(
+                    "Оценка должна быть от 1 до 5",
+                ),
+            )
         }
 
-        require(text.isNotBlank()) {
-            "Текст отзыва не может быть пустым"
+        if (text.isBlank()) {
+            return DomainResult.Failure(
+                DomainError.Validation(
+                    "Текст отзыва не может быть пустым",
+                ),
+            )
         }
 
-        return reviewRepository.updateReview(
-            reviewId = reviewId,
-            rating = rating,
-            text = text.trim(),
-        )
+        val review =
+            reviewRepository.updateReview(
+                reviewId = reviewId.trim(),
+                rating = rating,
+                text = text.trim(),
+            )
+
+        return DomainResult.Success(review)
     }
 }

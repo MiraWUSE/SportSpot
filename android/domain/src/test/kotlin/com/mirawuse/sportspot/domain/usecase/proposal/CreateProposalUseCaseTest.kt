@@ -10,6 +10,8 @@ import com.mirawuse.sportspot.domain.model.user.UserProfile
 import com.mirawuse.sportspot.domain.model.user.UserRole
 import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.SpotProposalRepository
+import com.mirawuse.sportspot.domain.result.DomainError
+import com.mirawuse.sportspot.domain.result.DomainResult
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -19,7 +21,7 @@ class CreateProposalUseCaseTest {
     private val location = GeoPoint(56.3269, 44.0059)
 
     @Test
-    fun `пользователь может предложить новую площадку`() =
+    fun `пользователь успешно создает предложение`() =
         runTest {
             val repository = FakeSpotProposalRepository()
             val useCase = createUseCase(authenticated(UserRole.USER), repository)
@@ -31,15 +33,23 @@ class CreateProposalUseCaseTest {
                     location = location,
                 )
 
-            assertEquals("Футбольная площадка", result.name)
-            assertEquals(SportType.FOOTBALL, result.sportType)
-            assertEquals(location, result.location)
-            assertEquals(ProposalStatus.PENDING, result.status)
+            assertTrue(result is DomainResult.Success)
+            assertEquals(
+                DomainResult.Success(repository.lastCreatedProposal),
+                result,
+            )
             assertEquals(1, repository.createCalls)
+            assertEquals("Футбольная площадка", repository.lastName)
+            assertEquals(SportType.FOOTBALL, repository.lastSportType)
+            assertEquals(location, repository.lastLocation)
+            assertEquals(
+                ProposalStatus.PENDING,
+                repository.lastCreatedProposal?.status,
+            )
         }
 
     @Test
-    fun `модератор может предложить новую площадку`() =
+    fun `модератор может создать предложение`() =
         runTest {
             val repository = FakeSpotProposalRepository()
             val useCase = createUseCase(authenticated(UserRole.MODERATOR), repository)
@@ -51,8 +61,10 @@ class CreateProposalUseCaseTest {
                     location = location,
                 )
 
-            assertEquals("Баскетбольная площадка", result.name)
-            assertEquals(ProposalStatus.PENDING, result.status)
+            assertEquals(
+                DomainResult.Success(repository.lastCreatedProposal),
+                result,
+            )
             assertEquals(1, repository.createCalls)
         }
 
@@ -62,41 +74,66 @@ class CreateProposalUseCaseTest {
             val repository = FakeSpotProposalRepository()
             val useCase = createUseCase(authenticated(UserRole.USER), repository)
 
-            val result =
-                useCase(
-                    name = "   Теннисный корт   ",
-                    sportType = SportType.TENNIS,
-                    location = location,
-                )
+            useCase(
+                name = "   Теннисный корт   ",
+                sportType = SportType.TENNIS,
+                location = location,
+            )
 
-            assertEquals("Теннисный корт", result.name)
             assertEquals("Теннисный корт", repository.lastName)
+            assertEquals(1, repository.createCalls)
         }
 
     @Test
-    fun `пустое название запрещено`() =
+    fun `пустое название возвращает ошибку валидации`() =
         runTest {
             val repository = FakeSpotProposalRepository()
             val useCase = createUseCase(authenticated(UserRole.USER), repository)
 
             val result =
-                runCatching {
-                    useCase(
-                        name = "   ",
-                        sportType = SportType.FOOTBALL,
-                        location = location,
-                    )
-                }
+                useCase(
+                    name = "   ",
+                    sportType = SportType.FOOTBALL,
+                    location = location,
+                )
 
-            assertTrue(result.exceptionOrNull() is IllegalArgumentException)
+            assertEquals(
+                DomainResult.Failure(
+                    DomainError.Validation(
+                        "Название площадки не может быть пустым",
+                    ),
+                ),
+                result,
+            )
             assertEquals(0, repository.createCalls)
         }
 
     @Test
-    fun `гость не может предложить площадку`() =
+    fun `гость получает ошибку авторизации`() =
         runTest {
             val repository = FakeSpotProposalRepository()
             val useCase = createUseCase(AuthState.Guest, repository)
+
+            val result =
+                useCase(
+                    name = "Футбольная площадка",
+                    sportType = SportType.FOOTBALL,
+                    location = location,
+                )
+
+            assertEquals(
+                DomainResult.Failure(DomainError.Unauthorized),
+                result,
+            )
+            assertEquals(0, repository.createCalls)
+        }
+
+    @Test
+    fun `непредвиденная ошибка репозитория не скрывается`() =
+        runTest {
+            val failure = IllegalStateException("Ошибка репозитория")
+            val repository = FakeSpotProposalRepository(failure)
+            val useCase = createUseCase(authenticated(UserRole.USER), repository)
 
             val result =
                 runCatching {
@@ -107,8 +144,9 @@ class CreateProposalUseCaseTest {
                     )
                 }
 
-            assertTrue(result.exceptionOrNull() is IllegalStateException)
-            assertEquals(0, repository.createCalls)
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() === failure)
+            assertEquals(1, repository.createCalls)
         }
 
     private fun createUseCase(
@@ -153,9 +191,14 @@ class CreateProposalUseCaseTest {
         }
     }
 
-    private class FakeSpotProposalRepository : SpotProposalRepository {
+    private class FakeSpotProposalRepository(
+        private val failure: Throwable? = null,
+    ) : SpotProposalRepository {
         var createCalls = 0
         var lastName: String? = null
+        var lastSportType: SportType? = null
+        var lastLocation: GeoPoint? = null
+        var lastCreatedProposal: SpotProposal? = null
 
         override suspend fun getMyProposals(): List<SpotProposal> = error("Метод не используется в тесте")
 
@@ -168,15 +211,23 @@ class CreateProposalUseCaseTest {
         ): SpotProposal {
             createCalls++
             lastName = name
+            lastSportType = sportType
+            lastLocation = location
 
-            return SpotProposal(
-                id = "proposal-123",
-                authorId = "user-123",
-                name = name,
-                sportType = sportType,
-                location = location,
-                status = ProposalStatus.PENDING,
-            )
+            failure?.let { throw it }
+
+            val proposal =
+                SpotProposal(
+                    id = "proposal-123",
+                    authorId = "user-123",
+                    name = name,
+                    sportType = sportType,
+                    location = location,
+                    status = ProposalStatus.PENDING,
+                )
+
+            lastCreatedProposal = proposal
+            return proposal
         }
 
         override suspend fun approveProposal(proposalId: String): SpotProposal = error("Метод не используется в тесте")

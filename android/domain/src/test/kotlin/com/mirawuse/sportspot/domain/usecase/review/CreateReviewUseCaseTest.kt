@@ -1,3 +1,4 @@
+
 package com.mirawuse.sportspot.domain.usecase.review
 
 import com.mirawuse.sportspot.domain.model.auth.AuthState
@@ -7,6 +8,8 @@ import com.mirawuse.sportspot.domain.model.user.UserProfile
 import com.mirawuse.sportspot.domain.model.user.UserRole
 import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.ReviewRepository
+import com.mirawuse.sportspot.domain.result.DomainError
+import com.mirawuse.sportspot.domain.result.DomainResult
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -16,102 +19,130 @@ class CreateReviewUseCaseTest {
     private val spotId = SpotId("osm", "12345")
 
     @Test
-    fun `авторизованный пользователь может создать отзыв`() =
+    fun `пользователь успешно создает отзыв`() =
         runTest {
             val repository = FakeReviewRepository()
-            val useCase =
-                CreateReviewUseCase(
-                    FakeAuthRepository(authenticated(UserRole.USER)),
-                    repository,
-                )
+            val useCase = createUseCase(authenticated(UserRole.USER), repository)
 
             val result = useCase(spotId, 5, " Отличная площадка ")
 
-            assertEquals(5, result.rating)
-            assertEquals("Отличная площадка", result.text)
+            assertEquals(
+                DomainResult.Success(repository.lastCreatedReview),
+                result,
+            )
             assertEquals(spotId, repository.lastSpotId)
+            assertEquals(5, repository.lastRating)
+            assertEquals("Отличная площадка", repository.lastText)
             assertEquals(1, repository.createCalls)
         }
 
     @Test
-    fun `модератор может создать отзыв`() =
+    fun `модератор успешно создает отзыв`() =
         runTest {
             val repository = FakeReviewRepository()
-            val useCase =
-                CreateReviewUseCase(
-                    FakeAuthRepository(authenticated(UserRole.MODERATOR)),
-                    repository,
-                )
+            val useCase = createUseCase(authenticated(UserRole.MODERATOR), repository)
 
             val result = useCase(spotId, 1, "Плохое покрытие")
 
-            assertEquals(1, result.rating)
+            assertTrue(result is DomainResult.Success)
+            assertEquals(1, repository.lastRating)
             assertEquals(1, repository.createCalls)
         }
 
     @Test
-    fun `гость не может создать отзыв`() =
+    fun `гость получает Unauthorized`() =
         runTest {
             val repository = FakeReviewRepository()
-            val useCase =
-                CreateReviewUseCase(
-                    FakeAuthRepository(AuthState.Guest),
-                    repository,
-                )
+            val useCase = createUseCase(AuthState.Guest, repository)
 
-            val result = runCatching { useCase(spotId, 5, "Хорошо") }
+            val result = useCase(spotId, 5, "Хорошая площадка")
 
-            assertTrue(result.exceptionOrNull() is IllegalStateException)
+            assertEquals(
+                DomainResult.Failure(DomainError.Unauthorized),
+                result,
+            )
             assertEquals(0, repository.createCalls)
         }
 
     @Test
-    fun `оценка меньше 1 запрещена`() =
+    fun `оценка меньше 1 возвращает Validation`() =
         runTest {
             val repository = FakeReviewRepository()
-            val useCase =
-                CreateReviewUseCase(
-                    FakeAuthRepository(authenticated(UserRole.USER)),
-                    repository,
-                )
+            val useCase = createUseCase(authenticated(UserRole.USER), repository)
 
-            val result = runCatching { useCase(spotId, 0, "Текст") }
+            val result = useCase(spotId, 0, "Текст отзыва")
 
-            assertTrue(result.exceptionOrNull() is IllegalArgumentException)
+            assertEquals(
+                DomainResult.Failure(
+                    DomainError.Validation(
+                        "Оценка должна быть от 1 до 5",
+                    ),
+                ),
+                result,
+            )
             assertEquals(0, repository.createCalls)
         }
 
     @Test
-    fun `оценка больше 5 запрещена`() =
+    fun `оценка больше 5 возвращает Validation`() =
         runTest {
             val repository = FakeReviewRepository()
-            val useCase =
-                CreateReviewUseCase(
-                    FakeAuthRepository(authenticated(UserRole.USER)),
-                    repository,
-                )
+            val useCase = createUseCase(authenticated(UserRole.USER), repository)
 
-            val result = runCatching { useCase(spotId, 6, "Текст") }
+            val result = useCase(spotId, 6, "Текст отзыва")
 
-            assertTrue(result.exceptionOrNull() is IllegalArgumentException)
+            assertEquals(
+                DomainResult.Failure(
+                    DomainError.Validation(
+                        "Оценка должна быть от 1 до 5",
+                    ),
+                ),
+                result,
+            )
             assertEquals(0, repository.createCalls)
         }
 
     @Test
-    fun `пустой текст отзыва запрещен`() =
+    fun `пустой текст возвращает Validation`() =
         runTest {
             val repository = FakeReviewRepository()
-            val useCase =
-                CreateReviewUseCase(
-                    FakeAuthRepository(authenticated(UserRole.USER)),
-                    repository,
-                )
+            val useCase = createUseCase(authenticated(UserRole.USER), repository)
 
-            val result = runCatching { useCase(spotId, 5, "   ") }
+            val result = useCase(spotId, 5, "   ")
 
-            assertTrue(result.exceptionOrNull() is IllegalArgumentException)
+            assertEquals(
+                DomainResult.Failure(
+                    DomainError.Validation(
+                        "Текст отзыва не может быть пустым",
+                    ),
+                ),
+                result,
+            )
             assertEquals(0, repository.createCalls)
         }
+
+    @Test
+    fun `непредвиденная ошибка репозитория не скрывается`() =
+        runTest {
+            val failure = IllegalStateException("Ошибка создания отзыва")
+            val repository = FakeReviewRepository(failure)
+            val useCase = createUseCase(authenticated(UserRole.USER), repository)
+
+            val result = runCatching { useCase(spotId, 5, "Отличная площадка") }
+
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() === failure)
+            assertEquals(1, repository.createCalls)
+        }
+
+    private fun createUseCase(
+        state: AuthState,
+        repository: ReviewRepository,
+    ): CreateReviewUseCase =
+        CreateReviewUseCase(
+            authRepository = FakeAuthRepository(state),
+            reviewRepository = repository,
+        )
 
     private fun authenticated(role: UserRole): AuthState =
         AuthState.Authenticated(
@@ -146,9 +177,14 @@ class CreateReviewUseCaseTest {
         }
     }
 
-    private class FakeReviewRepository : ReviewRepository {
+    private class FakeReviewRepository(
+        private val failure: Throwable? = null,
+    ) : ReviewRepository {
         var createCalls = 0
         var lastSpotId: SpotId? = null
+        var lastRating: Int? = null
+        var lastText: String? = null
+        var lastCreatedReview: Review? = null
 
         override suspend fun getReviewsBySpot(spotId: SpotId): List<Review> = error("Метод не используется в тесте")
 
@@ -159,14 +195,22 @@ class CreateReviewUseCaseTest {
         ): Review {
             createCalls++
             lastSpotId = spotId
+            lastRating = rating
+            lastText = text
 
-            return Review(
-                id = "review-123",
-                spotId = spotId,
-                authorId = "user-123",
-                rating = rating,
-                text = text,
-            )
+            failure?.let { throw it }
+
+            val review =
+                Review(
+                    id = "review-123",
+                    spotId = spotId,
+                    authorId = "user-123",
+                    rating = rating,
+                    text = text,
+                )
+
+            lastCreatedReview = review
+            return review
         }
 
         override suspend fun updateReview(

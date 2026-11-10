@@ -10,26 +10,26 @@ import com.mirawuse.sportspot.domain.model.user.UserProfile
 import com.mirawuse.sportspot.domain.model.user.UserRole
 import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.SpotProposalRepository
+import com.mirawuse.sportspot.domain.result.DomainError
+import com.mirawuse.sportspot.domain.result.DomainResult
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ApproveProposalUseCaseTest {
     @Test
-    fun `модератор может одобрить предложение`() =
+    fun `модератор успешно одобряет предложение`() =
         runTest {
             val repository = FakeSpotProposalRepository()
             val useCase = createUseCase(authenticated(UserRole.MODERATOR), repository)
 
             val result = useCase("proposal-123")
 
-            assertEquals("proposal-123", result.id)
-            assertEquals(ProposalStatus.APPROVED, result.status)
-            assertNull(result.rejectReason)
-            assertEquals(1, repository.approveCalls)
+            assertTrue(result is DomainResult.Success)
+            assertEquals(ProposalStatus.APPROVED, repository.lastApprovedProposal?.status)
             assertEquals("proposal-123", repository.lastProposalId)
+            assertEquals(1, repository.approveCalls)
         }
 
     @Test
@@ -38,58 +38,93 @@ class ApproveProposalUseCaseTest {
             val repository = FakeSpotProposalRepository()
             val useCase = createUseCase(authenticated(UserRole.MODERATOR), repository)
 
-            useCase("  proposal-123  ")
+            val result = useCase("  proposal-123  ")
 
+            assertTrue(result is DomainResult.Success)
             assertEquals("proposal-123", repository.lastProposalId)
             assertEquals(1, repository.approveCalls)
         }
 
     @Test
-    fun `обычный пользователь не может одобрить предложение`() =
+    fun `обычный пользователь получает Forbidden`() =
         runTest {
             val repository = FakeSpotProposalRepository()
             val useCase = createUseCase(authenticated(UserRole.USER), repository)
 
-            val result = runCatching { useCase("proposal-123") }
+            val result = useCase("proposal-123")
 
-            assertTrue(result.exceptionOrNull() is IllegalStateException)
+            assertEquals(
+                DomainResult.Failure(DomainError.Forbidden),
+                result,
+            )
             assertEquals(0, repository.approveCalls)
         }
 
     @Test
-    fun `гость не может одобрить предложение`() =
+    fun `гость получает Unauthorized`() =
         runTest {
             val repository = FakeSpotProposalRepository()
             val useCase = createUseCase(AuthState.Guest, repository)
 
+            val result = useCase("proposal-123")
+
+            assertEquals(
+                DomainResult.Failure(DomainError.Unauthorized),
+                result,
+            )
+            assertEquals(0, repository.approveCalls)
+        }
+
+    @Test
+    fun `пустой идентификатор возвращает Validation`() =
+        runTest {
+            val repository = FakeSpotProposalRepository()
+            val useCase = createUseCase(authenticated(UserRole.MODERATOR), repository)
+
+            val result = useCase("")
+
+            assertEquals(
+                DomainResult.Failure(
+                    DomainError.Validation(
+                        "Идентификатор предложения не может быть пустым",
+                    ),
+                ),
+                result,
+            )
+            assertEquals(0, repository.approveCalls)
+        }
+
+    @Test
+    fun `идентификатор из пробелов возвращает Validation`() =
+        runTest {
+            val repository = FakeSpotProposalRepository()
+            val useCase = createUseCase(authenticated(UserRole.MODERATOR), repository)
+
+            val result = useCase("   ")
+
+            assertEquals(
+                DomainResult.Failure(
+                    DomainError.Validation(
+                        "Идентификатор предложения не может быть пустым",
+                    ),
+                ),
+                result,
+            )
+            assertEquals(0, repository.approveCalls)
+        }
+
+    @Test
+    fun `непредвиденная ошибка репозитория не скрывается`() =
+        runTest {
+            val failure = IllegalStateException("Ошибка репозитория")
+            val repository = FakeSpotProposalRepository(failure)
+            val useCase = createUseCase(authenticated(UserRole.MODERATOR), repository)
+
             val result = runCatching { useCase("proposal-123") }
 
-            assertTrue(result.exceptionOrNull() is IllegalStateException)
-            assertEquals(0, repository.approveCalls)
-        }
-
-    @Test
-    fun `пустой идентификатор предложения запрещен`() =
-        runTest {
-            val repository = FakeSpotProposalRepository()
-            val useCase = createUseCase(authenticated(UserRole.MODERATOR), repository)
-
-            val result = runCatching { useCase("") }
-
-            assertTrue(result.exceptionOrNull() is IllegalArgumentException)
-            assertEquals(0, repository.approveCalls)
-        }
-
-    @Test
-    fun `идентификатор из пробелов запрещен`() =
-        runTest {
-            val repository = FakeSpotProposalRepository()
-            val useCase = createUseCase(authenticated(UserRole.MODERATOR), repository)
-
-            val result = runCatching { useCase("   ") }
-
-            assertTrue(result.exceptionOrNull() is IllegalArgumentException)
-            assertEquals(0, repository.approveCalls)
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() === failure)
+            assertEquals(1, repository.approveCalls)
         }
 
     private fun createUseCase(
@@ -134,9 +169,12 @@ class ApproveProposalUseCaseTest {
         }
     }
 
-    private class FakeSpotProposalRepository : SpotProposalRepository {
+    private class FakeSpotProposalRepository(
+        private val failure: Throwable? = null,
+    ) : SpotProposalRepository {
         var approveCalls = 0
         var lastProposalId: String? = null
+        var lastApprovedProposal: SpotProposal? = null
 
         override suspend fun getMyProposals(): List<SpotProposal> = error("Метод не используется в тесте")
 
@@ -152,6 +190,8 @@ class ApproveProposalUseCaseTest {
             approveCalls++
             lastProposalId = proposalId
 
+            failure?.let { throw it }
+
             val proposal =
                 SpotProposal(
                     id = proposalId,
@@ -162,7 +202,9 @@ class ApproveProposalUseCaseTest {
                     status = ProposalStatus.PENDING,
                 )
 
-            return proposal.approve()
+            return proposal.approve().also {
+                lastApprovedProposal = it
+            }
         }
 
         override suspend fun rejectProposal(

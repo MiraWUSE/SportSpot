@@ -8,6 +8,8 @@ import com.mirawuse.sportspot.domain.model.user.UserProfile
 import com.mirawuse.sportspot.domain.model.user.UserRole
 import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.FavoriteRepository
+import com.mirawuse.sportspot.domain.result.DomainError
+import com.mirawuse.sportspot.domain.result.DomainResult
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -17,59 +19,85 @@ class AddFavoriteUseCaseTest {
     private val spotId = SpotId("osm", "12345")
 
     @Test
-    fun `авторизованный пользователь может добавить площадку`() =
+    fun `пользователь успешно добавляет площадку`() =
         runTest {
-            val authRepository = FakeAuthRepository(authenticated(UserRole.USER))
-            val favoriteRepository = FakeFavoriteRepository()
-            val useCase = AddFavoriteUseCase(authRepository, favoriteRepository)
+            val repository = FakeFavoriteRepository()
+            val useCase = createUseCase(authenticated(UserRole.USER), repository)
 
             val result = useCase(spotId)
 
-            assertEquals(spotId, result.spotId)
-            assertEquals(1, favoriteRepository.checkCalls)
-            assertEquals(1, favoriteRepository.addCalls)
+            assertTrue(result is DomainResult.Success)
+            assertEquals(spotId, (result as DomainResult.Success).value.spotId)
+            assertEquals(1, repository.checkCalls)
+            assertEquals(1, repository.addCalls)
         }
 
     @Test
-    fun `модератор может добавить площадку`() =
+    fun `модератор успешно добавляет площадку`() =
         runTest {
-            val authRepository = FakeAuthRepository(authenticated(UserRole.MODERATOR))
-            val favoriteRepository = FakeFavoriteRepository()
-            val useCase = AddFavoriteUseCase(authRepository, favoriteRepository)
+            val repository = FakeFavoriteRepository()
+            val useCase = createUseCase(authenticated(UserRole.MODERATOR), repository)
 
             val result = useCase(spotId)
 
-            assertEquals(spotId, result.spotId)
-            assertEquals(1, favoriteRepository.addCalls)
+            assertTrue(result is DomainResult.Success)
+            assertEquals(1, repository.addCalls)
         }
 
     @Test
-    fun `гость не может добавить площадку`() =
+    fun `гость получает Unauthorized`() =
         runTest {
-            val authRepository = FakeAuthRepository(AuthState.Guest)
-            val favoriteRepository = FakeFavoriteRepository()
-            val useCase = AddFavoriteUseCase(authRepository, favoriteRepository)
+            val repository = FakeFavoriteRepository()
+            val useCase = createUseCase(AuthState.Guest, repository)
 
-            val result = runCatching { useCase(spotId) }
+            val result = useCase(spotId)
 
-            assertTrue(result.exceptionOrNull() is IllegalStateException)
-            assertEquals(0, favoriteRepository.checkCalls)
-            assertEquals(0, favoriteRepository.addCalls)
+            assertEquals(
+                DomainResult.Failure(DomainError.Unauthorized),
+                result,
+            )
+            assertEquals(0, repository.checkCalls)
+            assertEquals(0, repository.addCalls)
         }
 
     @Test
-    fun `повторное добавление площадки запрещено`() =
+    fun `повторное добавление возвращает Conflict`() =
         runTest {
-            val authRepository = FakeAuthRepository(authenticated(UserRole.USER))
-            val favoriteRepository = FakeFavoriteRepository(alreadyAdded = true)
-            val useCase = AddFavoriteUseCase(authRepository, favoriteRepository)
+            val repository = FakeFavoriteRepository(alreadyAdded = true)
+            val useCase = createUseCase(authenticated(UserRole.USER), repository)
+
+            val result = useCase(spotId)
+
+            assertEquals(
+                DomainResult.Failure(DomainError.Conflict),
+                result,
+            )
+            assertEquals(1, repository.checkCalls)
+            assertEquals(0, repository.addCalls)
+        }
+
+    @Test
+    fun `непредвиденная ошибка репозитория не скрывается`() =
+        runTest {
+            val failure = IllegalStateException("Ошибка репозитория")
+            val repository = FakeFavoriteRepository(failure = failure)
+            val useCase = createUseCase(authenticated(UserRole.USER), repository)
 
             val result = runCatching { useCase(spotId) }
 
-            assertTrue(result.exceptionOrNull() is IllegalStateException)
-            assertEquals(1, favoriteRepository.checkCalls)
-            assertEquals(0, favoriteRepository.addCalls)
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() === failure)
+            assertEquals(1, repository.addCalls)
         }
+
+    private fun createUseCase(
+        state: AuthState,
+        repository: FavoriteRepository,
+    ): AddFavoriteUseCase =
+        AddFavoriteUseCase(
+            authRepository = FakeAuthRepository(state),
+            favoriteRepository = repository,
+        )
 
     private fun authenticated(role: UserRole): AuthState =
         AuthState.Authenticated(
@@ -106,6 +134,7 @@ class AddFavoriteUseCaseTest {
 
     private class FakeFavoriteRepository(
         private val alreadyAdded: Boolean = false,
+        private val failure: Throwable? = null,
     ) : FavoriteRepository {
         var checkCalls = 0
         var addCalls = 0
@@ -119,6 +148,8 @@ class AddFavoriteUseCaseTest {
 
         override suspend fun addFavorite(spotId: SpotId): Favorite {
             addCalls++
+            failure?.let { throw it }
+
             return Favorite(
                 userId = "user-123",
                 spotId = spotId,
