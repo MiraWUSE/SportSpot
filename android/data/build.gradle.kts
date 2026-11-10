@@ -1,8 +1,26 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
     alias(libs.plugins.ktlint)
+}
+
+val localConfiguration =
+    Properties().apply {
+        val configurationFile = rootProject.file("local.properties")
+        if (configurationFile.exists()) {
+            configurationFile.inputStream().use { load(it) }
+        }
+    }
+val publishableKey =
+    providers
+        .environmentVariable("SUPABASE_PUBLISHABLE_KEY")
+        .orElse(localConfiguration.getProperty("supabase.publishableKey", ""))
+        .get()
+require(publishableKey.isEmpty() || publishableKey.matches(Regex("sb_publishable_[A-Za-z0-9_-]+"))) {
+    "Configure only a Supabase publishable key"
 }
 
 android {
@@ -15,6 +33,10 @@ android {
         minSdk = 24
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"$publishableKey\"")
+    }
+    buildFeatures {
+        buildConfig = true
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
