@@ -1,0 +1,22 @@
+{
+  "spots": [
+    {
+      "id": "osm:node:12345",
+      "source": "osm",
+      "osm_type": "node",
+      "osm_id": 12345,
+      "name": "Спортивная площадка",
+      "sport_type": "basketball",
+      "latitude": 56.3269,
+      "longitude": 44.0059,
+      "address": null,
+      "surface": "asphalt",
+      "lighting": null,
+      "equipment": null
+    }
+  ],
+  "count": 1,
+  "source": "Overpass API",
+  "attribution": "© OpenStreetMap contributors",
+  "cache": "miss"
+}
