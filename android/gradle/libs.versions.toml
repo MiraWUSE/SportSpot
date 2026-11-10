@@ -14,11 +14,14 @@ material = "1.10.0"
 hilt = "2.60.1"
 ksp = "2.3.10"
 ktlintGradle = "14.2.0"
+kotlinxCoroutines = "1.10.2"
 
 
 [libraries]
 hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
 hilt-compiler = { module = "com.google.dagger:hilt-compiler", version.ref = "hilt" }
+
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
 
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
