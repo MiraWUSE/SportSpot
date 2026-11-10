@@ -7,6 +7,7 @@ import com.mirawuse.sportspot.data.remote.AccessTokenProvider
 import com.mirawuse.sportspot.data.remote.NetworkClient
 import com.mirawuse.sportspot.data.remote.NetworkConfig
 import com.mirawuse.sportspot.data.remote.NetworkLogger
+import com.mirawuse.sportspot.data.remote.api.SpotApi
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -48,4 +49,8 @@ object NetworkModule {
         client: OkHttpClient,
         gson: Gson,
     ): Retrofit = NetworkClient.createRetrofit(config, client, gson)
+
+    @Provides
+    @Singleton
+    fun provideSpotApi(retrofit: Retrofit): SpotApi = retrofit.create(SpotApi::class.java)
 }
