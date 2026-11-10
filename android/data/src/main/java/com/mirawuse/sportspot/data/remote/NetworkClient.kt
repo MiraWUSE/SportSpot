@@ -5,7 +5,6 @@ import com.google.gson.GsonBuilder
 import com.google.gson.Strictness
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object NetworkClient {
@@ -39,6 +38,6 @@ object NetworkClient {
             .Builder()
             .baseUrl(config.baseUrl)
             .client(client)
-            .addConverterFactory(GsonConverterFactory.create(gson))
+            .addConverterFactory(JsonConverterFactory(gson))
             .build()
 }
