@@ -251,6 +251,14 @@ class SpotMapperTest {
     }
 
     @Test
+    fun `lighting accepts JSON booleans and null but never coerces strings into false`() {
+        listOf("\"true\"", "\"false\"", "\"unknown\"", "1").forEach { value ->
+            val json = fixture("search-spots.json").replace("\"lighting\": null", "\"lighting\": $value")
+            assertThrows(JsonParseException::class.java) { gson.fromJson(json, SpotSearchResponseDto::class.java) }
+        }
+    }
+
+    @Test
     fun `mapping failure message does not expose server field contents`() {
         val error =
             assertThrows(SpotMappingException::class.java) {

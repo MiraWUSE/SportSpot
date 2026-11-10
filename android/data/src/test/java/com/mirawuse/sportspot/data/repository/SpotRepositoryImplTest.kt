@@ -296,6 +296,21 @@ class SpotRepositoryImplTest {
         }
 
     @Test
+    fun `HTTP string lighting is a parsing failure and cannot become false`() =
+        runBlocking {
+            val repository = repository()
+            listOf("true", "false", "unknown").forEach { value ->
+                val response =
+                    searchObject().apply {
+                        getAsJsonArray("spots")[0].asJsonObject.addProperty("lighting", value)
+                    }
+                server.enqueue(json(response.toString()))
+
+                assertError(NetworkError.Parsing) { repository.searchNearby(center, 1000) }
+            }
+        }
+
+    @Test
     fun `lookup rejects multiple rows and a row with another identifier`() =
         runBlocking {
             val repository = repository()

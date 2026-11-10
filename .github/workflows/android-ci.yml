@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   android:
-    name: Android ktlint and build
+    name: Android ktlint, tests and build
     runs-on: ubuntu-latest
 
     defaults:
@@ -45,6 +45,9 @@ jobs:
 
       - name: Check Kotlin formatting
         run: ./gradlew ktlintCheck --no-daemon
+
+      - name: Run Domain and network unit tests
+        run: ./gradlew :domain:test :data:testDebugUnitTest --no-daemon
 
       - name: Build Debug APK
         run: ./gradlew :app:assembleDebug --no-daemon

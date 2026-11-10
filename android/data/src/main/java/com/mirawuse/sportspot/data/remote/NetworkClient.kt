@@ -8,7 +8,12 @@ import retrofit2.Retrofit
 import java.util.concurrent.TimeUnit
 
 object NetworkClient {
-    fun createGson(): Gson = GsonBuilder().setStrictness(Strictness.STRICT).disableJdkUnsafe().create()
+    fun createGson(): Gson =
+        GsonBuilder()
+            .setStrictness(Strictness.STRICT)
+            .disableJdkUnsafe()
+            .registerTypeAdapter(Boolean::class.javaObjectType, BooleanJsonAdapter().nullSafe())
+            .create()
 
     fun createOkHttp(
         config: NetworkConfig,

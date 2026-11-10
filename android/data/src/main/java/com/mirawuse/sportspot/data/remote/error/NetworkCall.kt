@@ -25,7 +25,9 @@ class NetworkCall
             currentCoroutineContext().ensureActive()
             try {
                 if (!monitor.isOnline()) throw NetworkException(NetworkError.Offline)
-                return block()
+                val result = block()
+                currentCoroutineContext().ensureActive()
+                return result
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {

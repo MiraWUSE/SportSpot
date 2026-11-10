@@ -347,6 +347,30 @@ class NetworkCallTest {
             assertTrue(observed is CancellationException)
         }
 
+    @Test
+    fun `cancellation during synchronous response processing cannot escape as success`() =
+        runBlocking {
+            var completed = false
+            var observed: Throwable? = null
+            val job =
+                launch {
+                    try {
+                        calls.execute {
+                            currentCoroutineContext().cancel()
+                            "completed response"
+                        }
+                        completed = true
+                    } catch (failure: Throwable) {
+                        observed = failure
+                    }
+                }
+
+            job.join()
+
+            assertTrue(observed is CancellationException)
+            assertFalse(completed)
+        }
+
     private suspend fun failure(
         executor: NetworkCall = calls,
         block: suspend () -> Any?,

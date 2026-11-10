@@ -106,6 +106,33 @@ class NetworkClientTest {
     }
 
     @Test
+    fun `failed request logs do not reveal exception messages or query values`() {
+        val logs = mutableListOf<String>()
+        val client =
+            create(NetworkConfig(server.url("/"), debugLogging = true), null, logs)
+                .newBuilder()
+                .addInterceptor { throw IOException("sensitive-transport-details") }
+                .build()
+                .also { clients += it }
+
+        assertThrows(IOException::class.java) {
+            client.newCall(Request.Builder().url(server.url("/rest/v1/spots?private=sensitive-query")).build()).execute()
+        }
+
+        assertTrue(logs.single().contains("GET /rest/v1/spots -> failed"))
+        assertFalse(logs.single().contains("sensitive-"))
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun `secret and malformed API key configuration is rejected`() {
+        listOf("sb_secret_test-only", "test-key\r\nInjected: value").forEach { key ->
+            val failure = assertThrows(IllegalArgumentException::class.java) { NetworkConfig(publishableKey = key) }
+            assertFalse(failure.message.orEmpty().contains(key))
+        }
+    }
+
+    @Test
     fun `unknown paths do not expose identifiers in logs`() {
         val logs = mutableListOf<String>()
         server.enqueue(MockResponse())
