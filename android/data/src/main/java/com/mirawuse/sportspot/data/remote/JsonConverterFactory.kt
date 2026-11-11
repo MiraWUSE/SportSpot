@@ -3,6 +3,7 @@ package com.mirawuse.sportspot.data.remote
 import com.google.gson.Gson
 import com.google.gson.JsonParseException
 import com.google.gson.stream.MalformedJsonException
+import kotlinx.coroutines.CancellationException
 import okhttp3.ResponseBody
 import retrofit2.Converter
 import retrofit2.Retrofit
@@ -25,16 +26,13 @@ class JsonConverterFactory(
         return Converter<ResponseBody, Any> { body ->
             try {
                 converter.convert(body)
-            } catch (failure: JsonParseException) {
-                throw failure
-            } catch (failure: MalformedJsonException) {
-                throw JsonParseException("Invalid JSON response", failure)
-            } catch (failure: EOFException) {
-                throw JsonParseException("Invalid JSON response", failure)
-            } catch (failure: IllegalStateException) {
-                throw JsonParseException("Invalid JSON response", failure)
-            } catch (failure: NumberFormatException) {
-                throw JsonParseException("Invalid JSON response", failure)
+            } catch (failure: Exception) {
+                throw when (failure) {
+                    is CancellationException -> failure
+                    is MalformedJsonException, is EOFException, is IllegalStateException, is NumberFormatException ->
+                        JsonParseException("Invalid JSON response", failure)
+                    else -> failure
+                }
             }
         }
     }
