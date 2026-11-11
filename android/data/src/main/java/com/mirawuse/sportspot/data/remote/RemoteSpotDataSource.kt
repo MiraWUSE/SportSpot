@@ -32,14 +32,12 @@ class RemoteSpotDataSource
         internal suspend fun getSpotById(canonicalId: String): Spot? =
             calls.execute {
                 val rows = calls.body(api.getSpots(limit = 2, id = "eq.$canonicalId"))
-                if (rows.isEmpty()) {
-                    null
-                } else {
-                    if (rows.size != 1) throw SpotMappingException()
-                    val spot = rows.single()?.toDomain() ?: throw SpotMappingException()
-                    if (spot.id.toCanonicalId() != canonicalId) throw SpotMappingException()
-                    spot
-                }
+                if (rows.isEmpty()) return@execute null
+                if (rows.size != 1) throw SpotMappingException()
+
+                val spot = rows.single()?.toDomain() ?: throw SpotMappingException()
+                if (spot.id.toCanonicalId() != canonicalId) throw SpotMappingException()
+                spot
             }
 
         internal suspend fun searchNearby(request: SpotSearchRequest): List<Spot> =

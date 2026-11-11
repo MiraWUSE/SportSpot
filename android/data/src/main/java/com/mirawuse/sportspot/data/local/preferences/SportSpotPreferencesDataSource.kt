@@ -18,10 +18,12 @@ class SportSpotPreferencesDataSource
     ) {
         val preferences: Flow<UserPreferences> =
             dataStore.data.map { stored ->
-                val theme = stored[THEME_MODE]
+                val themeName = stored[THEME_MODE]
+                val themeMode = ThemeMode.entries.firstOrNull { it.name == themeName }
+                val validRadius = stored[SEARCH_RADIUS_METERS]?.takeIf { it in validSearchRadii }
                 UserPreferences(
-                    themeMode = ThemeMode.entries.firstOrNull { it.name == theme } ?: ThemeMode.SYSTEM,
-                    searchRadiusMeters = stored[SEARCH_RADIUS_METERS]?.takeIf { it in validSearchRadii } ?: DEFAULT_SEARCH_RADIUS_METERS,
+                    themeMode = themeMode ?: ThemeMode.SYSTEM,
+                    searchRadiusMeters = validRadius ?: DEFAULT_SEARCH_RADIUS_METERS,
                 )
             }
 

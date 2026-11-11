@@ -17,6 +17,7 @@ internal data class SpotSearchRequest(
     val radiusMeters: Int,
     val sport: String,
 ) {
+    // The cache key uses the same values sent in the HTTP query.
     val cacheKey: String
         get() = "$latitude:$longitude:$radiusMeters:$sport"
 }
@@ -30,10 +31,15 @@ internal suspend fun validatedSearchRequest(
 ): SpotSearchRequest =
     validateRequest {
         require(radiusMeters in 100..3000) { "Search radius must be between 100 and 3000 meters" }
-        SpotSearchRequest(coordinate(center.latitude), coordinate(center.longitude), radiusMeters, sportType.toApiSport())
+        SpotSearchRequest(
+            latitude = formatCoordinate(center.latitude),
+            longitude = formatCoordinate(center.longitude),
+            radiusMeters = radiusMeters,
+            sport = sportType.toApiSport(),
+        )
     }
 
-private fun coordinate(value: Double): String {
+private fun formatCoordinate(value: Double): String {
     val decimal = BigDecimal.valueOf(value).stripTrailingZeros()
     require(decimal.scale() <= 6) { "Search coordinates support at most six decimal places" }
     return decimal.toPlainString()
