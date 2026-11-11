@@ -2,6 +2,7 @@ package com.mirawuse.sportspot.data.di
 
 import android.content.Context
 import androidx.room.Room
+import com.mirawuse.sportspot.data.local.CacheClock
 import com.mirawuse.sportspot.data.local.db.MIGRATION_1_2
 import com.mirawuse.sportspot.data.local.db.SportSpotDatabase
 import dagger.Module
@@ -14,6 +15,9 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object LocalStorageModule {
+    @Provides
+    fun provideCacheClock(): CacheClock = CacheClock(System::currentTimeMillis)
+
     @Provides
     @Singleton
     fun provideDatabase(

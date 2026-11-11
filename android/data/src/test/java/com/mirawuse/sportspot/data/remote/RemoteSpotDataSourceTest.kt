@@ -1,11 +1,8 @@
-package com.mirawuse.sportspot.data.repository
+package com.mirawuse.sportspot.data.remote
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonNull
 import com.google.gson.JsonObject
-import com.mirawuse.sportspot.data.remote.AccessTokenProvider
-import com.mirawuse.sportspot.data.remote.NetworkClient
-import com.mirawuse.sportspot.data.remote.NetworkConfig
 import com.mirawuse.sportspot.data.remote.api.SpotApi
 import com.mirawuse.sportspot.data.remote.connectivity.NetworkMonitor
 import com.mirawuse.sportspot.data.remote.error.NetworkCall
@@ -15,6 +12,7 @@ import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
+import com.mirawuse.sportspot.domain.repository.SpotRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -37,7 +35,7 @@ import org.junit.Test
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class SpotRepositoryImplTest {
+class RemoteSpotDataSourceTest {
     @get:Rule
     val server = MockWebServer()
 
@@ -439,7 +437,7 @@ class SpotRepositoryImplTest {
         online: Boolean = true,
         readTimeoutMillis: Long = 2000,
         callTimeoutMillis: Long = 5000,
-    ): SpotRepositoryImpl {
+    ): SpotRepository {
         val config =
             NetworkConfig(
                 baseUrl = server.url("/"),
@@ -451,7 +449,18 @@ class SpotRepositoryImplTest {
             )
         val client = NetworkClient.createOkHttp(config, AccessTokenProvider { null }).also { clients += it }
         val api = NetworkClient.createRetrofit(config, client, gson).create(SpotApi::class.java)
-        return SpotRepositoryImpl(api, NetworkCall(NetworkMonitor { online }, gson))
+        val remote = RemoteSpotDataSource(api, NetworkCall(NetworkMonitor { online }, gson))
+        return object : SpotRepository {
+            override suspend fun getSpots(): List<Spot> = remote.getSpots()
+
+            override suspend fun getSpotById(id: SpotId): Spot? = remote.getSpotById(validatedCanonicalId(id))
+
+            override suspend fun searchNearby(
+                center: GeoPoint,
+                radiusMeters: Int,
+                sportType: SportType?,
+            ): List<Spot> = remote.searchNearby(validatedSearchRequest(center, radiusMeters, sportType))
+        }
     }
 
     private suspend fun assertError(
