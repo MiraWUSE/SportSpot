@@ -1,13 +1,14 @@
 package com.mirawuse.sportspot.data.repository
 
-import com.mirawuse.sportspot.data.mapper.SpotMappingException
-import com.mirawuse.sportspot.data.mapper.toApiSport
-import com.mirawuse.sportspot.data.mapper.toCanonicalId
-import com.mirawuse.sportspot.data.mapper.toDomain
-import com.mirawuse.sportspot.data.remote.api.SpotApi
-import com.mirawuse.sportspot.data.remote.error.NetworkCall
+import com.mirawuse.sportspot.data.local.CacheClock
+import com.mirawuse.sportspot.data.local.CacheSnapshot
+import com.mirawuse.sportspot.data.local.RoomSpotCache
+import com.mirawuse.sportspot.data.remote.RemoteSpotDataSource
+import com.mirawuse.sportspot.data.remote.connectivity.NetworkMonitor
 import com.mirawuse.sportspot.data.remote.error.NetworkError
 import com.mirawuse.sportspot.data.remote.error.NetworkException
+import com.mirawuse.sportspot.data.remote.validatedCanonicalId
+import com.mirawuse.sportspot.data.remote.validatedSearchRequest
 import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
@@ -15,41 +16,41 @@ import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.repository.SpotRepository
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import java.math.BigDecimal
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 
 class SpotRepositoryImpl
     @Inject
     constructor(
-        private val api: SpotApi,
-        private val calls: NetworkCall,
+        private val remote: RemoteSpotDataSource,
+        private val cache: RoomSpotCache,
+        private val monitor: NetworkMonitor,
+        private val clock: CacheClock,
     ) : SpotRepository {
+        // The saved list and individual details update the same Room rows.
+        private val savedMutex = Mutex()
+        private val searchMutex = Mutex()
+
         override suspend fun getSpots(): List<Spot> =
-            calls.execute {
-                val spots = mutableListOf<Spot>()
-                val ids = mutableSetOf<SpotId>()
-                do {
-                    val rows = calls.body(api.getSpots(limit = PAGE_SIZE, offset = spots.size))
-                    if (rows.size > PAGE_SIZE) throw SpotMappingException()
-                    val page = rows.map { it?.toDomain() ?: throw SpotMappingException() }
-                    if (page.any { !ids.add(it.id) }) throw SpotMappingException()
-                    spots += page
-                } while (rows.size == PAGE_SIZE)
-                spots
+            savedMutex.withLock {
+                readOrRefresh(
+                    ttlMillis = SAVED_TTL_MILLIS,
+                    readCache = cache::readSaved,
+                    fetchRemote = remote::getSpots,
+                    writeCache = cache::replaceSaved,
+                )
             }
 
         override suspend fun getSpotById(id: SpotId): Spot? {
-            val canonical = validate { id.toCanonicalId() }
-            return calls.execute {
-                val rows = calls.body(api.getSpots(limit = 2, id = "eq.$canonical"))
-                if (rows.isEmpty()) {
-                    null
-                } else {
-                    if (rows.size != 1) throw SpotMappingException()
-                    val spot = rows.single()?.toDomain() ?: throw SpotMappingException()
-                    if (spot.id != id) throw SpotMappingException()
-                    spot
-                }
+            val canonicalId = validatedCanonicalId(id)
+            return savedMutex.withLock {
+                readOrRefresh(
+                    ttlMillis = SAVED_TTL_MILLIS,
+                    readCache = { cache.readSavedSpot(canonicalId) },
+                    fetchRemote = { remote.getSpotById(canonicalId) },
+                    writeCache = { spot, time -> cache.replaceSavedSpot(canonicalId, spot, time) },
+                )
             }
         }
 
@@ -58,33 +59,69 @@ class SpotRepositoryImpl
             radiusMeters: Int,
             sportType: SportType?,
         ): List<Spot> {
-            val (lat, lon, sport) =
-                validate {
-                    require(radiusMeters in 100..3000) { "Search radius must be between 100 and 3000 meters" }
-                    Triple(coordinate(center.latitude), coordinate(center.longitude), sportType.toApiSport())
+            val request = validatedSearchRequest(center, radiusMeters, sportType)
+            val key = request.cacheKey
+            return searchMutex.withLock {
+                readOrRefresh(
+                    ttlMillis = SEARCH_TTL_MILLIS,
+                    readCache = { cache.readSearch(key) },
+                    fetchRemote = { remote.searchNearby(request) },
+                    writeCache = { spots, time -> cache.replaceSearch(key, spots, time) },
+                )
+            }
+        }
+
+        private suspend fun <T> readOrRefresh(
+            ttlMillis: Long,
+            readCache: suspend () -> CacheSnapshot<T>?,
+            fetchRemote: suspend () -> T,
+            writeCache: suspend (T, Long) -> T,
+        ): T {
+            val context = currentCoroutineContext()
+            context.ensureActive()
+            val snapshot = readCache()
+            context.ensureActive()
+            if (snapshot != null && isFresh(snapshot.fetchedAtEpochMillis, ttlMillis)) return snapshot.value
+
+            if (!monitor.isOnline()) {
+                context.ensureActive()
+                if (snapshot != null) return snapshot.value
+                throw NetworkException(NetworkError.Offline)
+            }
+
+            val remoteValue =
+                try {
+                    fetchRemote()
+                } catch (failure: NetworkException) {
+                    context.ensureActive()
+                    if (snapshot != null && failure.error.permitsCacheFallback()) return snapshot.value
+                    throw failure
                 }
-            return calls.execute {
-                calls.body(api.searchSpots(lat, lon, radiusMeters, sport)).toDomain()
-            }
+
+            context.ensureActive()
+            val localValue = writeCache(remoteValue, clock.nowMillis())
+            context.ensureActive()
+            return localValue
         }
 
-        private fun coordinate(value: Double): String {
-            val decimal = BigDecimal.valueOf(value).stripTrailingZeros()
-            require(decimal.scale() <= 6) { "Search coordinates support at most six decimal places" }
-            return decimal.toPlainString()
+        private fun isFresh(
+            fetchedAt: Long,
+            ttlMillis: Long,
+        ): Boolean {
+            val now = clock.nowMillis()
+            // Migrated rows start at zero. Timestamps ahead of the clock also need a refresh.
+            return fetchedAt in 1L..now && now - fetchedAt < ttlMillis
         }
 
-        private suspend fun <T> validate(block: () -> T): T {
-            currentCoroutineContext().ensureActive()
-            return try {
-                block()
-            } catch (failure: IllegalArgumentException) {
-                currentCoroutineContext().ensureActive()
-                throw NetworkException(NetworkError.InvalidRequest, failure)
+        private fun NetworkError.permitsCacheFallback(): Boolean =
+            when (this) {
+                NetworkError.Offline, NetworkError.Timeout, NetworkError.Dns, NetworkError.Connection -> true
+                is NetworkError.Http -> status == 429 || status in 500..599
+                NetworkError.Parsing, NetworkError.InvalidRequest, NetworkError.Unexpected -> false
             }
-        }
 
         companion object {
-            private const val PAGE_SIZE = 100
+            private const val SAVED_TTL_MILLIS = 15 * 60_000L
+            private const val SEARCH_TTL_MILLIS = 60 * 60_000L
         }
     }
