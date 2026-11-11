@@ -48,12 +48,14 @@ android {
     }
 }
 
+val roomSchemas = layout.projectDirectory.dir("schemas")
 room {
-    schemaDirectory("$projectDir/schemas")
+    schemaDirectory(roomSchemas.asFile.absolutePath)
 }
 
 tasks.withType<Test>().configureEach {
-    classpath += files(layout.projectDirectory.dir("schemas"))
+    inputs.dir(roomSchemas)
+    systemProperty("sportspot.room.schemas", roomSchemas.asFile.absolutePath)
 }
 
 dependencies {

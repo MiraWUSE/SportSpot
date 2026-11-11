@@ -39,6 +39,9 @@ class RoomSpotCacheTest {
     private val databaseName = "cache.db"
     private lateinit var database: SportSpotDatabase
     private lateinit var cache: RoomSpotCache
+    private val initialFetch = 1_000L
+    private val updatedFetch = 2_000L
+    private val emptyFetch = 3_000L
 
     private val node =
         Spot(
@@ -91,20 +94,30 @@ class RoomSpotCacheTest {
         runBlocking {
             val saved = listOf(way, community, node, relation)
             assertNull(cache.readSaved())
-            assertEquals(saved, cache.replaceSaved(saved))
+            assertEquals(saved, cache.replaceSaved(saved, initialFetch))
 
             reopenDatabase()
-            assertEquals(saved, cache.readSaved())
-            assertEquals(relation, cache.readSavedSpot("osm:relation:789"))
+            val savedSnapshot = cache.readSaved()
+            assertEquals(saved, savedSnapshot?.value)
+            assertEquals(initialFetch, savedSnapshot?.fetchedAtEpochMillis)
+            val relationSnapshot = cache.readSavedSpot("osm:relation:789")
+            assertEquals(relation, relationSnapshot?.value)
+            assertEquals(initialFetch, relationSnapshot?.fetchedAtEpochMillis)
 
-            assertEquals(listOf(community), cache.replaceSaved(listOf(community)))
-            assertEquals(listOf(community), cache.readSaved())
-            assertNull(cache.readSavedSpot("osm:relation:789"))
+            assertEquals(listOf(community), cache.replaceSaved(listOf(community), updatedFetch))
+            assertEquals(listOf(community), cache.readSaved()?.value)
+            val removedRelation = cache.readSavedSpot("osm:relation:789")
+            assertNull(removedRelation?.value)
+            assertEquals(updatedFetch, removedRelation?.fetchedAtEpochMillis)
 
-            assertEquals(emptyList<Spot>(), cache.replaceSaved(emptyList()))
+            assertEquals(emptyList<Spot>(), cache.replaceSaved(emptyList(), emptyFetch))
             reopenDatabase()
-            assertEquals(emptyList<Spot>(), cache.readSaved())
-            assertNull(cache.readSavedSpot("community:33333333-3333-4333-8333-333333333333"))
+            val emptySnapshot = cache.readSaved()
+            assertEquals(emptyList<Spot>(), emptySnapshot?.value)
+            assertEquals(emptyFetch, emptySnapshot?.fetchedAtEpochMillis)
+            val removedCommunity = cache.readSavedSpot("community:33333333-3333-4333-8333-333333333333")
+            assertNull(removedCommunity?.value)
+            assertEquals(emptyFetch, removedCommunity?.fetchedAtEpochMillis)
         }
 
     @Test
@@ -115,25 +128,32 @@ class RoomSpotCacheTest {
             val missing = "56.3269:44.0059:3000:all"
             val firstSpots = listOf(relation, way, node)
             val secondSpots = listOf(community, node.copy(name = "Node in second response"))
+            val secondFetch = 1_500L
 
             assertNull(cache.readSearch(first))
-            assertEquals(firstSpots, cache.replaceSearch(first, firstSpots))
-            assertEquals(secondSpots, cache.replaceSearch(second, secondSpots))
+            assertEquals(firstSpots, cache.replaceSearch(first, firstSpots, initialFetch))
+            assertEquals(secondSpots, cache.replaceSearch(second, secondSpots, secondFetch))
 
             reopenDatabase()
-            assertEquals(firstSpots, cache.readSearch(first))
-            assertEquals(secondSpots, cache.readSearch(second))
+            val firstSnapshot = cache.readSearch(first)
+            assertEquals(firstSpots, firstSnapshot?.value)
+            assertEquals(initialFetch, firstSnapshot?.fetchedAtEpochMillis)
+            assertEquals(secondSpots, cache.readSearch(second)?.value)
             assertNull(cache.readSaved())
             assertNull(cache.readSavedSpot("osm:node:12345"))
 
-            assertEquals(listOf(way), cache.replaceSearch(first, listOf(way)))
-            assertEquals(listOf(way), cache.readSearch(first))
-            assertEquals(secondSpots, cache.readSearch(second))
+            assertEquals(listOf(way), cache.replaceSearch(first, listOf(way), updatedFetch))
+            assertEquals(listOf(way), cache.readSearch(first)?.value)
+            assertEquals(secondSpots, cache.readSearch(second)?.value)
 
-            assertEquals(emptyList<Spot>(), cache.replaceSearch(first, emptyList()))
+            assertEquals(emptyList<Spot>(), cache.replaceSearch(first, emptyList(), emptyFetch))
             reopenDatabase()
-            assertEquals(emptyList<Spot>(), cache.readSearch(first))
-            assertEquals(secondSpots, cache.readSearch(second))
+            val emptySnapshot = cache.readSearch(first)
+            assertEquals(emptyList<Spot>(), emptySnapshot?.value)
+            assertEquals(emptyFetch, emptySnapshot?.fetchedAtEpochMillis)
+            val secondSnapshot = cache.readSearch(second)
+            assertEquals(secondSpots, secondSnapshot?.value)
+            assertEquals(secondFetch, secondSnapshot?.fetchedAtEpochMillis)
             assertNull(cache.readSearch(missing))
         }
 
@@ -142,33 +162,46 @@ class RoomSpotCacheTest {
         runBlocking {
             val nodeId = "osm:node:12345"
             val wayId = "osm:way:456"
-            assertEquals(node, cache.replaceSavedSpot(nodeId, node))
-            assertEquals(node, cache.readSavedSpot(nodeId))
+            assertEquals(node, cache.replaceSavedSpot(nodeId, node, initialFetch))
+            reopenDatabase()
+            val nodeSnapshot = cache.readSavedSpot(nodeId)
+            assertEquals(node, nodeSnapshot?.value)
+            assertEquals(initialFetch, nodeSnapshot?.fetchedAtEpochMillis)
             assertNull(cache.readSaved())
 
-            assertEquals(listOf(relation), cache.replaceSaved(listOf(relation)))
-            assertNull(cache.readSavedSpot(nodeId))
-            assertEquals(way, cache.replaceSavedSpot(wayId, way))
-            assertEquals(way, cache.readSavedSpot(wayId))
-            assertEquals(listOf(relation), cache.readSaved())
+            assertEquals(listOf(relation), cache.replaceSaved(listOf(relation), updatedFetch))
+            val removedNode = cache.readSavedSpot(nodeId)
+            assertNull(removedNode?.value)
+            assertEquals(updatedFetch, removedNode?.fetchedAtEpochMillis)
+            assertEquals(way, cache.replaceSavedSpot(wayId, way, 2_500L))
+            assertEquals(way, cache.readSavedSpot(wayId)?.value)
+            assertEquals(listOf(relation), cache.readSaved()?.value)
 
-            assertNull(cache.replaceSavedSpot(wayId, null))
-            assertNull(cache.readSavedSpot(wayId))
-            assertEquals(listOf(relation), cache.readSaved())
+            assertNull(cache.replaceSavedSpot(wayId, null, emptyFetch))
+            val removedWay = cache.readSavedSpot(wayId)
+            assertNull(removedWay?.value)
+            assertEquals(updatedFetch, removedWay?.fetchedAtEpochMillis)
+            val savedSnapshot = cache.readSaved()
+            assertEquals(listOf(relation), savedSnapshot?.value)
+            assertEquals(updatedFetch, savedSnapshot?.fetchedAtEpochMillis)
         }
 
     @Test
     fun `failed saved replacement rolls back deletions and partial inserts`() =
         runBlocking {
             val saved = listOf(way, node)
-            cache.replaceSaved(saved)
+            cache.replaceSaved(saved, initialFetch)
 
-            val failure = runCatching { cache.replaceSaved(listOf(relation, relation)) }.exceptionOrNull()
+            val failure = runCatching { cache.replaceSaved(listOf(relation, relation), updatedFetch) }.exceptionOrNull()
 
             assertTrue("Expected duplicate key failure, got $failure", failure is SQLiteConstraintException)
             reopenDatabase()
-            assertEquals(saved, cache.readSaved())
-            assertNull(cache.readSavedSpot("osm:relation:789"))
+            val savedSnapshot = cache.readSaved()
+            assertEquals(saved, savedSnapshot?.value)
+            assertEquals(initialFetch, savedSnapshot?.fetchedAtEpochMillis)
+            val rolledBackRelation = cache.readSavedSpot("osm:relation:789")
+            assertNull(rolledBackRelation?.value)
+            assertEquals(initialFetch, rolledBackRelation?.fetchedAtEpochMillis)
         }
 
     @Test
@@ -177,15 +210,15 @@ class RoomSpotCacheTest {
             val key = "56.3269:44.0059:1000:all"
             val saved = listOf(way, node)
             val search = listOf(relation)
-            cache.replaceSaved(saved)
-            cache.replaceSearch(key, search)
+            cache.replaceSaved(saved, initialFetch)
+            cache.replaceSearch(key, search, initialFetch)
             val writesCompleted = CompletableDeferred<Unit>()
 
             val write =
                 launch {
                     database.withTransaction {
-                        cache.replaceSaved(listOf(community))
-                        cache.replaceSearch(key, emptyList())
+                        cache.replaceSaved(listOf(community), updatedFetch)
+                        cache.replaceSearch(key, emptyList(), updatedFetch)
                         writesCompleted.complete(Unit)
                         awaitCancellation()
                     }
@@ -195,8 +228,12 @@ class RoomSpotCacheTest {
 
             assertTrue(write.isCancelled)
             reopenDatabase()
-            assertEquals(saved, cache.readSaved())
-            assertEquals(search, cache.readSearch(key))
+            val savedSnapshot = cache.readSaved()
+            assertEquals(saved, savedSnapshot?.value)
+            assertEquals(initialFetch, savedSnapshot?.fetchedAtEpochMillis)
+            val searchSnapshot = cache.readSearch(key)
+            assertEquals(search, searchSnapshot?.value)
+            assertEquals(initialFetch, searchSnapshot?.fetchedAtEpochMillis)
         }
 
     private fun reopenDatabase() {

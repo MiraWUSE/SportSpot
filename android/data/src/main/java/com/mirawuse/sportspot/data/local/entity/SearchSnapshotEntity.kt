@@ -9,4 +9,6 @@ data class SearchSnapshotEntity(
     @PrimaryKey
     @ColumnInfo(name = "query_key")
     val queryKey: String,
+    @ColumnInfo(name = "fetched_at_epoch_millis", defaultValue = "0")
+    val fetchedAtEpochMillis: Long,
 )

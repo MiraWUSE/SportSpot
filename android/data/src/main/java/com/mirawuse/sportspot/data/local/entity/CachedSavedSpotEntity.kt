@@ -15,4 +15,6 @@ data class CachedSavedSpotEntity(
     val spot: SpotColumns,
     @ColumnInfo(name = "list_position")
     val listPosition: Int?,
+    @ColumnInfo(name = "fetched_at_epoch_millis", defaultValue = "0")
+    val fetchedAtEpochMillis: Long,
 )

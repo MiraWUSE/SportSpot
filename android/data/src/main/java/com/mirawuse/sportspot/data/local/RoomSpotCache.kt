@@ -11,6 +11,11 @@ import com.mirawuse.sportspot.data.local.mapper.toDomain
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import javax.inject.Inject
 
+data class CacheSnapshot<T>(
+    val value: T,
+    val fetchedAtEpochMillis: Long,
+)
+
 class RoomSpotCache
     @Inject
     constructor(
@@ -18,26 +23,38 @@ class RoomSpotCache
     ) {
         private val dao = database.spotCacheDao()
 
-        suspend fun readSaved(): List<Spot>? =
+        suspend fun readSaved(): CacheSnapshot<List<Spot>>? =
             database.withTransaction {
-                if (dao.savedSnapshot() == null) null else savedSpots()
+                dao.savedSnapshot()?.let { CacheSnapshot(savedSpots(), it.fetchedAtEpochMillis) }
             }
 
-        suspend fun readSavedSpot(canonicalId: String): Spot? = dao.savedSpot(canonicalId)?.spot?.toDomain()
+        suspend fun readSavedSpot(canonicalId: String): CacheSnapshot<Spot?>? =
+            database.withTransaction {
+                val spot = dao.savedSpot(canonicalId)
+                if (spot != null) {
+                    CacheSnapshot(spot.spot.toDomain(), spot.fetchedAtEpochMillis)
+                } else {
+                    dao.savedSnapshot()?.let { CacheSnapshot(null, it.fetchedAtEpochMillis) }
+                }
+            }
 
-        suspend fun replaceSaved(spots: List<Spot>): List<Spot> =
+        suspend fun replaceSaved(
+            spots: List<Spot>,
+            fetchedAtEpochMillis: Long,
+        ): List<Spot> =
             database.withTransaction {
                 dao.clearSavedSpots()
                 dao.insertSavedSpots(
-                    spots.mapIndexed { index, spot -> CachedSavedSpotEntity(spot.toCacheColumns(), index) },
+                    spots.mapIndexed { index, spot -> CachedSavedSpotEntity(spot.toCacheColumns(), index, fetchedAtEpochMillis) },
                 )
-                dao.upsertSavedSnapshot(SavedSpotSnapshotEntity())
+                dao.upsertSavedSnapshot(SavedSpotSnapshotEntity(fetchedAtEpochMillis = fetchedAtEpochMillis))
                 savedSpots()
             }
 
         suspend fun replaceSavedSpot(
             canonicalId: String,
             spot: Spot?,
+            fetchedAtEpochMillis: Long,
         ): Spot? =
             database.withTransaction {
                 if (spot == null) {
@@ -46,23 +63,24 @@ class RoomSpotCache
                     val columns = spot.toCacheColumns()
                     require(columns.canonicalId == canonicalId) { "Cached spot must match requested identifier" }
                     val position = dao.savedSpot(canonicalId)?.listPosition
-                    dao.upsertSavedSpot(CachedSavedSpotEntity(columns, position))
+                    dao.upsertSavedSpot(CachedSavedSpotEntity(columns, position, fetchedAtEpochMillis))
                 }
-                readSavedSpot(canonicalId)
+                dao.savedSpot(canonicalId)?.spot?.toDomain()
             }
 
-        suspend fun readSearch(queryKey: String): List<Spot>? =
+        suspend fun readSearch(queryKey: String): CacheSnapshot<List<Spot>>? =
             database.withTransaction {
-                if (dao.searchSnapshot(queryKey) == null) null else searchSpots(queryKey)
+                dao.searchSnapshot(queryKey)?.let { CacheSnapshot(searchSpots(queryKey), it.fetchedAtEpochMillis) }
             }
 
         suspend fun replaceSearch(
             queryKey: String,
             spots: List<Spot>,
+            fetchedAtEpochMillis: Long,
         ): List<Spot> =
             database.withTransaction {
                 dao.deleteSearchSnapshot(queryKey)
-                dao.insertSearchSnapshot(SearchSnapshotEntity(queryKey))
+                dao.insertSearchSnapshot(SearchSnapshotEntity(queryKey, fetchedAtEpochMillis))
                 dao.insertSearchSpots(
                     spots.mapIndexed { position, spot -> CachedSearchSpotEntity(queryKey, position, spot.toCacheColumns()) },
                 )
