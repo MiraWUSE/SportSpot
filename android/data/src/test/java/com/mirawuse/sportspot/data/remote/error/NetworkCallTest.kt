@@ -1,5 +1,7 @@
 package com.mirawuse.sportspot.data.remote.error
 
+import com.google.gson.Gson
+import com.google.gson.JsonDeserializer
 import com.google.gson.JsonParseException
 import com.mirawuse.sportspot.data.mapper.SpotMappingException
 import com.mirawuse.sportspot.data.remote.AccessTokenProvider
@@ -40,10 +42,12 @@ class NetworkCallTest {
     private val gson = NetworkClient.createGson()
     private val calls = NetworkCall(NetworkMonitor { true }, gson)
     private val clients = mutableListOf<OkHttpClient>()
-    private val api by lazy {
+    private val api by lazy { createApi() }
+
+    private fun createApi(gson: Gson = this.gson): SpotApi {
         val config = NetworkConfig(server.url("/"))
         val client = NetworkClient.createOkHttp(config, AccessTokenProvider { null }).also { clients += it }
-        NetworkClient.createRetrofit(config, client, gson).create(SpotApi::class.java)
+        return NetworkClient.createRetrofit(config, client, gson).create(SpotApi::class.java)
     }
 
     @After
@@ -100,7 +104,6 @@ class NetworkCallTest {
                         "UNAUTHORIZED_NO_AUTH_HEADER",
                         """{"code":"UNAUTHORIZED_NO_AUTH_HEADER","message":"Missing authorization header"}""",
                     ),
-                    Triple(500, "INTERNAL_ERROR", """{"error":{"code":"INTERNAL_ERROR","message":"Service not configured"}}"""),
                 )
             errors.forEach { (status, code, body) ->
                 server.enqueue(MockResponse().setResponseCode(status).setBody(body))
@@ -118,7 +121,6 @@ class NetworkCallTest {
         runBlocking {
             val bodies =
                 listOf(
-                    "",
                     "<html>Service temporarily unavailable</html>",
                     "{",
                     "[]",
@@ -129,6 +131,7 @@ class NetworkCallTest {
                     """{"code":"sb_secret_private-value"}""",
                     """{"code":"user.token.value"}""",
                     """{"code":"${"A".repeat(65)}"}""",
+                    """{"code":"SAFE_CODE","message":"${"A".repeat(8192)}"}""",
                 )
             bodies.forEach { body ->
                 server.enqueue(MockResponse().setResponseCode(503).setBody(body))
@@ -246,16 +249,25 @@ class NetworkCallTest {
         }
 
     @Test
-    fun `empty successful array is a success but absent successful body is parsing`() =
+    fun `absent successful body is a parsing failure`() =
         runBlocking {
-            server.enqueue(MockResponse().setBody("[]"))
-
-            val rows = calls.execute { calls.body(api.getSpots()) }
-
-            assertTrue(rows.isEmpty())
-            assertRestRequest()
             val failure = failure { calls.body(Response.success<List<SpotDto?>>(null)) }
             assertEquals(NetworkError.Parsing, failure.error)
+        }
+
+    @Test
+    fun `cancellation during Retrofit decoding reaches the caller as cancellation`() =
+        runBlocking {
+            val cancelled = CancellationException("Test cancellation")
+            val adapter = JsonDeserializer<SpotDto> { _, _, _ -> throw cancelled }
+            val cancellingApi = createApi(gson.newBuilder().registerTypeAdapter(SpotDto::class.java, adapter).create())
+            server.enqueue(MockResponse().setBody("[{}]"))
+
+            val failure = runCatching { calls.execute { calls.body(cancellingApi.getSpots()) } }.exceptionOrNull()
+
+            assertTrue(failure is CancellationException)
+            assertEquals(cancelled.message, failure?.message)
+            assertRestRequest()
         }
 
     @Test

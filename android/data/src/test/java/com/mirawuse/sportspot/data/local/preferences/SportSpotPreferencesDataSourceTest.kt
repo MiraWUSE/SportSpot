@@ -36,21 +36,13 @@ class SportSpotPreferencesDataSourceTest {
         get() = folder.root.resolve("settings.preferences_pb")
 
     @Test
-    fun `first read returns system theme and a radius of 1000 meters`() =
-        runBlocking {
-            withStore { store ->
-                val source = SportSpotPreferencesDataSource(store)
-
-                assertEquals(UserPreferences(ThemeMode.SYSTEM, 1000), source.preferences.first())
-            }
-        }
-
-    @Test
-    fun `settings flow emits updates and a new store reads them from disk`() =
+    fun `settings start with defaults then emit and persist updates`() =
         runBlocking {
             val expected = UserPreferences(ThemeMode.DARK, 2500)
             withStore { store ->
                 val source = SportSpotPreferencesDataSource(store)
+                assertEquals(UserPreferences(ThemeMode.SYSTEM, 1000), source.preferences.first())
+
                 coroutineScope {
                     val observed = async(start = CoroutineStart.UNDISPATCHED) { source.preferences.first { it == expected } }
                     source.setThemeMode(ThemeMode.DARK)
@@ -89,8 +81,6 @@ class SportSpotPreferencesDataSourceTest {
         runBlocking {
             withStore { store ->
                 val source = SportSpotPreferencesDataSource(store)
-                source.setThemeMode(ThemeMode.DARK)
-                source.setSearchRadiusMeters(2500)
                 store.edit { stored ->
                     stored[stringPreferencesKey("theme_mode")] = "UNKNOWN"
                     stored[intPreferencesKey("search_radius_meters")] = 3001

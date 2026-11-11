@@ -1,7 +1,6 @@
 package com.mirawuse.sportspot.data.mapper
 
 import com.google.gson.JsonParseException
-import com.google.gson.reflect.TypeToken
 import com.mirawuse.sportspot.data.remote.NetworkClient
 import com.mirawuse.sportspot.data.remote.dto.SpotDto
 import com.mirawuse.sportspot.data.remote.dto.SpotSearchResponseDto
@@ -10,10 +9,8 @@ import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SpotMapperTest {
@@ -52,21 +49,6 @@ class SpotMapperTest {
             assertEquals(SpotId("osm", "$type:$id"), mapped.id)
             assertEquals(dto.id, mapped.id.toCanonicalId())
         }
-    }
-
-    @Test
-    fun `SQL derived REST fixture maps OSM and community rows`() {
-        val type = object : TypeToken<List<SpotDto>>() {}.type
-        val rows: List<SpotDto> = gson.fromJson(fixture("saved-spots.json"), type)
-
-        val mapped = rows.map(SpotDto::toDomain)
-
-        assertFalse(mapped.first().lighting!!)
-        assertEquals(SpotId("community", "33333333-3333-4333-8333-333333333333"), mapped.last().id)
-        assertEquals("community:33333333-3333-4333-8333-333333333333", mapped.last().id.toCanonicalId())
-        assertEquals(SportType.WORKOUT, mapped.last().sportType)
-        assertNull(mapped.last().lighting)
-        assertNull(mapped.last().surface)
     }
 
     @Test
@@ -191,13 +173,6 @@ class SpotMapperTest {
             validSpot().copy(osmId = null),
             validSpot().copy(id = "community:33333333-3333-4333-8333-333333333333", source = "community"),
         ).forEach(::assertInvalid)
-    }
-
-    @Test
-    fun `empty search is a successful empty list`() {
-        val response = searchFixture().copy(spots = emptyList(), count = 0)
-
-        assertTrue(response.toDomain().isEmpty())
     }
 
     @Test

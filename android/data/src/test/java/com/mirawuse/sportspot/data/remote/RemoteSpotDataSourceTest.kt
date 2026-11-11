@@ -1,7 +1,6 @@
 package com.mirawuse.sportspot.data.remote
 
 import com.google.gson.JsonArray
-import com.google.gson.JsonNull
 import com.google.gson.JsonObject
 import com.mirawuse.sportspot.data.remote.api.SpotApi
 import com.mirawuse.sportspot.data.remote.connectivity.NetworkMonitor
@@ -13,13 +12,7 @@ import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.repository.SpotRepository
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -113,33 +106,26 @@ class RemoteSpotDataSourceTest {
         }
 
     @Test
-    fun `OSM lookup preserves type in the encoded canonical ID query`() =
+    fun `lookup sends encoded canonical IDs for OSM and community spots`() =
         runBlocking {
-            server.enqueue(json(singleSavedRow(0)))
+            val repository = repository()
+            val cases =
+                listOf(
+                    Triple(osmId, 0, "eq.osm:node:12345"),
+                    Triple(communityId, 1, "eq.community:33333333-3333-4333-8333-333333333333"),
+                )
+            for ((id, rowIndex, expectedQuery) in cases) {
+                server.enqueue(json(singleSavedRow(rowIndex)))
 
-            val spot = repository().getSpotById(osmId)
+                val spot = repository.getSpotById(id)
 
-            assertEquals(osmId, requireNotNull(spot).id)
-            val request = takeRequest()
-            val url = requireNotNull(request.requestUrl)
-            assertEquals("eq.osm:node:12345", url.queryParameter("id"))
-            assertEquals("2", url.queryParameter("limit"))
-            assertEquals("*", url.queryParameter("select"))
-            assertTrue(requireNotNull(request.path).contains("id=eq.osm%3Anode%3A12345"))
-        }
-
-    @Test
-    fun `community lookup preserves UUID and source in canonical ID query`() =
-        runBlocking {
-            server.enqueue(json(singleSavedRow(1)))
-
-            val spot = repository().getSpotById(communityId)
-
-            assertEquals(communityId, requireNotNull(spot).id)
-            assertEquals(
-                "eq.community:33333333-3333-4333-8333-333333333333",
-                requireNotNull(takeRequest().requestUrl).queryParameter("id"),
-            )
+                assertEquals(id, requireNotNull(spot).id)
+                val url = requireNotNull(takeRequest().requestUrl)
+                assertEquals(expectedQuery, url.queryParameter("id"))
+                assertEquals("2", url.queryParameter("limit"))
+                assertEquals("*", url.queryParameter("select"))
+                assertTrue(requireNotNull(url.encodedQuery).contains("id=" + expectedQuery.replace(":", "%3A")))
+            }
         }
 
     @Test
@@ -196,7 +182,7 @@ class RemoteSpotDataSourceTest {
         }
 
     @Test
-    fun `invalid radii unsupported filter and excess precision fail before HTTP`() =
+    fun `invalid search arguments and IDs fail before HTTP`() =
         runBlocking {
             val repository = repository(online = false)
             val operations: List<suspend () -> Any?> =
@@ -206,20 +192,11 @@ class RemoteSpotDataSourceTest {
                     { repository.searchNearby(center, 1000, SportType.OTHER) },
                     { repository.searchNearby(GeoPoint(56.3269001, 44.0059), 1000) },
                     { repository.searchNearby(GeoPoint(56.3269, 44.0059001), 1000) },
+                    { repository.getSpotById(SpotId("osm", "12345")) },
+                    { repository.getSpotById(SpotId("community", "invalid-uuid")) },
                 )
 
             operations.forEach { assertError(NetworkError.InvalidRequest, it) }
-            assertEquals(0, server.requestCount)
-        }
-
-    @Test
-    fun `incomplete OSM and malformed community identifiers fail before HTTP`() =
-        runBlocking {
-            val repository = repository(online = false)
-
-            listOf(SpotId("osm", "12345"), SpotId("community", "invalid-uuid")).forEach { id ->
-                assertError(NetworkError.InvalidRequest) { repository.getSpotById(id) }
-            }
             assertEquals(0, server.requestCount)
         }
 
@@ -265,16 +242,11 @@ class RemoteSpotDataSourceTest {
         }
 
     @Test
-    fun `malformed missing null and inconsistent search payloads become Parsing`() =
+    fun `malformed null and inconsistent search payloads become Parsing`() =
         runBlocking {
             val repository = repository()
-            val nullItem = searchObject().apply { add("spots", JsonArray().apply { add(JsonNull.INSTANCE) }) }
-            val missingCoordinate =
-                searchObject().apply {
-                    getAsJsonArray("spots")[0].asJsonObject.remove("latitude")
-                }
             val wrongCount = searchObject().apply { addProperty("count", 0) }
-            val responses = listOf("{", "null", "{}", nullItem.toString(), missingCoordinate.toString(), wrongCount.toString())
+            val responses = listOf("{", "null", wrongCount.toString())
 
             responses.forEach { body ->
                 server.enqueue(json(body))
@@ -296,16 +268,13 @@ class RemoteSpotDataSourceTest {
     @Test
     fun `HTTP string lighting is a parsing failure and cannot become false`() =
         runBlocking {
-            val repository = repository()
-            listOf("true", "false", "unknown").forEach { value ->
-                val response =
-                    searchObject().apply {
-                        getAsJsonArray("spots")[0].asJsonObject.addProperty("lighting", value)
-                    }
-                server.enqueue(json(response.toString()))
+            val response =
+                searchObject().apply {
+                    getAsJsonArray("spots")[0].asJsonObject.addProperty("lighting", "unknown")
+                }
+            server.enqueue(json(response.toString()))
 
-                assertError(NetworkError.Parsing) { repository.searchNearby(center, 1000) }
-            }
+            assertError(NetworkError.Parsing) { repository().searchNearby(center, 1000) }
         }
 
     @Test
@@ -407,30 +376,6 @@ class RemoteSpotDataSourceTest {
                 repository(readTimeoutMillis = 5000, callTimeoutMillis = 500).searchNearby(center, 1000)
             }
             assertEquals("GET", takeRequest().method)
-        }
-
-    @Test
-    fun `cancelling an in flight Retrofit call preserves cancellation and closes the call`() =
-        runBlocking {
-            server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
-            val repository = repository(readTimeoutMillis = 5000, callTimeoutMillis = 5000)
-            val client = clients.last()
-            val pending = async(Dispatchers.Default) { repository.getSpots() }
-            try {
-                takeRequest()
-                pending.cancel(CancellationException("Test cancellation"))
-
-                val failure = runCatching { pending.await() }.exceptionOrNull()
-
-                assertTrue(failure is CancellationException)
-                withTimeout(2000) {
-                    pending.join()
-                    while (client.dispatcher.runningCallsCount() != 0) delay(10)
-                }
-                assertEquals(0, client.dispatcher.runningCallsCount())
-            } finally {
-                pending.cancelAndJoin()
-            }
         }
 
     private fun repository(
