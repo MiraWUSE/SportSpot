@@ -23,6 +23,7 @@ import com.mirawuse.sportspot.domain.model.spot.SpotId
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -378,6 +379,40 @@ class OfflineSpotRepositoryTest {
             reopenDatabase()
             assertEquals(savedSpots, repository.getSpots())
             assertEquals(2, server.requestCount)
+        }
+
+    @Test
+    fun `unknown and future timestamps remain available offline and refresh online`() =
+        runBlocking {
+            val cache = RoomSpotCache(database)
+            val oldOrder = savedSpots.reversed()
+            timeMillis = 1_000L
+
+            listOf(0L, timeMillis + 1).forEach { timestamp ->
+                cache.replaceSaved(oldOrder, timestamp)
+                online = false
+                assertEquals(oldOrder, repository.getSpots())
+
+                online = true
+                server.enqueue(json(fixture("saved-spots.json")))
+                assertEquals(savedSpots, repository.getSpots())
+            }
+            assertEquals(2, server.requestCount)
+        }
+
+    @Test
+    fun `concurrent searches reuse a successful refresh of the same key`() =
+        runBlocking {
+            server.enqueue(json(fixture("search-spots.json")).setHeadersDelay(200, TimeUnit.MILLISECONDS))
+            server.enqueue(json(fixture("search-spots.json")))
+
+            withTimeout(8_000) {
+                val first = async { repository.searchNearby(center, 1000) }
+                val second = async { repository.searchNearby(center, 1000) }
+                assertEquals(searchSpots, first.await())
+                assertEquals(searchSpots, second.await())
+            }
+            assertEquals(1, server.requestCount)
         }
 
     private fun openDatabase() {
