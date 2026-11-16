@@ -153,6 +153,13 @@ fun SportSpotApp() {
                     state = state,
                     onRetry = viewModel::retry,
                     onBack = { navController.popBackStack() },
+                    onShowMap = { id ->
+                        navController.clearBackStack<MapRoute>()
+                        navController.navigate(MapRoute(id.source, id.value)) {
+                            popUpTo(HOME_ROUTE)
+                            launchSingleTop = true
+                        }
+                    },
                 )
             }
         }

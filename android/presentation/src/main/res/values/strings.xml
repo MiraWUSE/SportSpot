@@ -19,6 +19,15 @@
     <string name="details_title">Карточка площадки</string>
     <string name="details_not_found">Площадка не найдена</string>
     <string name="details_not_found_message">В текущих результатах поиска этой площадки нет.</string>
+    <string name="details_about">О площадке</string>
+    <string name="details_traits">Характеристики</string>
+    <string name="details_surface">Покрытие: %1$s</string>
+    <string name="details_surface_rubber">резиновое</string>
+    <string name="details_lighting">Освещение: %1$s</string>
+    <string name="details_lighting_yes">есть</string>
+    <string name="details_lighting_no">нет</string>
+    <string name="details_unknown">не указано</string>
+    <string name="details_show_map">Показать на карте</string>
     <string name="map_scheme">Схема расположения</string>
     <string name="map_north">С</string>
     <string name="map_marker">%1$s, %2$s</string>
