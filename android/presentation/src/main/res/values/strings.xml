@@ -4,7 +4,6 @@
     <string name="tab_map">Карта</string>
     <string name="tab_favorites">Избранное</string>
     <string name="tab_profile">Профиль</string>
-    <string name="section_coming_soon">Раздел в разработке</string>
 
     <string name="home_brand_prefix" translatable="false">Sport</string>
     <string name="home_brand_suffix" translatable="false">Spot</string>
@@ -107,6 +106,22 @@
     <string name="profile_reviews_guest">Войдите, чтобы просматривать свои отзывы.</string>
     <string name="profile_my_proposals">Мои предложения</string>
     <string name="profile_proposals_guest">Список предложений доступен после входа.</string>
+
+    <string name="favorites_saved">Сохранённые площадки</string>
+    <string name="favorites_guest_header">Быстрый доступ</string>
+    <string name="favorites_guest_message">Для доступа к избранному нужен аккаунт.</string>
+    <string name="moderation_title">Модерация</string>
+    <string name="moderation_access">Доступ по роли</string>
+    <string name="moderation_role_required">Раздел открыт только модератору.</string>
+    <string name="moderation_queue">Заявки на модерацию</string>
+    <string name="moderation_unavailable">Заявки пока недоступны.</string>
+    <string name="moderation_queue_empty">Нет заявок на проверку.</string>
+    <string name="moderation_pending">Ожидает решения модератора</string>
+    <string name="moderation_approve">Одобрить</string>
+    <string name="moderation_reject">Отклонить</string>
+    <string name="moderation_reason">Причина отклонения</string>
+    <string name="moderation_validate">Проверить причину</string>
+    <string name="moderation_send_unavailable">Отправка решения пока недоступна.</string>
     <string name="profile_settings">Настройки</string>
     <string name="profile_theme_setting">Тема приложения следует настройкам устройства.</string>
 </resources>

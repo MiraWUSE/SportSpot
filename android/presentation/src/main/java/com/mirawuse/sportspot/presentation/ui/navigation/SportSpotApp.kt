@@ -1,6 +1,5 @@
 package com.mirawuse.sportspot.presentation.ui.navigation
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -15,11 +14,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavBackStackEntry
@@ -34,6 +31,7 @@ import androidx.navigation.toRoute
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.account.AuthScreen
+import com.mirawuse.sportspot.presentation.ui.account.FavoritesScreen
 import com.mirawuse.sportspot.presentation.ui.account.ProfileScreen
 import com.mirawuse.sportspot.presentation.ui.details.SpotDetailsScreen
 import com.mirawuse.sportspot.presentation.ui.home.HomeScreen
@@ -43,7 +41,6 @@ import com.mirawuse.sportspot.presentation.ui.map.MapScreen
 import com.mirawuse.sportspot.presentation.ui.proposal.ProposalScreen
 import com.mirawuse.sportspot.presentation.ui.reviews.ReviewFormScreen
 import com.mirawuse.sportspot.presentation.ui.reviews.ReviewsScreen
-import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 import kotlinx.serialization.Serializable
 
 private const val APP_GRAPH = "sportspot"
@@ -170,7 +167,12 @@ fun SportSpotApp() {
                     onOpenSpot = { navController.navigate(SpotDetailsRoute(it.source, it.value)) },
                 )
             }
-            composable("favorites") { ComingSoonScreen(Tab.FAVORITES) }
+            composable("favorites") {
+                FavoritesScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenAuth = { navController.navigate(AUTH_ROUTE) },
+                )
+            }
             composable("profile") {
                 ProfileScreen(
                     onBack = { navController.popBackStack() },
@@ -248,25 +250,4 @@ private fun searchViewModel(
 ): HomeViewModel {
     val graphEntry = remember(entry) { navController.getBackStackEntry(APP_GRAPH) }
     return hiltViewModel(graphEntry)
-}
-
-@Composable
-private fun ComingSoonScreen(tab: Tab) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(SportSpotSpacing.xl),
-        verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.sm, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = stringResource(tab.label),
-            style = MaterialTheme.typography.headlineMedium,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            text = stringResource(R.string.section_coming_soon),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-        )
-    }
 }
