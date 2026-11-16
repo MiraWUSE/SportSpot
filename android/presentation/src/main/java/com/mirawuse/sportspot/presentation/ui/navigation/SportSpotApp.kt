@@ -35,8 +35,11 @@ import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.details.SpotDetailsScreen
 import com.mirawuse.sportspot.presentation.ui.home.HomeScreen
+import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
 import com.mirawuse.sportspot.presentation.ui.home.HomeViewModel
 import com.mirawuse.sportspot.presentation.ui.map.MapScreen
+import com.mirawuse.sportspot.presentation.ui.reviews.ReviewFormScreen
+import com.mirawuse.sportspot.presentation.ui.reviews.ReviewsScreen
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 import kotlinx.serialization.Serializable
 
@@ -61,6 +64,24 @@ internal data class MapRoute(
         get() = if (source != null && value != null) SpotId(source, value) else null
 }
 
+@Serializable
+internal data class ReviewsRoute(
+    val source: String,
+    val value: String,
+) {
+    val spotId: SpotId
+        get() = SpotId(source, value)
+}
+
+@Serializable
+internal data class ReviewFormRoute(
+    val source: String,
+    val value: String,
+) {
+    val spotId: SpotId
+        get() = SpotId(source, value)
+}
+
 private enum class Tab(
     val route: String?,
     val label: Int,
@@ -83,12 +104,12 @@ fun SportSpotApp() {
         } else {
             Tab.entries.firstOrNull { it.route != null && it.route == destination?.route } ?: Tab.HOME
         }
-    val isDetails = backStackEntry?.destination?.hasRoute<SpotDetailsRoute>() == true
+    val showTabs = destination == null || destination.hasRoute<MapRoute>() || Tab.entries.any { it.route == destination.route }
     val colors = MaterialTheme.colorScheme
 
     Scaffold(
         bottomBar = {
-            if (!isDetails) {
+            if (showTabs) {
                 Column {
                     HorizontalDivider(color = colors.outline.copy(alpha = 0.3f))
                     NavigationBar(containerColor = colors.surface) {
@@ -154,6 +175,7 @@ fun SportSpotApp() {
                     state = state,
                     onRetry = viewModel::retry,
                     onBack = { navController.popBackStack() },
+                    onOpenReviews = { navController.navigate(ReviewsRoute(it.source, it.value)) },
                     onShowMap = { id ->
                         navController.clearBackStack<MapRoute>()
                         navController.navigate(MapRoute(id.source, id.value)) {
@@ -161,6 +183,25 @@ fun SportSpotApp() {
                             launchSingleTop = true
                         }
                     },
+                )
+            }
+            composable<ReviewsRoute> { entry ->
+                val route = entry.toRoute<ReviewsRoute>()
+                val viewModel = searchViewModel(navController, entry)
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                ReviewsScreen(
+                    spotName = (state as? HomeUiState.Content)?.findSpot(route.spotId)?.name,
+                    onBack = { navController.popBackStack() },
+                    onWrite = { navController.navigate(ReviewFormRoute(route.source, route.value)) },
+                )
+            }
+            composable<ReviewFormRoute> { entry ->
+                val route = entry.toRoute<ReviewFormRoute>()
+                val viewModel = searchViewModel(navController, entry)
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                ReviewFormScreen(
+                    spotName = (state as? HomeUiState.Content)?.findSpot(route.spotId)?.name,
+                    onBack = { navController.popBackStack() },
                 )
             }
         }

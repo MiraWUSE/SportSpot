@@ -52,4 +52,24 @@
     <string name="sport_tennis">Теннис</string>
     <string name="sport_workout">Воркаут</string>
     <string name="sport_other">Другой вид спорта</string>
+
+    <string name="form_required">Заполните это поле</string>
+    <string name="form_email_format">Проверьте формат электронной почты</string>
+    <string name="form_rating_required">Выберите оценку от 1 до 5</string>
+    <string name="form_sport_required">Выберите вид спорта</string>
+    <string name="form_coordinate_format">Введите число</string>
+    <string name="form_coordinate_range">Координата вне диапазона</string>
+
+    <string name="reviews_title">Отзывы</string>
+    <string name="reviews_write">Написать отзыв</string>
+    <string name="reviews_unavailable">Отзывы пока недоступны</string>
+    <string name="reviews_read_unavailable">Можно заполнить форму, публикация пока недоступна.</string>
+    <string name="review_rating">Ваша оценка</string>
+    <string name="review_rating_choice">Оценка %1$d из 5</string>
+    <string name="review_title_optional">Заголовок (необязательно)</string>
+    <string name="review_title_hint">Кратко о площадке</string>
+    <string name="review_comment">Комментарий</string>
+    <string name="review_comment_hint">Что понравилось? Что можно улучшить?</string>
+    <string name="review_validate">Проверить отзыв</string>
+    <string name="review_send_unavailable">Поля заполнены. Публикация отзывов пока недоступна.</string>
 </resources>
