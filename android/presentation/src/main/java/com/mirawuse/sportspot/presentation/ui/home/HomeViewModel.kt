@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+internal val spotSearchCenter = GeoPoint(latitude = 56.3269, longitude = 44.0059)
+internal const val SPOT_SEARCH_RADIUS_METERS = 1000
+
 @HiltViewModel
 class HomeViewModel
     @Inject
@@ -34,7 +37,7 @@ class HomeViewModel
             _uiState.value = HomeUiState.Loading
             viewModelScope.launch {
                 try {
-                    val spots = searchNearbySpots(center = DEMO_CENTER, radiusMeters = DEMO_RADIUS_METERS, sportType = null)
+                    val spots = searchNearbySpots(center = spotSearchCenter, radiusMeters = SPOT_SEARCH_RADIUS_METERS, sportType = null)
                     _uiState.value = if (spots.isEmpty()) HomeUiState.Empty else HomeUiState.Content(spots)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
@@ -42,10 +45,5 @@ class HomeViewModel
                     _uiState.value = HomeUiState.Error("Не удалось загрузить площадки. Проверьте соединение и попробуйте снова.")
                 }
             }
-        }
-
-        private companion object {
-            val DEMO_CENTER = GeoPoint(latitude = 56.3269, longitude = 44.0059)
-            const val DEMO_RADIUS_METERS = 1000
         }
     }

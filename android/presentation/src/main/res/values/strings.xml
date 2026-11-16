@@ -19,6 +19,10 @@
     <string name="details_title">Карточка площадки</string>
     <string name="details_not_found">Площадка не найдена</string>
     <string name="details_not_found_message">В текущих результатах поиска этой площадки нет.</string>
+    <string name="map_scheme">Схема расположения</string>
+    <string name="map_north">С</string>
+    <string name="map_marker">%1$s, %2$s</string>
+    <string name="map_details">Подробнее</string>
 
     <string name="sport_football">Футбол</string>
     <string name="sport_basketball">Баскетбол</string>
