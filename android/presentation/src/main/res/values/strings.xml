@@ -72,4 +72,18 @@
     <string name="review_comment_hint">Что понравилось? Что можно улучшить?</string>
     <string name="review_validate">Проверить отзыв</string>
     <string name="review_send_unavailable">Поля заполнены. Публикация отзывов пока недоступна.</string>
+
+    <string name="proposal_title">Предложить площадку</string>
+    <string name="proposal_heading">Новая спортивная площадка</string>
+    <string name="proposal_name">Название</string>
+    <string name="proposal_name_hint">Введите название</string>
+    <string name="proposal_sport">Вид спорта</string>
+    <string name="proposal_sport_hint">Выберите вид спорта</string>
+    <string name="proposal_address">Адрес или район (необязательно)</string>
+    <string name="proposal_address_hint">Укажите местоположение</string>
+    <string name="proposal_coordinates">Координаты</string>
+    <string name="proposal_latitude">Широта</string>
+    <string name="proposal_longitude">Долгота</string>
+    <string name="proposal_validate">Проверить предложение</string>
+    <string name="proposal_send_unavailable">Поля заполнены. Отправка предложений пока недоступна.</string>
 </resources>

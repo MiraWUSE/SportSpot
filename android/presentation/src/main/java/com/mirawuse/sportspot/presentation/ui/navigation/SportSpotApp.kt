@@ -33,11 +33,13 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.presentation.R
+import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
 import com.mirawuse.sportspot.presentation.ui.details.SpotDetailsScreen
 import com.mirawuse.sportspot.presentation.ui.home.HomeScreen
 import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
 import com.mirawuse.sportspot.presentation.ui.home.HomeViewModel
 import com.mirawuse.sportspot.presentation.ui.map.MapScreen
+import com.mirawuse.sportspot.presentation.ui.proposal.ProposalScreen
 import com.mirawuse.sportspot.presentation.ui.reviews.ReviewFormScreen
 import com.mirawuse.sportspot.presentation.ui.reviews.ReviewsScreen
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
@@ -45,6 +47,7 @@ import kotlinx.serialization.Serializable
 
 private const val APP_GRAPH = "sportspot"
 private const val HOME_ROUTE = "home"
+private const val PROPOSAL_ROUTE = "proposal"
 
 @Serializable
 internal data class SpotDetailsRoute(
@@ -166,7 +169,15 @@ fun SportSpotApp() {
                 )
             }
             composable("favorites") { ComingSoonScreen(Tab.FAVORITES) }
-            composable("profile") { ComingSoonScreen(Tab.PROFILE) }
+            composable("profile") {
+                ComingSoonScreen(Tab.PROFILE) {
+                    SportSpotButton(
+                        text = stringResource(R.string.proposal_title),
+                        onClick = { navController.navigate(PROPOSAL_ROUTE) },
+                    )
+                }
+            }
+            composable(PROPOSAL_ROUTE) { ProposalScreen(onBack = { navController.popBackStack() }) }
             composable<SpotDetailsRoute> { entry ->
                 val viewModel = searchViewModel(navController, entry)
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -232,7 +243,10 @@ private fun searchViewModel(
 }
 
 @Composable
-private fun ComingSoonScreen(tab: Tab) {
+private fun ComingSoonScreen(
+    tab: Tab,
+    action: @Composable () -> Unit = {},
+) {
     Column(
         modifier = Modifier.fillMaxSize().padding(SportSpotSpacing.xl),
         verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.sm, Alignment.CenterVertically),
@@ -249,5 +263,6 @@ private fun ComingSoonScreen(tab: Tab) {
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
         )
+        action()
     }
 }
