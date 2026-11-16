@@ -23,6 +23,7 @@ import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.validation.FormValidation
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
+import com.mirawuse.sportspot.presentation.ui.components.SportSpotButtonVariant
 import com.mirawuse.sportspot.presentation.ui.components.labelRes
 import com.mirawuse.sportspot.presentation.ui.forms.FormCard
 import com.mirawuse.sportspot.presentation.ui.forms.FormErrorText
@@ -31,7 +32,10 @@ import com.mirawuse.sportspot.presentation.ui.forms.FormScreen
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
 @Composable
-internal fun ProposalScreen(onBack: () -> Unit) {
+internal fun ProposalScreen(
+    onBack: () -> Unit,
+    onOpenAuth: () -> Unit,
+) {
     var name by rememberSaveable { mutableStateOf("") }
     var sport by rememberSaveable { mutableStateOf<SportType?>(null) }
     var address by rememberSaveable { mutableStateOf("") }
@@ -115,5 +119,11 @@ internal fun ProposalScreen(onBack: () -> Unit) {
         if (attempted && nameError == null && sportError == null && latitudeError == null && longitudeError == null) {
             Text(stringResource(R.string.proposal_send_unavailable), style = MaterialTheme.typography.bodyMedium)
         }
+        SportSpotButton(
+            text = stringResource(R.string.auth_open),
+            onClick = onOpenAuth,
+            modifier = Modifier.fillMaxWidth(),
+            variant = SportSpotButtonVariant.TEXT,
+        )
     }
 }

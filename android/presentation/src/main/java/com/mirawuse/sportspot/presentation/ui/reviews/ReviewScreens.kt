@@ -21,6 +21,7 @@ import androidx.compose.ui.semantics.semantics
 import com.mirawuse.sportspot.domain.validation.FormValidation
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
+import com.mirawuse.sportspot.presentation.ui.components.SportSpotButtonVariant
 import com.mirawuse.sportspot.presentation.ui.forms.FormCard
 import com.mirawuse.sportspot.presentation.ui.forms.FormErrorText
 import com.mirawuse.sportspot.presentation.ui.forms.FormField
@@ -54,6 +55,7 @@ internal fun ReviewsScreen(
 internal fun ReviewFormScreen(
     spotName: String?,
     onBack: () -> Unit,
+    onOpenAuth: () -> Unit,
 ) {
     var rating by rememberSaveable { mutableIntStateOf(0) }
     var title by rememberSaveable { mutableStateOf("") }
@@ -108,5 +110,11 @@ internal fun ReviewFormScreen(
         if (attempted && ratingError == null && commentError == null) {
             Text(stringResource(R.string.review_send_unavailable), style = MaterialTheme.typography.bodyMedium)
         }
+        SportSpotButton(
+            text = stringResource(R.string.auth_open),
+            onClick = onOpenAuth,
+            modifier = Modifier.fillMaxWidth(),
+            variant = SportSpotButtonVariant.TEXT,
+        )
     }
 }

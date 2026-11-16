@@ -86,4 +86,27 @@
     <string name="proposal_longitude">Долгота</string>
     <string name="proposal_validate">Проверить предложение</string>
     <string name="proposal_send_unavailable">Поля заполнены. Отправка предложений пока недоступна.</string>
+
+    <string name="auth_title">Авторизация</string>
+    <string name="auth_welcome">Добро пожаловать!</string>
+    <string name="auth_permissions">Войдите, чтобы сохранять площадки</string>
+    <string name="auth_login_tab">Вход</string>
+    <string name="auth_registration_tab">Регистрация</string>
+    <string name="auth_name">Имя</string>
+    <string name="auth_email">Электронная почта</string>
+    <string name="auth_email_hint">name@example.com</string>
+    <string name="auth_password">Пароль</string>
+    <string name="auth_password_hint">Введите пароль</string>
+    <string name="auth_validate">Проверить данные</string>
+    <string name="auth_open">К авторизации</string>
+    <string name="auth_continue_guest">Продолжить без входа</string>
+    <string name="auth_sign_in_unavailable">Поля заполнены. Вход пока недоступен.</string>
+    <string name="auth_sign_up_unavailable">Поля заполнены. Регистрация пока недоступна.</string>
+    <string name="profile_guest">Гость</string>
+    <string name="profile_my_reviews">Мои отзывы</string>
+    <string name="profile_reviews_guest">Войдите, чтобы просматривать свои отзывы.</string>
+    <string name="profile_my_proposals">Мои предложения</string>
+    <string name="profile_proposals_guest">Список предложений доступен после входа.</string>
+    <string name="profile_settings">Настройки</string>
+    <string name="profile_theme_setting">Тема приложения следует настройкам устройства.</string>
 </resources>
