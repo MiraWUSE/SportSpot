@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tab_home">Главная</string>
+    <string name="tab_map">Карта</string>
+    <string name="tab_favorites">Избранное</string>
+    <string name="tab_profile">Профиль</string>
+    <string name="section_coming_soon">Раздел в разработке</string>
+
+    <string name="home_brand">SportSpot</string>
+    <string name="home_demo_location">Нижний Новгород</string>
+    <string name="home_title">Спортивные площадки</string>
+    <string name="home_loading">Загружаем площадки…</string>
+    <string name="home_empty_title">Площадки не найдены</string>
+    <string name="home_empty_message">В радиусе поиска нет результатов.</string>
+    <string name="home_error_title">Не удалось выполнить поиск</string>
+    <string name="home_retry">Повторить</string>
+
+    <string name="sport_football">Футбол</string>
+    <string name="sport_basketball">Баскетбол</string>
+    <string name="sport_volleyball">Волейбол</string>
+    <string name="sport_tennis">Теннис</string>
+    <string name="sport_workout">Воркаут</string>
+    <string name="sport_other">Другой вид спорта</string>
+</resources>
