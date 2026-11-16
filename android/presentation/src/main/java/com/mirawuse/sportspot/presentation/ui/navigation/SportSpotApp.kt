@@ -131,6 +131,7 @@ fun SportSpotApp() {
                     state = state,
                     onRetry = viewModel::retry,
                     onOpenSpot = { navController.navigate(SpotDetailsRoute(it.source, it.value)) },
+                    onOpenMap = { navController.selectTab(Tab.MAP) },
                 )
             }
             composable<MapRoute> { entry ->
