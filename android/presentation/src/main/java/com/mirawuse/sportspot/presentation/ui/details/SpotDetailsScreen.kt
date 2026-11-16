@@ -26,6 +26,7 @@ import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
+import com.mirawuse.sportspot.presentation.ui.components.SportSpotButtonVariant
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchLoading
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchMessage
 import com.mirawuse.sportspot.presentation.ui.components.labelRes
@@ -38,6 +39,7 @@ internal fun SpotDetailsScreen(
     state: HomeUiState,
     onRetry: () -> Unit,
     onBack: () -> Unit,
+    onOpenReviews: (SpotId) -> Unit,
     onShowMap: (SpotId) -> Unit,
 ) {
     val backLabel = stringResource(R.string.details_back)
@@ -63,7 +65,7 @@ internal fun SpotDetailsScreen(
                 state is HomeUiState.Loading -> SpotSearchLoading()
                 state is HomeUiState.Error ->
                     SpotSearchMessage(stringResource(R.string.home_error_title), state.message, onRetry)
-                spot != null -> DetailsContent(spot, onShowMap)
+                spot != null -> DetailsContent(spot, onShowMap, onOpenReviews)
                 else ->
                     SpotSearchMessage(
                         title = stringResource(R.string.details_not_found),
@@ -79,6 +81,7 @@ internal fun SpotDetailsScreen(
 private fun DetailsContent(
     spot: Spot,
     onShowMap: (SpotId) -> Unit,
+    onOpenReviews: (SpotId) -> Unit,
 ) {
     Image(
         painter = painterResource(R.drawable.spot_court_illustration),
@@ -116,6 +119,12 @@ private fun DetailsContent(
         text = stringResource(R.string.details_show_map),
         onClick = { onShowMap(spot.id) },
         modifier = Modifier.fillMaxWidth(),
+    )
+    SportSpotButton(
+        text = stringResource(R.string.reviews_title),
+        onClick = { onOpenReviews(spot.id) },
+        modifier = Modifier.fillMaxWidth(),
+        variant = SportSpotButtonVariant.OUTLINED,
     )
 }
 

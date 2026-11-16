@@ -1,6 +1,5 @@
 package com.mirawuse.sportspot.presentation.ui.navigation
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -15,11 +14,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavBackStackEntry
@@ -33,15 +30,23 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.presentation.R
+import com.mirawuse.sportspot.presentation.ui.account.AuthScreen
+import com.mirawuse.sportspot.presentation.ui.account.FavoritesScreen
+import com.mirawuse.sportspot.presentation.ui.account.ProfileScreen
 import com.mirawuse.sportspot.presentation.ui.details.SpotDetailsScreen
 import com.mirawuse.sportspot.presentation.ui.home.HomeScreen
+import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
 import com.mirawuse.sportspot.presentation.ui.home.HomeViewModel
 import com.mirawuse.sportspot.presentation.ui.map.MapScreen
-import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
+import com.mirawuse.sportspot.presentation.ui.proposal.ProposalScreen
+import com.mirawuse.sportspot.presentation.ui.reviews.ReviewFormScreen
+import com.mirawuse.sportspot.presentation.ui.reviews.ReviewsScreen
 import kotlinx.serialization.Serializable
 
 private const val APP_GRAPH = "sportspot"
 private const val HOME_ROUTE = "home"
+private const val PROPOSAL_ROUTE = "proposal"
+private const val AUTH_ROUTE = "auth"
 
 @Serializable
 internal data class SpotDetailsRoute(
@@ -59,6 +64,24 @@ internal data class MapRoute(
 ) {
     val spotId: SpotId?
         get() = if (source != null && value != null) SpotId(source, value) else null
+}
+
+@Serializable
+internal data class ReviewsRoute(
+    val source: String,
+    val value: String,
+) {
+    val spotId: SpotId
+        get() = SpotId(source, value)
+}
+
+@Serializable
+internal data class ReviewFormRoute(
+    val source: String,
+    val value: String,
+) {
+    val spotId: SpotId
+        get() = SpotId(source, value)
 }
 
 private enum class Tab(
@@ -83,12 +106,12 @@ fun SportSpotApp() {
         } else {
             Tab.entries.firstOrNull { it.route != null && it.route == destination?.route } ?: Tab.HOME
         }
-    val isDetails = backStackEntry?.destination?.hasRoute<SpotDetailsRoute>() == true
+    val showTabs = destination == null || destination.hasRoute<MapRoute>() || Tab.entries.any { it.route == destination.route }
     val colors = MaterialTheme.colorScheme
 
     Scaffold(
         bottomBar = {
-            if (!isDetails) {
+            if (showTabs) {
                 Column {
                     HorizontalDivider(color = colors.outline.copy(alpha = 0.3f))
                     NavigationBar(containerColor = colors.surface) {
@@ -131,6 +154,7 @@ fun SportSpotApp() {
                     state = state,
                     onRetry = viewModel::retry,
                     onOpenSpot = { navController.navigate(SpotDetailsRoute(it.source, it.value)) },
+                    onOpenMap = { navController.selectTab(Tab.MAP) },
                 )
             }
             composable<MapRoute> { entry ->
@@ -143,8 +167,24 @@ fun SportSpotApp() {
                     onOpenSpot = { navController.navigate(SpotDetailsRoute(it.source, it.value)) },
                 )
             }
-            composable("favorites") { ComingSoonScreen(Tab.FAVORITES) }
-            composable("profile") { ComingSoonScreen(Tab.PROFILE) }
+            composable("favorites") {
+                FavoritesScreen(
+                    onOpenAuth = { navController.navigate(AUTH_ROUTE) },
+                )
+            }
+            composable("profile") {
+                ProfileScreen(
+                    onOpenAuth = { navController.navigate(AUTH_ROUTE) },
+                    onPropose = { navController.navigate(PROPOSAL_ROUTE) },
+                )
+            }
+            composable(PROPOSAL_ROUTE) {
+                ProposalScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenAuth = { navController.navigate(AUTH_ROUTE) },
+                )
+            }
+            composable(AUTH_ROUTE) { AuthScreen(onBack = { navController.popBackStack() }) }
             composable<SpotDetailsRoute> { entry ->
                 val viewModel = searchViewModel(navController, entry)
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -153,6 +193,7 @@ fun SportSpotApp() {
                     state = state,
                     onRetry = viewModel::retry,
                     onBack = { navController.popBackStack() },
+                    onOpenReviews = { navController.navigate(ReviewsRoute(it.source, it.value)) },
                     onShowMap = { id ->
                         navController.clearBackStack<MapRoute>()
                         navController.navigate(MapRoute(id.source, id.value)) {
@@ -160,6 +201,26 @@ fun SportSpotApp() {
                             launchSingleTop = true
                         }
                     },
+                )
+            }
+            composable<ReviewsRoute> { entry ->
+                val route = entry.toRoute<ReviewsRoute>()
+                val viewModel = searchViewModel(navController, entry)
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                ReviewsScreen(
+                    spotName = (state as? HomeUiState.Content)?.findSpot(route.spotId)?.name,
+                    onBack = { navController.popBackStack() },
+                    onWrite = { navController.navigate(ReviewFormRoute(route.source, route.value)) },
+                )
+            }
+            composable<ReviewFormRoute> { entry ->
+                val route = entry.toRoute<ReviewFormRoute>()
+                val viewModel = searchViewModel(navController, entry)
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                ReviewFormScreen(
+                    spotName = (state as? HomeUiState.Content)?.findSpot(route.spotId)?.name,
+                    onBack = { navController.popBackStack() },
+                    onOpenAuth = { navController.navigate(AUTH_ROUTE) },
                 )
             }
         }
@@ -187,25 +248,4 @@ private fun searchViewModel(
 ): HomeViewModel {
     val graphEntry = remember(entry) { navController.getBackStackEntry(APP_GRAPH) }
     return hiltViewModel(graphEntry)
-}
-
-@Composable
-private fun ComingSoonScreen(tab: Tab) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(SportSpotSpacing.xl),
-        verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.sm, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = stringResource(tab.label),
-            style = MaterialTheme.typography.headlineMedium,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            text = stringResource(R.string.section_coming_soon),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-        )
-    }
 }

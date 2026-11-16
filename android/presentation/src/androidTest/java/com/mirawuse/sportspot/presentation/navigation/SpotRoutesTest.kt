@@ -10,6 +10,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.presentation.ui.navigation.MapRoute
+import com.mirawuse.sportspot.presentation.ui.navigation.ReviewFormRoute
+import com.mirawuse.sportspot.presentation.ui.navigation.ReviewsRoute
 import com.mirawuse.sportspot.presentation.ui.navigation.SpotDetailsRoute
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -71,6 +73,23 @@ class SpotRoutesTest {
             assertEquals(id, restored.currentBackStackEntry?.toRoute<MapRoute>()?.spotId)
         }
 
+    @Test
+    fun restoredReviewFormAndBackKeepTheExactSpotId() =
+        onMain {
+            val nav = controller()
+            val id = SpotId("osm", "way:151302848")
+            nav.navigate(SpotDetailsRoute(id.source, id.value))
+            nav.navigate(ReviewsRoute(id.source, id.value))
+            nav.navigate(ReviewFormRoute(id.source, id.value))
+            val restored = controller(savedState = nav.saveState())
+
+            assertEquals(id, restored.currentBackStackEntry?.toRoute<ReviewFormRoute>()?.spotId)
+            assertTrue(restored.popBackStack())
+            assertEquals(id, restored.currentBackStackEntry?.toRoute<ReviewsRoute>()?.spotId)
+            assertTrue(restored.popBackStack())
+            assertEquals(id, restored.currentBackStackEntry?.toRoute<SpotDetailsRoute>()?.spotId)
+        }
+
     private fun controller(savedState: Bundle? = null): NavHostController =
         NavHostController(InstrumentationRegistry.getInstrumentation().targetContext).apply {
             navigatorProvider.addNavigator(ComposeNavigator())
@@ -80,6 +99,8 @@ class SpotRoutesTest {
                     composable("home") {}
                     composable<MapRoute> {}
                     composable<SpotDetailsRoute> {}
+                    composable<ReviewsRoute> {}
+                    composable<ReviewFormRoute> {}
                 }
         }
 
