@@ -7,11 +7,11 @@
     <string name="section_coming_soon">Раздел в разработке</string>
 
     <string name="home_brand">SportSpot</string>
-    <string name="home_demo_location">Нижний Новгород · демонстрационная точка</string>
+    <string name="home_demo_location">Нижний Новгород</string>
     <string name="home_title">Спортивные площадки</string>
     <string name="home_loading">Загружаем площадки…</string>
     <string name="home_empty_title">Площадки не найдены</string>
-    <string name="home_empty_message">В радиусе поиска от демонстрационной точки нет результатов.</string>
+    <string name="home_empty_message">В радиусе поиска нет результатов.</string>
     <string name="home_error_title">Не удалось выполнить поиск</string>
     <string name="home_retry">Повторить</string>
 
