@@ -122,12 +122,11 @@ internal fun AuthScreen(onBack: () -> Unit) {
 
 @Composable
 internal fun ProfileScreen(
-    onBack: () -> Unit,
     onOpenAuth: () -> Unit,
     onPropose: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
-    FormScreen(stringResource(R.string.tab_profile), onBack) {
+    FormScreen(stringResource(R.string.tab_profile)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.md)) {
             Box(
                 Modifier.size(64.dp).background(colors.primary, CircleShape),

@@ -169,13 +169,11 @@ fun SportSpotApp() {
             }
             composable("favorites") {
                 FavoritesScreen(
-                    onBack = { navController.popBackStack() },
                     onOpenAuth = { navController.navigate(AUTH_ROUTE) },
                 )
             }
             composable("profile") {
                 ProfileScreen(
-                    onBack = { navController.popBackStack() },
                     onOpenAuth = { navController.navigate(AUTH_ROUTE) },
                     onPropose = { navController.navigate(PROPOSAL_ROUTE) },
                 )

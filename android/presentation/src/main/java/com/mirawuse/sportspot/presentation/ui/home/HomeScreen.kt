@@ -1,37 +1,27 @@
 package com.mirawuse.sportspot.presentation.ui.home
 
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,9 +34,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.lerp
@@ -60,7 +47,6 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -71,7 +57,6 @@ import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchLoading
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchMessage
 import com.mirawuse.sportspot.presentation.ui.components.labelRes
-import com.mirawuse.sportspot.presentation.ui.map.mapPosition
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotPillShape
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
@@ -194,7 +179,6 @@ private fun HomeHeader(
         ) {
             Icon(painterResource(R.drawable.ic_demo_location), contentDescription = null, tint = homeAccentText())
             Text(stringResource(R.string.home_demo_location), style = MaterialTheme.typography.labelMedium)
-            Text("⌄", color = colors.onSurfaceVariant, modifier = Modifier.padding(start = SportSpotSpacing.sm))
         }
         HomeSearchBar(query, onQuery, onSport)
         Row(
@@ -211,7 +195,7 @@ private fun HomeHeader(
                             .clip(SportSpotPillShape)
                             .background(if (selected) colors.primary else colors.surfaceVariant)
                             .selectable(selected = selected, role = Role.RadioButton, onClick = { onSport(category) })
-                            .padding(horizontal = SportSpotSpacing.lg, vertical = SportSpotSpacing.sm),
+                            .padding(horizontal = SportSpotSpacing.lg, vertical = 10.dp),
                     color = if (selected) colors.onPrimary else colors.onSurface,
                     style = MaterialTheme.typography.labelMedium,
                 )
@@ -235,7 +219,7 @@ private fun HomeSearchBar(
             Modifier
                 .fillMaxWidth()
                 .clip(MaterialTheme.shapes.medium)
-                .background(theme.surface)
+                .background(if (theme.background.luminance() < 0.5f) theme.surfaceVariant else theme.surface)
                 .padding(start = SportSpotSpacing.lg, end = SportSpotSpacing.xs),
         horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
@@ -257,7 +241,14 @@ private fun HomeSearchBar(
             },
         )
         Box {
-            IconButton(onClick = { menuOpen = true }) {
+            Box(
+                modifier =
+                    Modifier
+                        .size(48.dp)
+                        .clip(MaterialTheme.shapes.medium)
+                        .clickable(role = Role.Button) { menuOpen = true },
+                contentAlignment = Alignment.Center,
+            ) {
                 Box(
                     modifier = Modifier.size(40.dp).background(theme.primary, MaterialTheme.shapes.medium),
                     contentAlignment = Alignment.Center,
@@ -279,137 +270,6 @@ private fun HomeSearchBar(
                         },
                     )
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun HomeMapPreview(
-    spots: List<Spot>,
-    onOpenMap: () -> Unit,
-) {
-    val colors = MaterialTheme.colorScheme
-    val dark = colors.background.luminance() < 0.5f
-    val fieldGreen = Color(0xFF2E7159)
-    val ground = lerp(colors.background, fieldGreen, if (dark) 0.26f else 0.08f)
-    val blocks = lerp(ground, fieldGreen, if (dark) 0.42f else 0.2f)
-    val roads = if (dark) lerp(colors.surfaceVariant, fieldGreen, 0.32f) else colors.surface
-    Box(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .height(158.dp)
-                .clip(MaterialTheme.shapes.large)
-                .background(ground),
-    ) {
-        Canvas(Modifier.matchParentSize()) {
-            val w = size.width
-            val h = size.height
-            drawRoundRect(blocks, Offset(w * 0.05f, h * 0.09f), Size(w * 0.30f, h * 0.52f), CornerRadius(12.dp.toPx()))
-            drawRoundRect(blocks, Offset(w * 0.58f, h * 0.04f), Size(w * 0.35f, h * 0.44f), CornerRadius(12.dp.toPx()))
-            drawRoundRect(blocks, Offset(w * 0.06f, h * 0.62f), Size(w * 0.23f, h * 0.35f), CornerRadius(12.dp.toPx()))
-            drawRoundRect(blocks, Offset(w * 0.61f, h * 0.66f), Size(w * 0.29f, h * 0.28f), CornerRadius(12.dp.toPx()))
-            listOf(0.33f, 0.73f).forEach { x -> drawRect(roads, Offset(w * x, 0f), Size(w * 0.05f, h)) }
-            listOf(0.32f, 0.72f).forEach { y -> drawRect(roads, Offset(0f, h * y), Size(w, h * 0.11f)) }
-        }
-        BoxWithConstraints(Modifier.fillMaxSize().padding(bottom = SportSpotSpacing.xxxl)) {
-            spots.distinctBy { it.location }.take(3).forEachIndexed { index, spot ->
-                val point = mapPosition(spot.location)
-                val markerSize = if (index == 0) 36.dp else 25.dp
-                Box(
-                    modifier =
-                        Modifier
-                            .absoluteOffset((maxWidth - markerSize) * point.x, (maxHeight - markerSize) * point.y)
-                            .size(markerSize)
-                            .background(if (index == 0) colors.primary else colors.onPrimary, CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        painterResource(R.drawable.ic_map_pin),
-                        contentDescription = null,
-                        tint = if (index == 0) colors.onPrimary else colors.primary,
-                    )
-                }
-            }
-        }
-        Text(
-            text = stringResource(R.string.home_map_scheme),
-            color = colors.onSurface,
-            modifier = Modifier.align(Alignment.TopStart).padding(SportSpotSpacing.sm),
-            style = MaterialTheme.typography.labelSmall,
-        )
-        Row(
-            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(SportSpotSpacing.md),
-            horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.sm),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.home_results_count, spots.size),
-                    modifier =
-                        Modifier
-                            .clip(SportSpotPillShape)
-                            .background(colors.surface)
-                            .padding(horizontal = SportSpotSpacing.md, vertical = SportSpotSpacing.sm),
-                    style = MaterialTheme.typography.labelSmall,
-                )
-            }
-            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                Text(
-                    text = stringResource(R.string.home_open_map),
-                    modifier =
-                        Modifier
-                            .clip(SportSpotPillShape)
-                            .background(colors.primary)
-                            .clickable(role = Role.Button, onClick = onOpenMap)
-                            .padding(horizontal = SportSpotSpacing.lg, vertical = SportSpotSpacing.sm),
-                    color = colors.onPrimary,
-                    style = MaterialTheme.typography.labelSmall,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun HomeSpotCard(
-    spot: Spot,
-    onClick: () -> Unit,
-    onFavorite: () -> Unit,
-) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
-        Row(
-            modifier = Modifier.padding(SportSpotSpacing.sm),
-            horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.md),
-        ) {
-            Image(
-                painter = painterResource(R.drawable.home_court),
-                contentDescription = null,
-                modifier = Modifier.widthIn(max = 104.dp).size(width = 104.dp, height = 83.dp).clip(MaterialTheme.shapes.medium),
-            )
-            Column(
-                modifier = Modifier.weight(1f).padding(vertical = SportSpotSpacing.xs),
-                verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs),
-            ) {
-                Text(spot.name, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
-                Text(
-                    stringResource(spot.sportType.labelRes()),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-            IconButton(onClick = onFavorite, modifier = Modifier.size(32.dp)) {
-                Icon(
-                    painterResource(R.drawable.ic_tab_favorites),
-                    contentDescription = stringResource(R.string.tab_favorites),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
     }

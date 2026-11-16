@@ -101,6 +101,7 @@ internal fun ProposalScreen(
                     onValueChange = { latitude = it },
                     modifier = Modifier.weight(1f),
                     error = if (attempted) latitudeError else null,
+                    hint = stringResource(R.string.form_coordinate_format),
                 )
                 FormField(
                     label = stringResource(R.string.proposal_longitude),
@@ -108,6 +109,7 @@ internal fun ProposalScreen(
                     onValueChange = { longitude = it },
                     modifier = Modifier.weight(1f),
                     error = if (attempted) longitudeError else null,
+                    hint = stringResource(R.string.form_coordinate_format),
                 )
             }
         }

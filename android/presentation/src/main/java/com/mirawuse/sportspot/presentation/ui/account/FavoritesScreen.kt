@@ -12,11 +12,8 @@ import com.mirawuse.sportspot.presentation.ui.forms.FormCard
 import com.mirawuse.sportspot.presentation.ui.forms.FormScreen
 
 @Composable
-internal fun FavoritesScreen(
-    onBack: () -> Unit,
-    onOpenAuth: () -> Unit,
-) {
-    FormScreen(stringResource(R.string.tab_favorites), onBack) {
+internal fun FavoritesScreen(onOpenAuth: () -> Unit) {
+    FormScreen(stringResource(R.string.tab_favorites)) {
         Text(stringResource(R.string.favorites_saved), style = MaterialTheme.typography.headlineSmall)
         FormCard(stringResource(R.string.favorites_guest_header)) {
             Text(stringResource(R.string.favorites_guest_message), style = MaterialTheme.typography.bodyMedium)

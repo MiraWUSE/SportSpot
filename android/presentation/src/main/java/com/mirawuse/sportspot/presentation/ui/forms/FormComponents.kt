@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -28,6 +29,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.dp
 import com.mirawuse.sportspot.domain.validation.FormError
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
@@ -35,12 +37,15 @@ import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 @Composable
 internal fun FormScreen(
     title: String,
-    onBack: (() -> Unit)?,
+    onBack: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(Modifier.fillMaxSize().imePadding()) {
         Row(
-            modifier = Modifier.padding(horizontal = SportSpotSpacing.sm),
+            modifier =
+                Modifier
+                    .heightIn(min = 48.dp)
+                    .padding(horizontal = if (onBack == null) SportSpotSpacing.xl else SportSpotSpacing.sm),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs),
         ) {
@@ -50,7 +55,11 @@ internal fun FormScreen(
                     Text("‹", style = MaterialTheme.typography.headlineLarge)
                 }
             }
-            Text(title, modifier = Modifier.padding(SportSpotSpacing.sm), style = MaterialTheme.typography.headlineSmall)
+            Text(
+                title,
+                modifier = if (onBack == null) Modifier else Modifier.padding(SportSpotSpacing.sm),
+                style = MaterialTheme.typography.headlineSmall,
+            )
         }
         Column(
             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(SportSpotSpacing.xl),

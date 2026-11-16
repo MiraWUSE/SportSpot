@@ -1,9 +1,13 @@
 package com.mirawuse.sportspot.presentation.ui.moderation
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -105,19 +109,23 @@ private fun ModerationProposal(name: String) {
 @Composable
 private fun ModeratorPreview() {
     SportSpotTheme {
-        ModerationScreen(
-            auth = AuthState.Authenticated(UserProfile("preview", "Модератор", "moderator@example.test", UserRole.MODERATOR)),
-            pending =
-                listOf(
-                    SpotProposal(
-                        id = "preview",
-                        authorId = "preview-author",
-                        name = "Воркаут-площадка",
-                        sportType = SportType.WORKOUT,
-                        location = GeoPoint(56.3269, 44.0059),
-                    ),
-                ),
-            onBack = {},
-        )
+        Scaffold { insets ->
+            Box(Modifier.fillMaxSize().padding(insets)) {
+                ModerationScreen(
+                    auth = AuthState.Authenticated(UserProfile("preview", "Модератор", "moderator@example.test", UserRole.MODERATOR)),
+                    pending =
+                        listOf(
+                            SpotProposal(
+                                id = "preview",
+                                authorId = "preview-author",
+                                name = "Воркаут-площадка",
+                                sportType = SportType.WORKOUT,
+                                location = GeoPoint(56.3269, 44.0059),
+                            ),
+                        ),
+                    onBack = {},
+                )
+            }
+        }
     }
 }
