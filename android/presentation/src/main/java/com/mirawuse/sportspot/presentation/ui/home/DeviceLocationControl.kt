@@ -64,8 +64,12 @@ internal fun DeviceLocationControl(
     fun granted(permission: String) = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 
     val launcher =
-        rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-            if (permissions.any { granted(it) }) {
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+            // An interrupted request is not a refusal and must remain retryable.
+            if (result.isNotEmpty()) history.edit().putBoolean("requested", true).apply()
+            if (result.isEmpty() || !owner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                onCancel()
+            } else if (permissions.any { granted(it) }) {
                 onLocate(!granted(Manifest.permission.ACCESS_FINE_LOCATION))
             } else {
                 onDenied()
@@ -134,7 +138,6 @@ internal fun DeviceLocationControl(
             confirmButton = {
                 TextButton(onClick = {
                     explanation = false
-                    history.edit().putBoolean("requested", true).apply()
                     launcher.launch(permissions)
                 }, colors = actionColors) { Text(stringResource(R.string.location_continue)) }
             },
