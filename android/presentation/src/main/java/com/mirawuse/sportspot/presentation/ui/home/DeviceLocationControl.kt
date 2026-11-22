@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -27,9 +28,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -85,27 +88,41 @@ internal fun DeviceLocationControl(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs),
         ) {
-            Icon(painterResource(R.drawable.ic_demo_location), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(stringResource(state.labelRes), style = MaterialTheme.typography.labelMedium)
-        }
-        TextButton(
-            enabled = !state.locating,
-            contentPadding = PaddingValues(horizontal = SportSpotSpacing.xs),
-            colors = actionColors,
-            onClick = {
-                if (permissions.any { granted(it) }) {
-                    onLocate(!granted(Manifest.permission.ACCESS_FINE_LOCATION))
-                } else if (activity != null) {
-                    val rationale = permissions.any { ActivityCompat.shouldShowRequestPermissionRationale(activity, it) }
-                    if (history.getBoolean("requested", false) && !rationale) {
-                        settings = true
-                    } else {
-                        explanation = true
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs),
+            ) {
+                Icon(
+                    painterResource(R.drawable.ic_demo_location),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(stringResource(state.labelRes), style = MaterialTheme.typography.labelMedium)
+            }
+            TextButton(
+                modifier = Modifier.heightIn(min = 48.dp),
+                enabled = !state.locating,
+                contentPadding = PaddingValues(horizontal = SportSpotSpacing.xs),
+                colors = actionColors,
+                onClick = {
+                    if (permissions.any { granted(it) }) {
+                        onLocate(!granted(Manifest.permission.ACCESS_FINE_LOCATION))
+                    } else if (activity != null) {
+                        val rationale = permissions.any { ActivityCompat.shouldShowRequestPermissionRationale(activity, it) }
+                        if (history.getBoolean("requested", false) && !rationale) {
+                            settings = true
+                        } else {
+                            explanation = true
+                        }
                     }
-                }
-            },
-        ) {
-            Text(stringResource(if (state.locating) R.string.location_locating else R.string.location_find))
+                },
+            ) {
+                Text(
+                    stringResource(if (state.locating) R.string.location_locating else R.string.location_find),
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
         }
         state.message?.let { Text(stringResource(it), style = MaterialTheme.typography.bodySmall) }
     }
