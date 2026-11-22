@@ -12,7 +12,9 @@ import org.junit.Test
 class MapPositionTest {
     @Test
     fun `search point is at the center of the scheme`() {
-        assertEquals(Offset(0.5f, 0.5f), mapPosition(spotSearchCenter, spotSearchCenter, 1000))
+        for (center in listOf(spotSearchCenter, GeoPoint(48.8566, 2.3522), GeoPoint(-33.8688, 151.2093))) {
+            assertEquals(Offset(0.5f, 0.5f), mapPosition(center, center, 1000))
+        }
     }
 
     @Test
@@ -29,6 +31,17 @@ class MapPositionTest {
     @Test
     fun `a location outside the scheme stays within its bounds`() {
         assertEquals(Offset(1f, 0f), mapPosition(GeoPoint(57.0, 45.0), spotSearchCenter, 1000))
+    }
+
+    @Test
+    fun `projection uses the supplied radius and crosses the date line locally`() {
+        val center = GeoPoint(0.0, 179.999)
+        val point = GeoPoint(0.0, -179.999)
+        val narrow = mapPosition(point, center, 1000)
+        val wide = mapPosition(point, center, 2000)
+        assertTrue(narrow.x > 0.5f && narrow.x < 1f)
+        assertTrue(wide.x < narrow.x && wide.x > 0.5f)
+        assertEquals(0.5f, narrow.y, 0f)
     }
 
     @Test
