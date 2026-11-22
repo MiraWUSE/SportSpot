@@ -25,6 +25,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,12 +43,11 @@ import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
 @Composable
-internal fun DeviceLocationControl(
-    state: SearchLocationState,
+internal fun rememberDeviceLocationRequest(
     onLocate: (Boolean) -> Unit,
     onDenied: () -> Unit,
     onCancel: () -> Unit,
-) {
+): () -> Unit {
     val context = LocalContext.current
     val activity = LocalActivity.current
     val owner = LocalLifecycleOwner.current
@@ -75,61 +75,19 @@ internal fun DeviceLocationControl(
                 onDenied()
             }
         }
+    val cancel by rememberUpdatedState(onCancel)
     DisposableEffect(owner) {
         val observer =
             LifecycleEventObserver { _, event ->
-                if (event == Lifecycle.Event.ON_STOP) onCancel()
+                if (event == Lifecycle.Event.ON_STOP) cancel()
             }
         owner.lifecycle.addObserver(observer)
         onDispose {
             owner.lifecycle.removeObserver(observer)
-            onCancel()
+            cancel()
         }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs)) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs),
-        ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs),
-            ) {
-                Icon(
-                    painterResource(R.drawable.ic_demo_location),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(stringResource(state.labelRes), style = MaterialTheme.typography.labelMedium)
-            }
-            TextButton(
-                modifier = Modifier.heightIn(min = 48.dp),
-                enabled = !state.locating,
-                contentPadding = PaddingValues(horizontal = SportSpotSpacing.xs),
-                colors = actionColors,
-                onClick = {
-                    if (permissions.any { granted(it) }) {
-                        onLocate(!granted(Manifest.permission.ACCESS_FINE_LOCATION))
-                    } else if (activity != null) {
-                        val rationale = permissions.any { ActivityCompat.shouldShowRequestPermissionRationale(activity, it) }
-                        if (history.getBoolean("requested", false) && !rationale) {
-                            settings = true
-                        } else {
-                            explanation = true
-                        }
-                    }
-                },
-            ) {
-                Text(
-                    stringResource(if (state.locating) R.string.location_locating else R.string.location_find),
-                    style = MaterialTheme.typography.labelMedium,
-                )
-            }
-        }
-        state.message?.let { Text(stringResource(it), style = MaterialTheme.typography.bodySmall) }
-    }
     if (explanation) {
         AlertDialog(
             onDismissRequest = { explanation = false },
@@ -161,5 +119,57 @@ internal fun DeviceLocationControl(
                 TextButton(onClick = { settings = false }, colors = actionColors) { Text(stringResource(R.string.location_later)) }
             },
         )
+    }
+    return {
+        if (permissions.any { granted(it) }) {
+            onLocate(!granted(Manifest.permission.ACCESS_FINE_LOCATION))
+        } else if (activity != null) {
+            val rationale = permissions.any { ActivityCompat.shouldShowRequestPermissionRationale(activity, it) }
+            if (history.getBoolean("requested", false) && !rationale) {
+                settings = true
+            } else {
+                explanation = true
+            }
+        }
+    }
+}
+
+@Composable
+internal fun DeviceLocationControl(
+    state: SearchLocationState,
+    onRequest: () -> Unit,
+) {
+    val actionColors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
+    Column(verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs),
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs),
+            ) {
+                Icon(
+                    painterResource(R.drawable.ic_demo_location),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(stringResource(state.labelRes), style = MaterialTheme.typography.labelMedium)
+            }
+            TextButton(
+                modifier = Modifier.heightIn(min = 48.dp),
+                enabled = !state.locating,
+                contentPadding = PaddingValues(horizontal = SportSpotSpacing.xs),
+                colors = actionColors,
+                onClick = onRequest,
+            ) {
+                Text(
+                    stringResource(if (state.locating) R.string.location_locating else R.string.location_find),
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
+        }
+        state.message?.let { Text(stringResource(it), style = MaterialTheme.typography.bodySmall) }
     }
 }

@@ -208,6 +208,40 @@ class HomeViewModelTest {
         }
 
     @Test
+    fun `late cancelled fix cannot clear a new attempt or change the search`() =
+        runTest(dispatcher) {
+            val oldFix = CompletableDeferred<GeoPoint>()
+            val newFix = CompletableDeferred<GeoPoint>()
+            val point = GeoPoint(48.8566, 2.3522)
+            var attempts = 0
+            val device =
+                FakeDeviceLocationProvider {
+                    if (attempts++ == 0) withContext(NonCancellable) { oldFix.await() } else newFix.await()
+                }
+            val repository = FakeSpotRepository { center, _, _ -> listOf(spot.copy(location = center)) }
+            val viewModel = HomeViewModel(SearchNearbySpotsUseCase(repository), device)
+            advanceUntilIdle()
+            viewModel.useDeviceLocation(approximate = false)
+            runCurrent()
+            viewModel.cancelLocation()
+            viewModel.useDeviceLocation(approximate = true)
+            runCurrent()
+            oldFix.complete(GeoPoint(51.5074, -0.1278))
+            runCurrent()
+            assertEquals(demoCenter, viewModel.location.value.center)
+            assertEquals(true, viewModel.location.value.locating)
+            assertEquals(1, repository.searchCalls)
+            newFix.complete(point)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.location.value.locating)
+            assertEquals(point, viewModel.location.value.center)
+            assertEquals(LocationSource.APPROXIMATE, viewModel.location.value.source)
+            assertEquals(HomeUiState.Content(listOf(spot.copy(location = point))), viewModel.uiState.value)
+            assertEquals(2, repository.searchCalls)
+        }
+
+    @Test
     fun `late responses cannot replace the latest gps search`() =
         runTest(dispatcher) {
             val initialResponse = CompletableDeferred<List<Spot>>()

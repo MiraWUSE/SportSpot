@@ -77,6 +77,8 @@ internal fun HomeScreen(
     var sport by rememberSaveable { mutableStateOf<SportType?>(null) }
     var favoritesInfo by rememberSaveable { mutableStateOf(false) }
     val resources = LocalResources.current
+    // Keep permission callbacks and cancellation alive when the header scrolls off screen.
+    val requestLocation = rememberDeviceLocationRequest(onLocate, onPermissionDenied, onCancelLocation)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -91,7 +93,7 @@ internal fun HomeScreen(
     ) {
         item {
             HomeHeader(query, sport, onQuery = { query = it }, onSport = { sport = it }) {
-                DeviceLocationControl(location, onLocate, onPermissionDenied, onCancelLocation)
+                DeviceLocationControl(location, requestLocation)
             }
         }
         when (state) {

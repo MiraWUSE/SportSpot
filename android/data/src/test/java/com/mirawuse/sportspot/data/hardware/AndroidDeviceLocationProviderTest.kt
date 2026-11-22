@@ -118,6 +118,21 @@ class AndroidDeviceLocationProviderTest {
             shadowOf(manager).setProviderEnabled(LocationManager.GPS_PROVIDER, true)
             shadowOf(manager).setProviderEnabled(LocationManager.NETWORK_PROVIDER, false)
             assertNull(provider.getCurrentLocation())
+            assertTrue(shadowOf(manager).getLocationRequests(LocationManager.GPS_PROVIDER).isEmpty())
+        }
+
+    @Test
+    fun `enabled location without a usable provider returns immediately`() =
+        runTest {
+            shadowOf(context).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+            shadowOf(manager).setLocationEnabled(true)
+            shadowOf(manager).setProviderEnabled(LocationManager.GPS_PROVIDER, false)
+            shadowOf(manager).setProviderEnabled(LocationManager.NETWORK_PROVIDER, false)
+            assertTrue(manager.isLocationEnabled)
+            assertNull(provider.getCurrentLocation())
+            assertEquals(0L, testScheduler.currentTime)
+            assertTrue(shadowOf(manager).getLocationRequests(LocationManager.GPS_PROVIDER).isEmpty())
+            assertTrue(shadowOf(manager).getLocationRequests(LocationManager.NETWORK_PROVIDER).isEmpty())
         }
 
     @Test
