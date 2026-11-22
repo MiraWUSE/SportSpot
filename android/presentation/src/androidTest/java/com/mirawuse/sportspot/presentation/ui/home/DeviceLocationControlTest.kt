@@ -1,6 +1,11 @@
 package com.mirawuse.sportspot.presentation.ui.home
 
 import android.Manifest
+import android.app.Activity
+import android.app.Instrumentation
+import android.content.IntentFilter
+import android.os.PatternMatcher
+import android.provider.Settings
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.result.ActivityResultRegistry
 import androidx.activity.result.ActivityResultRegistryOwner
@@ -75,6 +80,20 @@ class DeviceLocationControlTest {
         compose.onNodeWithText("Открыть настройки").assertIsDisplayed()
         compose.onNodeWithText("Не сейчас").performClick()
         compose.onNodeWithText("Открыть настройки").assertDoesNotExist()
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val filter =
+            IntentFilter(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                addDataScheme("package")
+                addDataSchemeSpecificPart(instrumentation.targetContext.packageName, PatternMatcher.PATTERN_LITERAL)
+            }
+        val monitor = instrumentation.addMonitor(filter, Instrumentation.ActivityResult(Activity.RESULT_CANCELED, null), true)
+        try {
+            compose.onNodeWithText("Найти рядом со мной").performClick()
+            compose.onNodeWithText("Открыть настройки").performClick()
+            compose.runOnIdle { assertEquals(1, monitor.hits) }
+        } finally {
+            instrumentation.removeMonitor(monitor)
+        }
     }
 
     @Test
