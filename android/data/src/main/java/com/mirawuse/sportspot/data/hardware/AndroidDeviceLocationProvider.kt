@@ -65,9 +65,15 @@ class AndroidDeviceLocationProvider
                     cancellation,
                     ContextCompat.getMainExecutor(context),
                 ) { location ->
+                    val permitted =
+                        if (provider == LocationManager.GPS_PROVIDER) {
+                            granted(Manifest.permission.ACCESS_FINE_LOCATION)
+                        } else {
+                            granted(Manifest.permission.ACCESS_COARSE_LOCATION) || granted(Manifest.permission.ACCESS_FINE_LOCATION)
+                        }
                     val point =
                         location
-                            ?.takeIf { it.latitude in -90.0..90.0 && it.longitude in -180.0..180.0 }
+                            ?.takeIf { permitted && it.latitude in -90.0..90.0 && it.longitude in -180.0..180.0 }
                             ?.let { GeoPoint(it.latitude, it.longitude) }
                     if (continuation.isActive) continuation.resume(point)
                 }

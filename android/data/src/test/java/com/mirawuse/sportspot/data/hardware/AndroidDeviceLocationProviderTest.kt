@@ -58,6 +58,33 @@ class AndroidDeviceLocationProviderTest {
         }
 
     @Test
+    fun `revoked access cannot deliver a point from a pending callback`() =
+        runTest {
+            for (source in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)) {
+                shadowOf(context).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION)
+                shadowOf(manager).setProviderEnabled(LocationManager.GPS_PROVIDER, source == LocationManager.GPS_PROVIDER)
+                shadowOf(manager).setProviderEnabled(LocationManager.NETWORK_PROVIDER, source == LocationManager.NETWORK_PROVIDER)
+                val result = async(UnconfinedTestDispatcher(testScheduler)) { provider.getCurrentLocation() }
+                if (source == LocationManager.GPS_PROVIDER) {
+                    shadowOf(context).denyPermissions(Manifest.permission.ACCESS_FINE_LOCATION)
+                } else {
+                    shadowOf(context).denyPermissions(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                }
+                val fix =
+                    Location(source).apply {
+                        latitude = 48.8566
+                        longitude = 2.3522
+                        accuracy = 50f
+                        time = System.currentTimeMillis()
+                        elapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos()
+                    }
+                shadowOf(manager).simulateLocation(fix)
+                shadowOf(Looper.getMainLooper()).idle()
+                assertNull(result.await())
+            }
+        }
+
+    @Test
     fun `cancelling the coroutine removes the system request`() =
         runTest {
             shadowOf(context).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
@@ -96,9 +123,17 @@ class AndroidDeviceLocationProviderTest {
     @Test
     fun `waiting for a fix is bounded`() =
         runTest {
-            shadowOf(context).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-            shadowOf(manager).setProviderEnabled(LocationManager.GPS_PROVIDER, true)
-            shadowOf(manager).setProviderEnabled(LocationManager.NETWORK_PROVIDER, false)
-            assertNull(provider.getCurrentLocation())
+            for (source in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)) {
+                shadowOf(context).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
+                if (source == LocationManager.GPS_PROVIDER) {
+                    shadowOf(context).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION)
+                } else {
+                    shadowOf(context).denyPermissions(Manifest.permission.ACCESS_FINE_LOCATION)
+                }
+                shadowOf(manager).setProviderEnabled(LocationManager.GPS_PROVIDER, source == LocationManager.GPS_PROVIDER)
+                shadowOf(manager).setProviderEnabled(LocationManager.NETWORK_PROVIDER, source == LocationManager.NETWORK_PROVIDER)
+                assertNull(provider.getCurrentLocation())
+                assertTrue(shadowOf(manager).getLocationRequests(source).isEmpty())
+            }
         }
 }
