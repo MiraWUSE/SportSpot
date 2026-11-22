@@ -12,13 +12,13 @@ import org.junit.Test
 class MapPositionTest {
     @Test
     fun `search point is at the center of the scheme`() {
-        assertEquals(Offset(0.5f, 0.5f), mapPosition(spotSearchCenter))
+        assertEquals(Offset(0.5f, 0.5f), mapPosition(spotSearchCenter, spotSearchCenter, 1000))
     }
 
     @Test
     fun `latitude moves the marker north and longitude moves it east`() {
-        val north = mapPosition(spotSearchCenter.copy(latitude = spotSearchCenter.latitude + 0.001))
-        val east = mapPosition(spotSearchCenter.copy(longitude = spotSearchCenter.longitude + 0.001))
+        val north = mapPosition(spotSearchCenter.copy(latitude = spotSearchCenter.latitude + 0.001), spotSearchCenter, 1000)
+        val east = mapPosition(spotSearchCenter.copy(longitude = spotSearchCenter.longitude + 0.001), spotSearchCenter, 1000)
 
         assertEquals(0.5f, north.x, 0f)
         assertTrue(north.y < 0.5f)
@@ -28,7 +28,7 @@ class MapPositionTest {
 
     @Test
     fun `a location outside the scheme stays within its bounds`() {
-        assertEquals(Offset(1f, 0f), mapPosition(GeoPoint(57.0, 45.0)))
+        assertEquals(Offset(1f, 0f), mapPosition(GeoPoint(57.0, 45.0), spotSearchCenter, 1000))
     }
 
     @Test

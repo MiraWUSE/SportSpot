@@ -65,6 +65,10 @@ private val HomeSports = listOf(null, SportType.FOOTBALL, SportType.BASKETBALL, 
 @Composable
 internal fun HomeScreen(
     state: HomeUiState,
+    location: SearchLocationState,
+    onLocate: (Boolean) -> Unit,
+    onPermissionDenied: () -> Unit,
+    onCancelLocation: () -> Unit,
     onRetry: () -> Unit,
     onOpenSpot: (SpotId) -> Unit,
     onOpenMap: () -> Unit,
@@ -86,7 +90,9 @@ internal fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.md),
     ) {
         item {
-            HomeHeader(query, sport, onQuery = { query = it }, onSport = { sport = it })
+            HomeHeader(query, sport, onQuery = { query = it }, onSport = { sport = it }) {
+                DeviceLocationControl(location, onLocate, onPermissionDenied, onCancelLocation)
+            }
         }
         when (state) {
             HomeUiState.Loading -> item { SpotSearchLoading() }
@@ -104,7 +110,7 @@ internal fun HomeScreen(
                 }
             is HomeUiState.Content -> {
                 val filtered = filterHomeSpots(state.spots, query, sport) { resources.getString(it.labelRes()) }
-                item { HomeMapPreview(filtered, onOpenMap) }
+                item { HomeMapPreview(filtered, location.center, onOpenMap) }
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -157,6 +163,7 @@ private fun HomeHeader(
     sport: SportType?,
     onQuery: (String) -> Unit,
     onSport: (SportType?) -> Unit,
+    locationContent: @Composable () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
     val sportPrefix = stringResource(R.string.home_brand_prefix)
@@ -173,13 +180,7 @@ private fun HomeHeader(
             )
             Text(stringResource(R.string.home_tagline), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs),
-        ) {
-            Icon(painterResource(R.drawable.ic_demo_location), contentDescription = null, tint = homeAccentText())
-            Text(stringResource(R.string.home_demo_location), style = MaterialTheme.typography.labelMedium)
-        }
+        locationContent()
         HomeSearchBar(query, onQuery, onSport)
         Row(
             modifier = Modifier.horizontalScroll(rememberScrollState()),

@@ -36,6 +36,7 @@ import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 @Composable
 internal fun SpotDetailsScreen(
     spotId: SpotId,
+    locationLabel: String,
     state: HomeUiState,
     onRetry: () -> Unit,
     onBack: () -> Unit,
@@ -65,7 +66,7 @@ internal fun SpotDetailsScreen(
                 state is HomeUiState.Loading -> SpotSearchLoading()
                 state is HomeUiState.Error ->
                     SpotSearchMessage(stringResource(R.string.home_error_title), state.message, onRetry)
-                spot != null -> DetailsContent(spot, onShowMap, onOpenReviews)
+                spot != null -> DetailsContent(spot, locationLabel, onShowMap, onOpenReviews)
                 else ->
                     SpotSearchMessage(
                         title = stringResource(R.string.details_not_found),
@@ -80,6 +81,7 @@ internal fun SpotDetailsScreen(
 @Composable
 private fun DetailsContent(
     spot: Spot,
+    locationLabel: String,
     onShowMap: (SpotId) -> Unit,
     onOpenReviews: (SpotId) -> Unit,
 ) {
@@ -91,7 +93,7 @@ private fun DetailsContent(
     Column(verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs)) {
         Text(text = spot.name, style = MaterialTheme.typography.headlineSmall)
         Text(
-            text = stringResource(R.string.home_demo_location),
+            text = locationLabel,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium,
         )

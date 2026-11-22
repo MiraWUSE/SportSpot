@@ -150,8 +150,13 @@ fun SportSpotApp() {
             composable(HOME_ROUTE) { entry ->
                 val viewModel = searchViewModel(navController, entry)
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
+                val location by viewModel.location.collectAsStateWithLifecycle()
                 HomeScreen(
                     state = state,
+                    location = location,
+                    onLocate = viewModel::useDeviceLocation,
+                    onPermissionDenied = viewModel::permissionDenied,
+                    onCancelLocation = viewModel::cancelLocation,
                     onRetry = viewModel::retry,
                     onOpenSpot = { navController.navigate(SpotDetailsRoute(it.source, it.value)) },
                     onOpenMap = { navController.selectTab(Tab.MAP) },
@@ -160,8 +165,11 @@ fun SportSpotApp() {
             composable<MapRoute> { entry ->
                 val viewModel = searchViewModel(navController, entry)
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
+                val location by viewModel.location.collectAsStateWithLifecycle()
                 MapScreen(
                     state = state,
+                    center = location.center,
+                    locationLabel = stringResource(location.labelRes),
                     focus = entry.toRoute<MapRoute>().spotId,
                     onRetry = viewModel::retry,
                     onOpenSpot = { navController.navigate(SpotDetailsRoute(it.source, it.value)) },
@@ -188,7 +196,9 @@ fun SportSpotApp() {
             composable<SpotDetailsRoute> { entry ->
                 val viewModel = searchViewModel(navController, entry)
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
+                val location by viewModel.location.collectAsStateWithLifecycle()
                 SpotDetailsScreen(
+                    locationLabel = stringResource(location.labelRes),
                     spotId = entry.toRoute<SpotDetailsRoute>().spotId,
                     state = state,
                     onRetry = viewModel::retry,

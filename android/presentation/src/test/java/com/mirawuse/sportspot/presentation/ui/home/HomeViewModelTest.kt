@@ -47,7 +47,7 @@ class HomeViewModelTest {
                     assertNull(sport)
                     listOf(spot)
                 }
-            val viewModel = HomeViewModel(SearchNearbySpotsUseCase(repository))
+            val viewModel = HomeViewModel(SearchNearbySpotsUseCase(repository), FakeDeviceLocationProvider())
 
             assertEquals(HomeUiState.Loading, viewModel.uiState.value)
             advanceUntilIdle()
@@ -60,7 +60,7 @@ class HomeViewModelTest {
     fun `successful empty result shows Empty`() =
         runTest(dispatcher) {
             val repository = FakeSpotRepository { _, _, _ -> emptyList() }
-            val viewModel = HomeViewModel(SearchNearbySpotsUseCase(repository))
+            val viewModel = HomeViewModel(SearchNearbySpotsUseCase(repository), FakeDeviceLocationProvider())
 
             advanceUntilIdle()
 
@@ -71,7 +71,7 @@ class HomeViewModelTest {
     fun `failed search shows a safe message`() =
         runTest(dispatcher) {
             val repository = FakeSpotRepository { _, _, _ -> throw IOException("Internal transport details") }
-            val viewModel = HomeViewModel(SearchNearbySpotsUseCase(repository))
+            val viewModel = HomeViewModel(SearchNearbySpotsUseCase(repository), FakeDeviceLocationProvider())
 
             advanceUntilIdle()
 
@@ -90,7 +90,7 @@ class HomeViewModelTest {
                     if (!online) throw IOException("Offline")
                     listOf(spot)
                 }
-            val viewModel = HomeViewModel(SearchNearbySpotsUseCase(repository))
+            val viewModel = HomeViewModel(SearchNearbySpotsUseCase(repository), FakeDeviceLocationProvider())
             advanceUntilIdle()
 
             online = true
@@ -107,7 +107,7 @@ class HomeViewModelTest {
     fun `cancelled search does not show Error`() =
         runTest(dispatcher) {
             val repository = FakeSpotRepository { _, _, _ -> throw CancellationException() }
-            val viewModel = HomeViewModel(SearchNearbySpotsUseCase(repository))
+            val viewModel = HomeViewModel(SearchNearbySpotsUseCase(repository), FakeDeviceLocationProvider())
 
             advanceUntilIdle()
 
