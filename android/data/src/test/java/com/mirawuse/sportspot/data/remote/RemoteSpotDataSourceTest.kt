@@ -82,6 +82,29 @@ class RemoteSpotDataSourceTest {
         }
 
     @Test
+    fun `gps precision is normalized before HTTP`() =
+        runBlocking {
+            val repository = repository()
+            val cases =
+                listOf(
+                    Triple(GeoPoint(56.326899999999995, 44.005900000000004), "56.3269", "44.0059"),
+                    Triple(GeoPoint(56.3269006, -44.0059006), "56.326901", "-44.005901"),
+                    Triple(GeoPoint(89.9999999, -179.9999999), "90", "-180"),
+                    Triple(GeoPoint(0.0000001, -0.0000001), "0", "0"),
+                )
+            for ((point, expectedLat, expectedLon) in cases) {
+                server.enqueue(json(fixture("search-spots.json")))
+                val spots = repository.searchNearby(point, 1000)
+                assertEquals(osmId, spots.single().id)
+                val url = requireNotNull(takeRequest().requestUrl)
+                assertEquals(expectedLat, url.queryParameter("lat"))
+                assertEquals(expectedLon, url.queryParameter("lon"))
+                assertEquals("1000", url.queryParameter("radius"))
+                assertEquals("all", url.queryParameter("sport"))
+            }
+        }
+
+    @Test
     fun `REST list maps full schema derived OSM and community rows`() =
         runBlocking {
             server.enqueue(json(fixture("saved-spots.json")))
@@ -190,8 +213,6 @@ class RemoteSpotDataSourceTest {
                     { repository.searchNearby(center, 99) },
                     { repository.searchNearby(center, 3001) },
                     { repository.searchNearby(center, 1000, SportType.OTHER) },
-                    { repository.searchNearby(GeoPoint(56.3269001, 44.0059), 1000) },
-                    { repository.searchNearby(GeoPoint(56.3269, 44.0059001), 1000) },
                     { repository.getSpotById(SpotId("osm", "12345")) },
                     { repository.getSpotById(SpotId("community", "invalid-uuid")) },
                 )

@@ -206,11 +206,29 @@ class OfflineSpotRepositoryTest {
             }
             assertError(NetworkError.InvalidRequest) { repository.searchNearby(center, 99, SportType.BASKETBALL) }
             assertError(NetworkError.InvalidRequest) { repository.searchNearby(center, 1000, SportType.OTHER) }
-            assertError(NetworkError.InvalidRequest) {
-                repository.searchNearby(center.copy(latitude = 56.3269001), 1000, SportType.BASKETBALL)
-            }
+            assertEquals(searchSpots, repository.searchNearby(center.copy(latitude = 56.3269001), 1000, SportType.BASKETBALL))
             assertError(NetworkError.InvalidRequest) { repository.getSpotById(SpotId("osm", "12345")) }
             assertEquals(searchSpots, repository.searchNearby(center, 1000, SportType.BASKETBALL))
+            assertEquals(1, server.requestCount)
+        }
+
+    @Test
+    fun `raw GPS requests share a disk snapshot only when their HTTP coordinates match`() =
+        runBlocking {
+            server.enqueue(json(fixture("search-spots.json")))
+            val rawPoint = GeoPoint(56.326899999999995, 44.005900000000004)
+            assertEquals(searchSpots, repository.searchNearby(rawPoint, 1000, SportType.BASKETBALL))
+            val query = requireNotNull(takeRequest().requestUrl)
+            assertEquals("56.3269", query.queryParameter("lat"))
+            assertEquals("44.0059", query.queryParameter("lon"))
+
+            online = false
+            reopenDatabase()
+            assertEquals(searchSpots, repository.searchNearby(center, 1000, SportType.BASKETBALL))
+            assertEquals(searchSpots, repository.searchNearby(rawPoint, 1000, SportType.BASKETBALL))
+            assertError(NetworkError.Offline) {
+                repository.searchNearby(center.copy(latitude = 56.3269006), 1000, SportType.BASKETBALL)
+            }
             assertEquals(1, server.requestCount)
         }
 

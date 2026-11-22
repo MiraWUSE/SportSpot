@@ -36,6 +36,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.labelRes
@@ -46,6 +47,7 @@ import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 @Composable
 internal fun HomeMapPreview(
     spots: List<Spot>,
+    center: GeoPoint,
     onOpenMap: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -77,7 +79,7 @@ internal fun HomeMapPreview(
             val outerPadding = mainMarkerSize / 2
             val markerCenters = mutableListOf<Offset>()
             for (spot in spots) {
-                val point = mapPosition(spot.location)
+                val point = mapPosition(spot.location, center, SPOT_SEARCH_RADIUS_METERS)
                 val center =
                     Offset(
                         (outerPadding + (maxWidth - mainMarkerSize) * point.x).value,

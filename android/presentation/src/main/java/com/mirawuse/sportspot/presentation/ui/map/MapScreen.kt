@@ -55,26 +55,27 @@ import com.mirawuse.sportspot.presentation.ui.components.SpotSummary
 import com.mirawuse.sportspot.presentation.ui.components.labelRes
 import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
 import com.mirawuse.sportspot.presentation.ui.home.SPOT_SEARCH_RADIUS_METERS
-import com.mirawuse.sportspot.presentation.ui.home.spotSearchCenter
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 import kotlin.math.cos
 
 @Composable
 internal fun MapScreen(
     state: HomeUiState,
+    center: GeoPoint,
+    locationLabel: String,
     focus: SpotId?,
     onRetry: () -> Unit,
     onOpenSpot: (SpotId) -> Unit,
 ) {
-    var selectedSource by rememberSaveable(focus) { mutableStateOf(focus?.source) }
-    var selectedValue by rememberSaveable(focus) { mutableStateOf(focus?.value) }
+    var selectedSource by rememberSaveable(focus, center) { mutableStateOf(focus?.source) }
+    var selectedValue by rememberSaveable(focus, center) { mutableStateOf(focus?.value) }
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(SportSpotSpacing.lg),
         verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.md),
     ) {
         Text(text = stringResource(R.string.tab_map), style = MaterialTheme.typography.headlineLarge)
         Text(
-            text = stringResource(R.string.home_demo_location),
+            text = locationLabel,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium,
         )
@@ -90,13 +91,14 @@ internal fun MapScreen(
             is HomeUiState.Content -> {
                 val source = selectedSource
                 val value = selectedValue
-                val selected = if (source != null && value != null) state.findSpot(SpotId(source, value)) else state.spots.firstOrNull()
+                val selected = if (source != null && value != null) state.findSpot(SpotId(source, value)) else null
+                val visibleSpot = selected ?: state.spots.firstOrNull()
                 Text(text = stringResource(R.string.map_scheme), style = MaterialTheme.typography.titleLarge)
-                SpotMap(state.spots, selected?.id) { id ->
+                SpotMap(state.spots, center, visibleSpot?.id) { id ->
                     selectedSource = id.source
                     selectedValue = id.value
                 }
-                if (selected != null) {
+                if (visibleSpot != null) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = MaterialTheme.shapes.large,
@@ -106,10 +108,10 @@ internal fun MapScreen(
                             modifier = Modifier.fillMaxWidth().padding(SportSpotSpacing.lg),
                             verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.md),
                         ) {
-                            SpotSummary(selected)
+                            SpotSummary(visibleSpot)
                             SportSpotButton(
                                 text = stringResource(R.string.map_details),
-                                onClick = { onOpenSpot(selected.id) },
+                                onClick = { onOpenSpot(visibleSpot.id) },
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
@@ -125,11 +127,12 @@ internal fun MapScreen(
 @Composable
 private fun SpotMap(
     spots: List<Spot>,
+    center: GeoPoint,
     selectedId: SpotId?,
     onSelect: (SpotId) -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
-    val markers = remember(spots) { spots.groupBy { mapPosition(it.location) } }
+    val markers = remember(spots, center) { spots.groupBy { mapPosition(it.location, center, SPOT_SEARCH_RADIUS_METERS) } }
     val markerSize = 45.dp
 
     fun selectMarker(group: List<Spot>) {
@@ -226,11 +229,16 @@ internal fun nearestMarker(
     return bestPosition
 }
 
-internal fun mapPosition(location: GeoPoint): Offset {
+internal fun mapPosition(
+    location: GeoPoint,
+    center: GeoPoint,
+    radiusMeters: Int,
+): Offset {
     val metersPerDegree = 111_320.0
-    val east = (location.longitude - spotSearchCenter.longitude) * metersPerDegree * cos(Math.toRadians(spotSearchCenter.latitude))
-    val north = (location.latitude - spotSearchCenter.latitude) * metersPerDegree
-    val diameter = 2 * SPOT_SEARCH_RADIUS_METERS
+    val longitudeDelta = (location.longitude - center.longitude + 540) % 360 - 180
+    val east = longitudeDelta * metersPerDegree * cos(Math.toRadians(center.latitude))
+    val north = (location.latitude - center.latitude) * metersPerDegree
+    val diameter = 2 * radiusMeters
     return Offset(
         x = (0.5 + east / diameter).coerceIn(0.0, 1.0).toFloat(),
         y = (0.5 - north / diameter).coerceIn(0.0, 1.0).toFloat(),
