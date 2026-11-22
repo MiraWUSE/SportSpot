@@ -242,6 +242,43 @@ class HomeViewModelTest {
         }
 
     @Test
+    fun `repeated gps search failures keep the center until a successful retry`() =
+        runTest(dispatcher) {
+            val point = GeoPoint(48.856612345, 2.352212345)
+            val centers = mutableListOf<GeoPoint>()
+            val device = FakeDeviceLocationProvider { point }
+            var failures = 2
+            val repository =
+                FakeSpotRepository { center, _, _ ->
+                    centers.add(center)
+                    if (center == point && failures-- > 0) throw IOException("External service unavailable")
+                    listOf(spot.copy(location = center))
+                }
+            val viewModel = HomeViewModel(SearchNearbySpotsUseCase(repository), device)
+            advanceUntilIdle()
+            viewModel.useDeviceLocation(approximate = false)
+            advanceUntilIdle()
+            assertEquals(point, viewModel.location.value.center)
+            assertEquals(
+                HomeUiState.Error("Не удалось загрузить площадки. Проверьте соединение и попробуйте снова."),
+                viewModel.uiState.value,
+            )
+            viewModel.retry()
+            advanceUntilIdle()
+            assertEquals(point, viewModel.location.value.center)
+            assertEquals(
+                HomeUiState.Error("Не удалось загрузить площадки. Проверьте соединение и попробуйте снова."),
+                viewModel.uiState.value,
+            )
+            viewModel.retry()
+            advanceUntilIdle()
+
+            assertEquals(listOf(demoCenter, point, point, point), centers)
+            assertEquals(1, device.calls)
+            assertEquals(HomeUiState.Content(listOf(spot.copy(location = point))), viewModel.uiState.value)
+        }
+
+    @Test
     fun `retry uses the selected approximate point even after a failed search`() =
         runTest(dispatcher) {
             val point = GeoPoint(48.8566, 2.3522)
