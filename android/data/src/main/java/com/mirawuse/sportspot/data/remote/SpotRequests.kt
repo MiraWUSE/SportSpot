@@ -10,6 +10,7 @@ import com.mirawuse.sportspot.domain.model.spot.SpotId
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import java.math.BigDecimal
+import java.math.RoundingMode
 
 internal data class SpotSearchRequest(
     val latitude: String,
@@ -40,9 +41,12 @@ internal suspend fun validatedSearchRequest(
     }
 
 private fun formatCoordinate(value: Double): String {
-    val decimal = BigDecimal.valueOf(value).stripTrailingZeros()
-    require(decimal.scale() <= 6) { "Search coordinates support at most six decimal places" }
-    return decimal.toPlainString()
+    // Android location fixes can contain more digits than the HTTP contract accepts.
+    return BigDecimal
+        .valueOf(value)
+        .setScale(6, RoundingMode.HALF_UP)
+        .stripTrailingZeros()
+        .toPlainString()
 }
 
 private suspend fun <T> validateRequest(block: () -> T): T {
