@@ -61,6 +61,7 @@ class HomeViewModel
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
+                        currentCoroutineContext().ensureActive()
                         _location.value = _location.value.copy(message = R.string.location_unavailable)
                     } finally {
                         if (request == locationRequest) _location.value = _location.value.copy(locating = false)
@@ -95,6 +96,7 @@ class HomeViewModel
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
+                        currentCoroutineContext().ensureActive()
                         _uiState.value = HomeUiState.Error("Не удалось загрузить площадки. Проверьте соединение и попробуйте снова.")
                     }
                 }

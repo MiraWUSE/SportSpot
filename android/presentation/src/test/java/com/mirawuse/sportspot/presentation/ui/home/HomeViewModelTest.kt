@@ -231,7 +231,7 @@ class HomeViewModelTest {
             point = secondPoint
             viewModel.useDeviceLocation(approximate = true)
             runCurrent()
-            initialResponse.complete(listOf(spot))
+            initialResponse.completeExceptionally(IOException("Late initial failure"))
             firstGpsResponse.complete(emptyList())
             advanceUntilIdle()
 

@@ -48,6 +48,7 @@ internal fun DeviceLocationControl(
     val context = LocalContext.current
     val activity = LocalActivity.current
     val owner = LocalLifecycleOwner.current
+    val actionColors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
     val permissions =
         remember {
             arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION)
@@ -90,7 +91,7 @@ internal fun DeviceLocationControl(
         TextButton(
             enabled = !state.locating,
             contentPadding = PaddingValues(horizontal = SportSpotSpacing.xs),
-            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
+            colors = actionColors,
             onClick = {
                 if (permissions.any { granted(it) }) {
                     onLocate(!granted(Manifest.permission.ACCESS_FINE_LOCATION))
@@ -118,10 +119,10 @@ internal fun DeviceLocationControl(
                     explanation = false
                     history.edit().putBoolean("requested", true).apply()
                     launcher.launch(permissions)
-                }) { Text(stringResource(R.string.location_continue)) }
+                }, colors = actionColors) { Text(stringResource(R.string.location_continue)) }
             },
             dismissButton = {
-                TextButton(onClick = { explanation = false }) { Text(stringResource(R.string.location_later)) }
+                TextButton(onClick = { explanation = false }, colors = actionColors) { Text(stringResource(R.string.location_later)) }
             },
         )
     }
@@ -134,10 +135,10 @@ internal fun DeviceLocationControl(
                 TextButton(onClick = {
                     settings = false
                     context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
-                }) { Text(stringResource(R.string.location_settings)) }
+                }, colors = actionColors) { Text(stringResource(R.string.location_settings)) }
             },
             dismissButton = {
-                TextButton(onClick = { settings = false }) { Text(stringResource(R.string.location_later)) }
+                TextButton(onClick = { settings = false }, colors = actionColors) { Text(stringResource(R.string.location_later)) }
             },
         )
     }

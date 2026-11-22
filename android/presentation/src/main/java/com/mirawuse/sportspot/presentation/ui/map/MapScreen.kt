@@ -67,8 +67,8 @@ internal fun MapScreen(
     onRetry: () -> Unit,
     onOpenSpot: (SpotId) -> Unit,
 ) {
-    var selectedSource by rememberSaveable(focus) { mutableStateOf(focus?.source) }
-    var selectedValue by rememberSaveable(focus) { mutableStateOf(focus?.value) }
+    var selectedSource by rememberSaveable(focus, center) { mutableStateOf(focus?.source) }
+    var selectedValue by rememberSaveable(focus, center) { mutableStateOf(focus?.value) }
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(SportSpotSpacing.lg),
         verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.md),
@@ -91,13 +91,14 @@ internal fun MapScreen(
             is HomeUiState.Content -> {
                 val source = selectedSource
                 val value = selectedValue
-                val selected = if (source != null && value != null) state.findSpot(SpotId(source, value)) else state.spots.firstOrNull()
+                val selected = if (source != null && value != null) state.findSpot(SpotId(source, value)) else null
+                val visibleSpot = selected ?: state.spots.firstOrNull()
                 Text(text = stringResource(R.string.map_scheme), style = MaterialTheme.typography.titleLarge)
-                SpotMap(state.spots, center, selected?.id) { id ->
+                SpotMap(state.spots, center, visibleSpot?.id) { id ->
                     selectedSource = id.source
                     selectedValue = id.value
                 }
-                if (selected != null) {
+                if (visibleSpot != null) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = MaterialTheme.shapes.large,
@@ -107,10 +108,10 @@ internal fun MapScreen(
                             modifier = Modifier.fillMaxWidth().padding(SportSpotSpacing.lg),
                             verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.md),
                         ) {
-                            SpotSummary(selected)
+                            SpotSummary(visibleSpot)
                             SportSpotButton(
                                 text = stringResource(R.string.map_details),
-                                onClick = { onOpenSpot(selected.id) },
+                                onClick = { onOpenSpot(visibleSpot.id) },
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
