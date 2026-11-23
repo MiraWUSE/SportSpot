@@ -7,6 +7,7 @@ import com.mirawuse.sportspot.data.mapper.verifiedSpotPhoto
 import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
+import com.mirawuse.sportspot.domain.model.spot.SpotSport
 
 internal fun Spot.toCacheColumns(): SpotColumns =
     SpotColumns(
@@ -22,6 +23,9 @@ internal fun Spot.toCacheColumns(): SpotColumns =
         photoAuthor = photo?.author,
         photoLicense = photo?.license,
         photoLicenseUrl = photo?.licenseUrl,
+        address = address,
+        equipment = equipment,
+        sports = sports?.joinToString(";") { it.name },
     )
 
 internal fun SpotColumns.toDomain(): Spot =
@@ -33,4 +37,11 @@ internal fun SpotColumns.toDomain(): Spot =
         surface = surface,
         lighting = lighting,
         photo = verifiedSpotPhoto(photoUrl, photoSourceUrl, photoAuthor, photoLicense, photoLicenseUrl),
+        address = address,
+        equipment = equipment,
+        sports =
+            sports
+                ?.split(';')
+                ?.filter { it.isNotEmpty() }
+                ?.map { name -> SpotSport.entries.find { it.name == name } ?: SpotSport.OTHER },
     )

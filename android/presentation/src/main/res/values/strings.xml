@@ -45,11 +45,21 @@
     <string name="details_not_found_message">В текущих результатах поиска этой площадки нет.</string>
     <string name="details_about">О площадке</string>
     <string name="details_traits">Характеристики</string>
+    <string name="details_no_address">Адрес не указан</string>
     <string name="details_surface">Покрытие: %1$s</string>
+    <string name="details_surface_asphalt">асфальт</string>
+    <string name="details_surface_concrete">бетон</string>
+    <string name="details_surface_grass">трава</string>
+    <string name="details_surface_artificial_turf">искусственный газон</string>
     <string name="details_surface_rubber">резиновое</string>
     <string name="details_lighting">Освещение: %1$s</string>
     <string name="details_lighting_yes">есть</string>
     <string name="details_lighting_no">нет</string>
+    <string name="details_equipment">Оборудование: %1$s</string>
+    <string name="details_equipment_horizontal_bar">турник</string>
+    <string name="details_equipment_parallel_bars">брусья</string>
+    <string name="details_equipment_horizontal_ladder">рукоход</string>
+    <string name="details_equipment_wall_bars">шведская стенка</string>
     <string name="details_unknown">не указано</string>
     <string name="details_show_map">Показать на карте</string>
     <string name="spot_photo_description">Фото площадки «%1$s»</string>
@@ -75,8 +85,12 @@
     <string name="sport_basketball">Баскетбол</string>
     <string name="sport_volleyball">Волейбол</string>
     <string name="sport_tennis">Теннис</string>
+    <string name="sport_table_tennis">Настольный теннис</string>
+    <string name="sport_hockey">Хоккей</string>
+    <string name="sport_ice_hockey">Хоккей с шайбой</string>
     <string name="sport_workout">Воркаут</string>
     <string name="sport_other">Другой вид спорта</string>
+    <string name="sport_unspecified">Вид спорта не указан</string>
 
     <string name="form_required">Заполните это поле</string>
     <string name="form_email_format">Проверьте формат электронной почты</string>

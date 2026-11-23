@@ -1541,10 +1541,12 @@ components:
           example: 12345
         name:
           type: string
-          example: Спортивная площадка
+          description: Имя объекта в OSM или описательное название по его тегам.
+          example: Баскетбольная площадка
         sport_type:
           type: string
-          example: basketball
+          description: Виды спорта объекта через точку с запятой. Значение unspecified означает отсутствие сведений.
+          example: basketball;soccer
         latitude:
           type: number
           example: 56.3269
@@ -1554,6 +1556,7 @@ components:
         address:
           type: string
           nullable: true
+          description: Улица или addr:place и номер дома из тегов этого объекта, если они есть.
         surface:
           type: string
           nullable: true

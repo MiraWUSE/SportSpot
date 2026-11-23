@@ -196,9 +196,7 @@ fun SportSpotApp() {
             composable<SpotDetailsRoute> { entry ->
                 val viewModel = searchViewModel(navController, entry)
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
-                val location by viewModel.location.collectAsStateWithLifecycle()
                 SpotDetailsScreen(
-                    locationLabel = stringResource(location.labelRes),
                     spotId = entry.toRoute<SpotDetailsRoute>().spotId,
                     state = state,
                     onRetry = viewModel::retry,

@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.mirawuse.sportspot.data.local.CacheClock
 import com.mirawuse.sportspot.data.local.db.MIGRATION_1_2
 import com.mirawuse.sportspot.data.local.db.MIGRATION_2_3
+import com.mirawuse.sportspot.data.local.db.MIGRATION_3_4
 import com.mirawuse.sportspot.data.local.db.SportSpotDatabase
 import dagger.Module
 import dagger.Provides
@@ -26,6 +27,6 @@ object LocalStorageModule {
     ): SportSpotDatabase =
         Room
             .databaseBuilder(context, SportSpotDatabase::class.java, "sportspot.db")
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .build()
 }

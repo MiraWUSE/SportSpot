@@ -22,4 +22,7 @@ data class SpotColumns(
     val photoLicense: String? = null,
     @ColumnInfo(name = "photo_license_url")
     val photoLicenseUrl: String? = null,
+    val address: String? = null,
+    val equipment: String? = null,
+    val sports: String? = null,
 )

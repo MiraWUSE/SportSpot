@@ -20,6 +20,7 @@ import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
+import com.mirawuse.sportspot.domain.model.spot.SpotSport
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -78,7 +79,8 @@ class OfflineSpotRepositoryTest {
     private val center = GeoPoint(56.3269, 44.0059)
     private val osmId = SpotId("osm", "node:12345")
     private val unknownId = SpotId("osm", "way:999")
-    private val osmSpot = Spot(osmId, "Спортивная площадка", SportType.BASKETBALL, center, "asphalt", false)
+    private val osmSpot =
+        Spot(osmId, "Спортивная площадка", SportType.BASKETBALL, center, "asphalt", false, sports = listOf(SpotSport.BASKETBALL))
     private val savedSpots =
         listOf(
             osmSpot,

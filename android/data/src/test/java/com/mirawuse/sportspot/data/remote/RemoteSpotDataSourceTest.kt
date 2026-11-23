@@ -11,6 +11,7 @@ import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
+import com.mirawuse.sportspot.domain.model.spot.SpotSport
 import com.mirawuse.sportspot.domain.repository.SpotRepository
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
@@ -63,6 +64,7 @@ class RemoteSpotDataSourceTest {
                         sportType = SportType.BASKETBALL,
                         location = center,
                         surface = "asphalt",
+                        sports = listOf(SpotSport.BASKETBALL),
                         lighting = null,
                     ),
                 ),
@@ -113,7 +115,15 @@ class RemoteSpotDataSourceTest {
 
             assertEquals(
                 listOf(
-                    Spot(osmId, "Спортивная площадка", SportType.BASKETBALL, center, "asphalt", false),
+                    Spot(
+                        osmId,
+                        "Спортивная площадка",
+                        SportType.BASKETBALL,
+                        center,
+                        "asphalt",
+                        false,
+                        sports = listOf(SpotSport.BASKETBALL),
+                    ),
                     Spot(communityId, "Спортивная площадка", SportType.WORKOUT, center),
                 ),
                 result,

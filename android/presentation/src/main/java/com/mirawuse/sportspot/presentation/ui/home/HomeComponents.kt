@@ -33,12 +33,13 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.SpotPhotoImage
-import com.mirawuse.sportspot.presentation.ui.components.labelRes
+import com.mirawuse.sportspot.presentation.ui.components.sportLabel
 import com.mirawuse.sportspot.presentation.ui.map.OsmMap
 import com.mirawuse.sportspot.presentation.ui.map.previewMapSpots
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotPillShape
@@ -146,11 +147,18 @@ internal fun HomeSpotCard(
                 modifier = Modifier.weight(1f).padding(vertical = SportSpotSpacing.xs),
                 verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs),
             ) {
-                Text(spot.name, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
                 Text(
-                    stringResource(spot.sportType.labelRes()),
+                    spot.name,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    spot.sportLabel(),
                     color = colors.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     stringResource(R.string.home_ratings_unavailable),

@@ -34,7 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.presentation.R
-import com.mirawuse.sportspot.presentation.ui.components.labelRes
+import com.mirawuse.sportspot.presentation.ui.components.sportLabel
 
 @Composable
 internal fun SpotPickerButton(
@@ -89,7 +89,7 @@ internal fun SpotPickerButton(
                                     stringResource(R.string.map_spot_option, index + 1, spot.name),
                                     style = MaterialTheme.typography.bodyMedium,
                                 )
-                                Text(stringResource(spot.sportType.labelRes()), style = MaterialTheme.typography.bodySmall)
+                                Text(spot.sportLabel(), style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }

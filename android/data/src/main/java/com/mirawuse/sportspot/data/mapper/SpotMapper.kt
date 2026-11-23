@@ -18,8 +18,8 @@ fun SpotDto.toDomain(): Spot {
         invalidResponse()
     }
 
-    val spotName = name?.takeIf { it.isNotBlank() } ?: invalidResponse()
-    val sport = sportType?.takeIf { it.isNotBlank() } ?: invalidResponse()
+    val spotName = name.nonEmptyText() ?: invalidResponse()
+    val sport = sportType.nonEmptyText() ?: invalidResponse()
     val lat = latitude ?: invalidResponse()
     val lon = longitude ?: invalidResponse()
     if (!lat.isFinite() ||
@@ -35,9 +35,12 @@ fun SpotDto.toDomain(): Spot {
         name = spotName,
         sportType = sport.toDomainSport(),
         location = GeoPoint(lat, lon),
-        surface = surface,
+        surface = surface.nonEmptyText(),
         lighting = lighting,
         photo = if (source == "osm") photo.toSpotPhoto() else null,
+        address = address.nonEmptyText(),
+        equipment = equipment.nonEmptyText(),
+        sports = if (source == "osm") sport.toSpotSports() else null,
     )
 }
 
@@ -58,3 +61,5 @@ fun SpotSearchResponseDto.toDomain(): List<Spot> {
 }
 
 private fun invalidResponse(): Nothing = throw SpotMappingException()
+
+private fun String?.nonEmptyText(): String? = this?.trim()?.takeIf { it.isNotEmpty() }

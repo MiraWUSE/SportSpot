@@ -18,6 +18,7 @@ import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.model.spot.SpotPhoto
+import com.mirawuse.sportspot.domain.model.spot.SpotSport
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -64,6 +65,14 @@ class SportSpotMigrationTest {
             surface = null,
             lighting = true,
         )
+    private val photo =
+        SpotPhoto(
+            "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a1/Test.jpg/500px-Test.jpg",
+            "https://commons.wikimedia.org/wiki/File:Test.jpg",
+            "Test Author",
+            "CC BY 4.0",
+            "https://creativecommons.org/licenses/by/4.0/",
+        )
 
     @Test
     fun `migration from exported version one preserves cache data and accepts new timestamps`() =
@@ -90,7 +99,7 @@ class SportSpotMigrationTest {
                 assertEquals(searchResults, dao.searchRows(POPULATED_QUERY))
                 assertEquals(SearchSnapshotEntity(EMPTY_QUERY, 0L), dao.searchSnapshot(EMPTY_QUERY))
                 assertTrue(dao.searchRows(EMPTY_QUERY).isEmpty())
-                assertEquals(3, database.openHelper.readableDatabase.version)
+                assertEquals(4, database.openHelper.readableDatabase.version)
 
                 val cache = RoomSpotCache(database)
                 val domainNode = node.expectedSpot(SpotId("osm", "node:12345"), SportType.BASKETBALL)
@@ -133,20 +142,12 @@ class SportSpotMigrationTest {
                 val first = way.expectedSpot(SpotId("osm", "way:456"), SportType.TENNIS)
                 val second = node.expectedSpot(SpotId("osm", "node:12345"), SportType.BASKETBALL)
                 val saved = community.expectedSpot(SpotId("community", "33333333-3333-4333-8333-333333333333"), SportType.WORKOUT)
-                assertEquals(3, database.openHelper.readableDatabase.version)
+                assertEquals(4, database.openHelper.readableDatabase.version)
                 assertEquals(CacheSnapshot(listOf(second, saved), 1200L), cache.readSaved())
                 assertEquals(CacheSnapshot(first, 1100L), cache.readSavedSpot(way.canonicalId))
                 assertEquals(CacheSnapshot(listOf(first, second), 1300L), cache.readSearch(POPULATED_QUERY))
                 assertEquals(CacheSnapshot(emptyList<Spot>(), 1300L), cache.readSearch(EMPTY_QUERY))
 
-                val photo =
-                    SpotPhoto(
-                        "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a1/Test.jpg/500px-Test.jpg",
-                        "https://commons.wikimedia.org/wiki/File:Test.jpg",
-                        "Test Author",
-                        "CC BY 4.0",
-                        "https://creativecommons.org/licenses/by/4.0/",
-                    )
                 cache.replaceSearch(NEW_QUERY, listOf(first.copy(photo = photo), second), 1500L)
             } finally {
                 database.close()
@@ -170,6 +171,48 @@ class SportSpotMigrationTest {
                         ?.licenseUrl,
                 )
                 assertEquals(null, cached.value[1].photo)
+            } finally {
+                reopened.close()
+            }
+        }
+
+    @Test
+    fun `migration from version three preserves photos and reads new metadata after reopening`() =
+        runBlocking {
+            val context = RuntimeEnvironment.getApplication().withDatabaseDirectory(folder.root)
+            createOldDatabase(context, version = 3)
+            val nodeWithPhoto = node.expectedSpot(SpotId("osm", "node:12345"), SportType.BASKETBALL).copy(photo = photo)
+            val saved = community.expectedSpot(SpotId("community", "33333333-3333-4333-8333-333333333333"), SportType.WORKOUT)
+            val detail = way.expectedSpot(SpotId("osm", "way:456"), SportType.TENNIS)
+            val refreshed =
+                nodeWithPhoto.copy(
+                    sports = listOf(SpotSport.BASKETBALL, SpotSport.TABLE_TENNIS),
+                    address = "Остров, 2А",
+                    equipment = "horizontal_bar;parallel_bars",
+                )
+
+            val database = LocalStorageModule.provideDatabase(context)
+            try {
+                val cache = RoomSpotCache(database)
+                assertEquals(4, database.openHelper.readableDatabase.version)
+                assertEquals(CacheSnapshot(listOf(nodeWithPhoto, saved), 1200L), cache.readSaved())
+                assertEquals(CacheSnapshot(nodeWithPhoto, 1100L), cache.readSavedSpot(node.canonicalId))
+                assertEquals(CacheSnapshot(detail, 1100L), cache.readSavedSpot(way.canonicalId))
+                assertEquals(CacheSnapshot(listOf(detail, nodeWithPhoto), 1300L), cache.readSearch(POPULATED_QUERY))
+                assertEquals(CacheSnapshot(emptyList<Spot>(), 1300L), cache.readSearch(EMPTY_QUERY))
+
+                cache.replaceSaved(listOf(refreshed, saved), 1500L)
+                cache.replaceSearch(NEW_QUERY, listOf(refreshed, detail.copy(sports = emptyList())), 1600L)
+            } finally {
+                database.close()
+            }
+            val reopened = LocalStorageModule.provideDatabase(context)
+            try {
+                val cache = RoomSpotCache(reopened)
+                assertEquals(CacheSnapshot(listOf(refreshed, saved), 1500L), cache.readSaved())
+                assertEquals(CacheSnapshot(refreshed, 1500L), cache.readSavedSpot(node.canonicalId))
+                assertEquals(CacheSnapshot(listOf(refreshed, detail.copy(sports = emptyList())), 1600L), cache.readSearch(NEW_QUERY))
+                assertEquals(CacheSnapshot(listOf(detail, nodeWithPhoto), 1300L), cache.readSearch(POPULATED_QUERY))
             } finally {
                 reopened.close()
             }
@@ -216,10 +259,18 @@ class SportSpotMigrationTest {
             }
             insertSearchSpot(db, POPULATED_QUERY, position = 1, spot = node)
             insertSearchSpot(db, POPULATED_QUERY, position = 0, spot = way)
-            if (version == 2) {
+            if (version >= 2) {
                 db.execSQL("UPDATE saved_spots SET fetched_at_epoch_millis = 1100")
                 db.execSQL("UPDATE saved_spot_snapshot SET fetched_at_epoch_millis = 1200")
                 db.execSQL("UPDATE search_snapshots SET fetched_at_epoch_millis = 1300")
+            }
+            if (version == 3) {
+                for (table in listOf("saved_spots", "search_spots")) {
+                    db.execSQL(
+                        "UPDATE $table SET photo_url=?, photo_source_url=?, photo_author=?, photo_license=?, photo_license_url=? WHERE canonical_id=?",
+                        arrayOf(photo.url, photo.sourceUrl, photo.author, photo.license, photo.licenseUrl, node.canonicalId),
+                    )
+                }
             }
         }
     }
