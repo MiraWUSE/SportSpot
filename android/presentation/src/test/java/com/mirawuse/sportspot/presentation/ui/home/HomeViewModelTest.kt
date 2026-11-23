@@ -195,9 +195,19 @@ class HomeViewModelTest {
             val repository = FakeSpotRepository { _, _, _ -> listOf(spot) }
             val viewModel = HomeViewModel(SearchNearbySpotsUseCase(repository), device)
             advanceUntilIdle()
+            val previousState = viewModel.uiState.value
+            val previousLocation = viewModel.location.value
             viewModel.useDeviceLocation(approximate = false)
             runCurrent()
             viewModel.cancelLocation()
+            runCurrent()
+
+            assertFalse(viewModel.location.value.locating)
+            assertEquals(previousState, viewModel.uiState.value)
+            assertEquals(previousLocation, viewModel.location.value)
+            assertEquals(1, repository.searchCalls)
+            assertEquals(1, device.calls)
+
             waitForFix = false
             viewModel.useDeviceLocation(approximate = false)
             advanceUntilIdle()
@@ -205,6 +215,42 @@ class HomeViewModelTest {
             assertFalse(viewModel.location.value.locating)
             assertEquals(point, viewModel.location.value.center)
             assertEquals(2, device.calls)
+            assertEquals(2, repository.searchCalls)
+            assertEquals(HomeUiState.Content(listOf(spot)), viewModel.uiState.value)
+        }
+
+    @Test
+    fun `late cancelled fix cannot clear a new attempt or change the search`() =
+        runTest(dispatcher) {
+            val oldFix = CompletableDeferred<GeoPoint>()
+            val newFix = CompletableDeferred<GeoPoint>()
+            val point = GeoPoint(48.8566, 2.3522)
+            var attempts = 0
+            val device =
+                FakeDeviceLocationProvider {
+                    if (attempts++ == 0) withContext(NonCancellable) { oldFix.await() } else newFix.await()
+                }
+            val repository = FakeSpotRepository { center, _, _ -> listOf(spot.copy(location = center)) }
+            val viewModel = HomeViewModel(SearchNearbySpotsUseCase(repository), device)
+            advanceUntilIdle()
+            viewModel.useDeviceLocation(approximate = false)
+            runCurrent()
+            viewModel.cancelLocation()
+            viewModel.useDeviceLocation(approximate = true)
+            runCurrent()
+            oldFix.complete(GeoPoint(51.5074, -0.1278))
+            runCurrent()
+            assertEquals(demoCenter, viewModel.location.value.center)
+            assertEquals(true, viewModel.location.value.locating)
+            assertEquals(1, repository.searchCalls)
+            newFix.complete(point)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.location.value.locating)
+            assertEquals(point, viewModel.location.value.center)
+            assertEquals(LocationSource.APPROXIMATE, viewModel.location.value.source)
+            assertEquals(HomeUiState.Content(listOf(spot.copy(location = point))), viewModel.uiState.value)
+            assertEquals(2, repository.searchCalls)
         }
 
     @Test
