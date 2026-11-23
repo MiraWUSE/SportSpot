@@ -22,9 +22,12 @@ function snapshot(id: string, extra: Record<string, unknown> = {}) {
 
 async function role(name: "anon" | "authenticated", uid = "") {
   await pg.exec("reset role");
-  await pg.query("select set_config('request.jwt.claim.sub', $1, false)", [
-    uid,
-  ]);
+  await pg.query<Record<string, unknown>>(
+    "select set_config('request.jwt.claim.sub', $1, false)",
+    [
+      uid,
+    ],
+  );
   await pg.exec(`set role ${name}`);
 }
 
@@ -42,26 +45,33 @@ try {
   await pg.exec(
     await Deno.readTextFile(new URL("../../setup.sql", import.meta.url)),
   );
-  await pg.query(
+  await pg.query<Record<string, unknown>>(
     'insert into auth.users values ($1, \'a@example.test\', \'{"name":"Alice","role":"moderator"}\'), ($2, \'b@example.test\', null)',
     [alice, bob],
   );
   equal(
-    (await pg.query("select role from public.profiles where id=$1", [alice]))
+    (await pg.query<Record<string, unknown>>(
+      "select role from public.profiles where id=$1",
+      [alice],
+    ))
       .rows[0].role,
     "user",
   );
-  await pg.query(
+  await pg.query<Record<string, unknown>>(
     "insert into public.spots (id,name,sport_type,latitude,longitude,source) values ($1,'Old Court','tennis',1,2,'community')",
     [community],
   );
   await role("authenticated", alice);
-  await pg.query("insert into public.favorites (spot_id) values ($1)", [
-    community,
-  ]);
-  const before =
-    (await pg.query("select created_at from public.favorites")).rows[0]
-      .created_at;
+  await pg.query<Record<string, unknown>>(
+    "insert into public.favorites (spot_id) values ($1)",
+    [
+      community,
+    ],
+  );
+  const before = (await pg.query<Record<string, unknown>>(
+    "select created_at from public.favorites",
+  )).rows[0]
+    .created_at;
   await pg.exec("reset role");
   await pg.exec(
     await Deno.readTextFile(
@@ -70,30 +80,44 @@ try {
   );
 
   await role("authenticated", alice);
-  const migrated =
-    (await pg.query("select created_at,spot_snapshot from public.favorites"))
-      .rows[0];
+  const migrated = (await pg.query<Record<string, unknown>>(
+    "select created_at,spot_snapshot from public.favorites",
+  ))
+    .rows[0];
   equal(String(migrated.created_at), String(before));
   equal((migrated.spot_snapshot as { name: string }).name, "Old Court");
 
   const insert =
     "insert into public.favorites (spot_id, spot_snapshot) values ($1,$2)";
-  await pg.query(insert, [osm, snapshot(osm)]);
-  await pg.query(insert + " on conflict (user_id,spot_id) do nothing", [
-    osm,
-    snapshot(osm),
-  ]);
+  await rejects(
+    pg.query("select app_private.sportspot_favorite_snapshot_valid($1,$2)", [
+      osm,
+      snapshot(osm),
+    ]),
+    { code: "42501" },
+  );
+  await pg.query<Record<string, unknown>>(insert, [osm, snapshot(osm)]);
+  await pg.query<Record<string, unknown>>(
+    insert + " on conflict (user_id,spot_id) do nothing",
+    [
+      osm,
+      snapshot(osm),
+    ],
+  );
   equal(
-    (await pg.query(
+    (await pg.query<Record<string, unknown>>(
       "select count(*)::int as n from public.favorites where spot_id=$1",
       [osm],
     )).rows[0].n,
     1,
   );
   equal(
-    (await pg.query("select count(*)::int as n from public.spots where id=$1", [
-      osm,
-    ])).rows[0].n,
+    (await pg.query<Record<string, unknown>>(
+      "select count(*)::int as n from public.spots where id=$1",
+      [
+        osm,
+      ],
+    )).rows[0].n,
     0,
   );
   const validPhoto = {
@@ -105,9 +129,15 @@ try {
     license_url: "https://creativecommons.org/licenses/by-sa/4.0/",
   };
   const node = "osm:node:43";
-  await pg.query(insert, [node, snapshot(node, { photo: validPhoto })]);
+  await pg.query<Record<string, unknown>>(insert, [
+    node,
+    snapshot(node, { photo: validPhoto }),
+  ]);
   const relation = "osm:relation:44";
-  await pg.query(insert, [relation, snapshot(relation)]);
+  await pg.query<Record<string, unknown>>(insert, [
+    relation,
+    snapshot(relation),
+  ]);
   for (
     const [id, data] of [
       ["osm:node:041", snapshot("osm:node:041")],
@@ -135,53 +165,67 @@ try {
       ["osm:node:50", null],
     ]
   ) {
-    await rejects(pg.query(insert, [id, data]), { code: "23514" });
+    await rejects(pg.query<Record<string, unknown>>(insert, [id, data]), {
+      code: "23514",
+    });
   }
   await role("authenticated", bob);
   equal(
-    (await pg.query("select count(*)::int as n from public.favorites")).rows[0]
+    (await pg.query<Record<string, unknown>>(
+      "select count(*)::int as n from public.favorites",
+    )).rows[0]
       .n,
     0,
   );
   equal(
-    (await pg.query(
+    (await pg.query<Record<string, unknown>>(
       "delete from public.favorites where spot_id=$1 returning spot_id",
       [osm],
     )).rows.length,
     0,
   );
   await rejects(
-    pg.query(
+    pg.query<Record<string, unknown>>(
       "insert into public.favorites (user_id,spot_id,spot_snapshot) values ($1,$2,$3)",
       [alice, osm, snapshot(osm)],
     ),
     { code: "42501" },
   );
-  await pg.query(insert, [osm, snapshot(osm)]);
+  await pg.query<Record<string, unknown>>(insert, [osm, snapshot(osm)]);
   equal(
-    (await pg.query("select user_id from public.favorites")).rows[0].user_id,
+    (await pg.query<Record<string, unknown>>(
+      "select user_id from public.favorites",
+    )).rows[0].user_id,
     bob,
   );
   equal(
-    (await pg.query(
+    (await pg.query<Record<string, unknown>>(
       "delete from public.favorites where spot_id=$1 returning spot_id",
       [osm],
     )).rows.length,
     1,
   );
   equal(
-    (await pg.query(
+    (await pg.query<Record<string, unknown>>(
       "delete from public.favorites where spot_id=$1 returning spot_id",
       [osm],
     )).rows.length,
     0,
   );
   await role("anon");
-  await rejects(pg.query("select * from public.favorites"), { code: "42501" });
-  await rejects(pg.query(insert, [osm, snapshot(osm)]), { code: "42501" });
+  await rejects(
+    pg.query<Record<string, unknown>>("select * from public.favorites"),
+    { code: "42501" },
+  );
+  await rejects(
+    pg.query<Record<string, unknown>>(insert, [osm, snapshot(osm)]),
+    { code: "42501" },
+  );
   await role("authenticated", alice);
   equal(
-    (await pg.query("select count(*)::int as n from public.favorites")).rows[0]
+    (await pg.query<Record<string, unknown>>(
+      "select count(*)::int as n from public.favorites",
+    )).rows[0]
       .n,
     4,
   );

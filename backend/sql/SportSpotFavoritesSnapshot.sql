@@ -5,7 +5,7 @@ SET LOCAL lock_timeout = '5s';
 
 ALTER TABLE public.favorites ADD COLUMN spot_snapshot jsonb;
 
-CREATE FUNCTION public.sportspot_favorite_snapshot_valid(spot_id text, snapshot jsonb)
+CREATE FUNCTION app_private.sportspot_favorite_snapshot_valid(spot_id text, snapshot jsonb)
 RETURNS boolean
 LANGUAGE plpgsql
 IMMUTABLE
@@ -80,8 +80,8 @@ BEGIN
 END;
 $validation$;
 
-REVOKE ALL ON FUNCTION public.sportspot_favorite_snapshot_valid(text, jsonb) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.sportspot_favorite_snapshot_valid(text, jsonb) TO authenticated;
+REVOKE ALL ON FUNCTION app_private.sportspot_favorite_snapshot_valid(text, jsonb) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION app_private.sportspot_favorite_snapshot_valid(text, jsonb) TO authenticated;
 
 -- Keep every legacy row. Backfill snapshots from its original catalog row when valid.
 UPDATE public.favorites AS favorite
@@ -96,12 +96,12 @@ FROM (
   FROM public.spots
 ) AS existing
 WHERE favorite.spot_id = existing.id
-  AND public.sportspot_favorite_snapshot_valid(favorite.spot_id, existing.snapshot);
+  AND app_private.sportspot_favorite_snapshot_valid(favorite.spot_id, existing.snapshot);
 
 -- The check applies to all new writes, even if a historical row has no valid snapshot.
 ALTER TABLE public.favorites
   ADD CONSTRAINT favorites_spot_snapshot_valid CHECK (
-    spot_snapshot IS NOT NULL AND public.sportspot_favorite_snapshot_valid(spot_id, spot_snapshot)
+    spot_snapshot IS NOT NULL AND app_private.sportspot_favorite_snapshot_valid(spot_id, spot_snapshot)
   ) NOT VALID,
   DROP CONSTRAINT favorites_spot_id_fkey;
 
