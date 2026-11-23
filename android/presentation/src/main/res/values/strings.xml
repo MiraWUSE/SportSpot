@@ -15,7 +15,6 @@
     <string name="home_spots_heading">Площадки</string>
     <string name="home_all_spots">Все площадки ›</string>
     <string name="home_no_matches">Площадок по этому запросу нет. Измените поиск или вид спорта.</string>
-    <string name="home_favorites_unavailable">Сохранение площадок в избранное пока недоступно.</string>
     <string name="home_close">Закрыть</string>
     <string name="home_results_count">Найдено %1$d</string>
     <string name="home_ratings_unavailable">Оценки недоступны</string>
@@ -160,6 +159,13 @@
     <string name="favorites_saved">Сохранённые площадки</string>
     <string name="favorites_guest_header">Быстрый доступ</string>
     <string name="favorites_guest_message">Для доступа к избранному нужен аккаунт.</string>
+    <string name="favorites_add">Добавить в избранное</string>
+    <string name="favorites_remove">Удалить из избранного</string>
+    <string name="favorites_empty">Сохранённых площадок пока нет.</string>
+    <string name="favorites_cached">Показан сохранённый список. Не удалось обновить данные.</string>
+    <string name="favorites_load_error">Не удалось загрузить или изменить избранное. Попробуйте позже.</string>
+    <string name="favorites_offline_error">Нет связи с сервером. Попробуйте, когда появится сеть.</string>
+    <string name="favorites_spot_unavailable">Данные сохранённой площадки недоступны</string>
     <string name="moderation_title">Модерация</string>
     <string name="moderation_access">Доступ по роли</string>
     <string name="moderation_role_required">Раздел открыт только модератору.</string>
