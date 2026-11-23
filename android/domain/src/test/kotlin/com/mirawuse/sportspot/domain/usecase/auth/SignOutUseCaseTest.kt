@@ -21,7 +21,7 @@ class SignOutUseCaseTest {
             val result = useCase()
 
             assertEquals(DomainResult.Success(Unit), result)
-            assertEquals(1, repository.getStateCalls)
+            assertEquals(0, repository.getStateCalls)
             assertEquals(1, repository.signOutCalls)
         }
 
@@ -38,7 +38,7 @@ class SignOutUseCaseTest {
         }
 
     @Test
-    fun `гость получает Success без повторного выхода`() =
+    fun `выход делегируется репозиторию без проверки сети даже для гостя`() =
         runTest {
             val repository = FakeAuthRepository(AuthState.Guest)
             val useCase = SignOutUseCase(repository)
@@ -46,8 +46,8 @@ class SignOutUseCaseTest {
             val result = useCase()
 
             assertEquals(DomainResult.Success(Unit), result)
-            assertEquals(1, repository.getStateCalls)
-            assertEquals(0, repository.signOutCalls)
+            assertEquals(0, repository.getStateCalls)
+            assertEquals(1, repository.signOutCalls)
         }
 
     @Test
