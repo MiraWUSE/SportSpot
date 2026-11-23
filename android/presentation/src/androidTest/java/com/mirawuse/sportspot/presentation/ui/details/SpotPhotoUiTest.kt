@@ -22,6 +22,7 @@ import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.model.spot.SpotPhoto
+import com.mirawuse.sportspot.domain.model.spot.SpotSport
 import com.mirawuse.sportspot.presentation.ui.home.HomeSpotCard
 import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotTheme
@@ -47,8 +48,13 @@ class SpotPhotoUiTest {
         Spot(
             id = SpotId("osm", "node:10"),
             name = "Тестовый корт",
-            sportType = SportType.TENNIS,
+            sportType = SportType.OTHER,
             location = GeoPoint(56.3269, 44.0059),
+            surface = "asphalt",
+            lighting = false,
+            address = "Остров, 2А",
+            equipment = "horizontal_bar;parallel_bars",
+            sports = listOf(SpotSport.TABLE_TENNIS, SpotSport.ICE_HOCKEY),
             photo =
                 SpotPhoto(
                     "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a1/Test.jpg/500px-Test.jpg",
@@ -88,7 +94,7 @@ class SpotPhotoUiTest {
                         },
                 ) {
                     if (details.value) {
-                        SpotDetailsScreen(spot.id, "Нижний Новгород", HomeUiState.Content(listOf(spot)), {}, {}, {}, {})
+                        SpotDetailsScreen(spot.id, HomeUiState.Content(listOf(spot)), {}, {}, {}, {})
                     } else {
                         HomeSpotCard(spot, { details.value = true }, {})
                     }
@@ -96,6 +102,7 @@ class SpotPhotoUiTest {
             }
         }
         waitForPhoto()
+        compose.onNodeWithText("Настольный теннис, Хоккей с шайбой").assertIsDisplayed()
         compose.onNodeWithText(spot.name).performClick()
         waitForPhoto()
         compose.onNodeWithText(cropNotice).performScrollTo().assertIsDisplayed()
@@ -115,24 +122,35 @@ class SpotPhotoUiTest {
             darkTheme.value = true
         }
         compose.onNodeWithText(cropNotice).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Остров, 2А").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Настольный теннис, Хоккей с шайбой").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Покрытие: асфальт").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Освещение: нет").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Оборудование: турник, брусья").performScrollTo().assertIsDisplayed()
     }
 
     @Test
     fun absentOrUnavailablePhotoLeavesDetailsAndHidesAttribution() {
         installFixture(503)
-        val current = mutableStateOf(spot.copy(photo = null))
+        val current =
+            mutableStateOf(spot.copy(photo = null, address = null, surface = null, lighting = null, equipment = null, sports = emptyList()))
         compose.setContent {
             SportSpotTheme(darkTheme = true) {
-                SpotDetailsScreen(spot.id, "Нижний Новгород", HomeUiState.Content(listOf(current.value)), {}, {}, {}, {})
+                SpotDetailsScreen(spot.id, HomeUiState.Content(listOf(current.value)), {}, {}, {}, {})
             }
         }
         compose.onNodeWithText(spot.name).assertIsDisplayed()
         compose.onNodeWithText(credit).assertDoesNotExist()
         compose.onNodeWithText(cropNotice).assertDoesNotExist()
+        compose.onNodeWithText("Адрес не указан").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Вид спорта не указан").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Покрытие: не указано").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Освещение: не указано").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Оборудование: не указано").performScrollTo().assertIsDisplayed()
         assertEquals(0, requests.get())
-        compose.runOnIdle { current.value = spot }
+        compose.runOnIdle { current.value = current.value.copy(photo = spot.photo) }
         compose.waitUntil(10_000) { requests.get() == 1 }
-        compose.onNodeWithText(spot.name).assertIsDisplayed()
+        compose.onNodeWithText(spot.name).performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription(photoLabel).assertDoesNotExist()
         compose.onNodeWithText(source).assertDoesNotExist()
         compose.onNodeWithText(cropNotice).assertDoesNotExist()

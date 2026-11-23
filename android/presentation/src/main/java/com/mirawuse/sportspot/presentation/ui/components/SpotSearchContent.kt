@@ -12,10 +12,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
+import com.mirawuse.sportspot.domain.model.spot.SpotSport
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
@@ -29,6 +31,24 @@ internal fun SportType.labelRes(): Int =
         SportType.OTHER -> R.string.sport_other
     }
 
+internal fun Spot.sportLabel(getString: (Int) -> String): String {
+    val reportedSports = sports ?: return getString(sportType.labelRes())
+    if (reportedSports.isEmpty()) return getString(R.string.sport_unspecified)
+    return reportedSports.joinToString { sport ->
+        getString(
+            when (sport) {
+                SpotSport.TABLE_TENNIS -> R.string.sport_table_tennis
+                SpotSport.HOCKEY -> R.string.sport_hockey
+                SpotSport.ICE_HOCKEY -> R.string.sport_ice_hockey
+                else -> sport.category.labelRes()
+            },
+        )
+    }
+}
+
+@Composable
+internal fun Spot.sportLabel(): String = sportLabel(LocalResources.current::getString)
+
 @Composable
 internal fun SpotSummary(
     spot: Spot,
@@ -37,7 +57,7 @@ internal fun SpotSummary(
     Column(modifier, verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs)) {
         Text(text = spot.name, style = MaterialTheme.typography.titleLarge)
         Text(
-            text = stringResource(spot.sportType.labelRes()),
+            text = spot.sportLabel(),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium,
         )
