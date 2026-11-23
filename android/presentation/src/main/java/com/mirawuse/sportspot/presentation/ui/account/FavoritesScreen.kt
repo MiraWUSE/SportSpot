@@ -19,6 +19,7 @@ import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchLoading
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchMessage
 import com.mirawuse.sportspot.presentation.ui.forms.FormCard
+import com.mirawuse.sportspot.presentation.ui.forms.FormScreen
 import com.mirawuse.sportspot.presentation.ui.home.HomeSpotCard
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
@@ -33,6 +34,20 @@ internal fun FavoritesScreen(
     onOpenMap: (SpotId) -> Unit,
     onRemove: (SpotId) -> Unit,
 ) {
+    if (state == FavoritesUiState.Guest && !restoring) {
+        FormScreen(stringResource(R.string.tab_favorites)) {
+            Text(stringResource(R.string.favorites_saved), style = MaterialTheme.typography.headlineSmall)
+            FormCard(stringResource(R.string.favorites_guest_header)) {
+                Text(stringResource(R.string.favorites_guest_message), style = MaterialTheme.typography.bodyMedium)
+            }
+            SportSpotButton(
+                text = stringResource(R.string.auth_open),
+                onClick = onOpenAuth,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        return
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(SportSpotSpacing.xl),
@@ -47,17 +62,6 @@ internal fun FavoritesScreen(
             return@LazyColumn
         }
         when (state) {
-            FavoritesUiState.Guest ->
-                item {
-                    FormCard(stringResource(R.string.favorites_guest_header)) {
-                        Text(stringResource(R.string.favorites_guest_message), style = MaterialTheme.typography.bodyMedium)
-                    }
-                    SportSpotButton(
-                        text = stringResource(R.string.auth_open),
-                        onClick = onOpenAuth,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
             is FavoritesUiState.Error ->
                 item {
                     SpotSearchMessage(stringResource(R.string.home_error_title), stringResource(state.reason.labelRes()), onRetry)
@@ -93,7 +97,7 @@ internal fun FavoritesScreen(
                     }
                 }
             }
-            is FavoritesUiState.Loading -> Unit
+            FavoritesUiState.Guest, is FavoritesUiState.Loading -> Unit
         }
     }
 }
