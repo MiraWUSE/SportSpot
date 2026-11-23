@@ -195,9 +195,19 @@ class HomeViewModelTest {
             val repository = FakeSpotRepository { _, _, _ -> listOf(spot) }
             val viewModel = HomeViewModel(SearchNearbySpotsUseCase(repository), device)
             advanceUntilIdle()
+            val previousState = viewModel.uiState.value
+            val previousLocation = viewModel.location.value
             viewModel.useDeviceLocation(approximate = false)
             runCurrent()
             viewModel.cancelLocation()
+            runCurrent()
+
+            assertFalse(viewModel.location.value.locating)
+            assertEquals(previousState, viewModel.uiState.value)
+            assertEquals(previousLocation, viewModel.location.value)
+            assertEquals(1, repository.searchCalls)
+            assertEquals(1, device.calls)
+
             waitForFix = false
             viewModel.useDeviceLocation(approximate = false)
             advanceUntilIdle()
@@ -205,6 +215,8 @@ class HomeViewModelTest {
             assertFalse(viewModel.location.value.locating)
             assertEquals(point, viewModel.location.value.center)
             assertEquals(2, device.calls)
+            assertEquals(2, repository.searchCalls)
+            assertEquals(HomeUiState.Content(listOf(spot)), viewModel.uiState.value)
         }
 
     @Test

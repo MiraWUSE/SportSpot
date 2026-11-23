@@ -21,7 +21,9 @@ class LocationPermissionTest {
     fun locationExplanationAppearsOnlyAfterUserActionSurvivesRecreationAndCanBeDismissed() {
         val activity = compose.activity
         val permission = Manifest.permission.ACCESS_COARSE_LOCATION
-        // This scenario applies to a fresh install or a retryable permission denial.
+        // This scenario needs denied access and fresh history or a retryable denial.
+        // scripts/test-location-permission.ps1 prepares an emulator before this process starts
+        // and rejects skipped results. Revoking permission here could terminate the runner.
         val requested = activity.getSharedPreferences("location_permission", 0).getBoolean("requested", false)
         assumeTrue(activity.checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED)
         assumeTrue(!requested || ActivityCompat.shouldShowRequestPermissionRationale(activity, permission))
