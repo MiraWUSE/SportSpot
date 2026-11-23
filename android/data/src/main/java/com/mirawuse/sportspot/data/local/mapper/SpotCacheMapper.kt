@@ -3,6 +3,7 @@ package com.mirawuse.sportspot.data.local.mapper
 import com.mirawuse.sportspot.data.local.entity.SpotColumns
 import com.mirawuse.sportspot.data.mapper.parseCanonicalSpotId
 import com.mirawuse.sportspot.data.mapper.toCanonicalId
+import com.mirawuse.sportspot.data.mapper.verifiedSpotPhoto
 import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
@@ -16,6 +17,11 @@ internal fun Spot.toCacheColumns(): SpotColumns =
         longitude = location.longitude,
         surface = surface,
         lighting = lighting,
+        photoUrl = photo?.url,
+        photoSourceUrl = photo?.sourceUrl,
+        photoAuthor = photo?.author,
+        photoLicense = photo?.license,
+        photoLicenseUrl = photo?.licenseUrl,
     )
 
 internal fun SpotColumns.toDomain(): Spot =
@@ -26,4 +32,5 @@ internal fun SpotColumns.toDomain(): Spot =
         location = GeoPoint(latitude, longitude),
         surface = surface,
         lighting = lighting,
+        photo = verifiedSpotPhoto(photoUrl, photoSourceUrl, photoAuthor, photoLicense, photoLicenseUrl),
     )

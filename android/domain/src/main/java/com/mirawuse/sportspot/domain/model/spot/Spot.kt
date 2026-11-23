@@ -9,6 +9,7 @@ data class Spot(
     val location: GeoPoint,
     val surface: String? = null,
     val lighting: Boolean? = null,
+    val photo: SpotPhoto? = null,
 ) {
     init {
         require(name.isNotBlank()) {

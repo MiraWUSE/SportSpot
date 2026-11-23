@@ -1,5 +1,6 @@
 package com.mirawuse.sportspot.data.remote.dto
 
+import com.google.gson.JsonElement
 import com.google.gson.annotations.SerializedName
 
 /** Shared wire fields of OpenAPI Spot and SearchSpot; nullable values are validated by the mapper. */
@@ -18,4 +19,6 @@ data class SpotDto(
     @SerializedName("osm_id") val osmId: Long? = null,
     @SerializedName("created_at") val createdAt: String? = null,
     @SerializedName("updated_at") val updatedAt: String? = null,
+    // Read this optional object defensively so a bad photo never invalidates a spot.
+    @SerializedName("photo") val photo: JsonElement? = null,
 )
