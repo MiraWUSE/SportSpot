@@ -57,6 +57,31 @@ export interface OSMSpot {
   photo?: SpotPhoto;
 }
 
+const fallbackNames = new Map([
+  ["soccer", "Футбольная площадка"],
+  ["basketball", "Баскетбольная площадка"],
+  ["volleyball", "Волейбольная площадка"],
+  ["tennis", "Теннисный корт"],
+  ["table_tennis", "Площадка для настольного тенниса"],
+  ["hockey", "Хоккейная площадка"],
+  ["ice_hockey", "Хоккейная площадка"],
+  ["fitness", "Воркаут-площадка"],
+]);
+
+function readSports(tag: unknown): string[] {
+  if (typeof tag !== "string") return [];
+  const tokens = tag.split(";").map((value) => value.trim().toLowerCase());
+  return [...new Set(tokens.filter((value) =>
+    value.length > 0 && value.length <= 64 && value !== "unspecified"
+  ))].slice(0, 8);
+}
+
+function describeSpot(sports: string[], fitnessStation: boolean): string {
+  if (sports.length > 1) return "Многофункциональная спортивная площадка";
+  if (fitnessStation) return "Воркаут-площадка";
+  return fallbackNames.get(sports[0]) ?? "Спортивная площадка";
+}
+
 export function convert(value: unknown): OSMSpot | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
@@ -87,20 +112,23 @@ export function convert(value: unknown): OSMSpot | null {
   ) as Record<string, unknown>;
   const getTag = (key: string): string | null => {
     const tag = tags[key];
-    return typeof tag === "string" ? tag.slice(0, 250) : null;
+    return typeof tag === "string" ? tag.trim().slice(0, 250).trimEnd() || null : null;
   };
+  const fitnessStation = tags.leisure === "fitness_station";
+  const sports = readSports(tags.sport);
+  if (sports.length === 0 && fitnessStation) sports.push("fitness");
+  const streetOrPlace = getTag("addr:street") ?? getTag("addr:place");
 
   return {
     id: `osm:${osmType}:${osmId}`,
     source: "osm",
     osm_type: osmType,
     osm_id: osmId,
-    name: getTag("name") || "Спортивная площадка",
-    sport_type: getTag("sport") ||
-      (tags.leisure === "fitness_station" ? "fitness" : "unspecified"),
+    name: getTag("name") ?? describeSpot(sports, fitnessStation),
+    sport_type: sports.join(";") || "unspecified",
     latitude: lat,
     longitude: lon,
-    address: [getTag("addr:street"), getTag("addr:housenumber")]
+    address: [streetOrPlace, getTag("addr:housenumber")]
       .filter(Boolean).join(", ") || null,
     surface: getTag("surface"),
     lighting: tags.lit === "yes" ? true : tags.lit === "no" ? false : null,
@@ -114,5 +142,5 @@ export function makeCacheKey(
   radius: number,
   sport: string,
 ): string {
-  return "v2:" + lat.toFixed(6) + ":" + lon.toFixed(6) + ":" + radius + ":" + sport;
+  return "v3:" + lat.toFixed(6) + ":" + lon.toFixed(6) + ":" + radius + ":" + sport;
 }

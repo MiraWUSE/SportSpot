@@ -161,10 +161,84 @@ Deno.test("convert: ограничивает длину названия 250 с�
   assert.equal(result?.name.length, 250);
 });
 
+Deno.test("convert: сохраняет собственное имя и использует описания только при его отсутствии", () => {
+  const item = { type: "node", id: 9, lat: 56, lon: 44 };
+  assert.equal(convert({
+    ...item,
+    tags: { name: "  Корт «Олимп»  ", sport: "soccer" },
+  })?.name, "Корт «Олимп»");
+  const sports = new Map([
+    ["soccer", "Футбольная площадка"],
+    ["basketball", "Баскетбольная площадка"],
+    ["tennis", "Теннисный корт"],
+    ["table_tennis", "Площадка для настольного тенниса"],
+    ["hockey", "Хоккейная площадка"],
+    ["ice_hockey", "Хоккейная площадка"],
+    ["swiss_wrestling", "Спортивная площадка"],
+    ["unspecified", "Спортивная площадка"],
+  ]);
+  for (const [sport, name] of sports) {
+    assert.equal(convert({ ...item, tags: { name: "  ", sport } })?.name, name);
+  }
+  assert.equal(convert({
+    ...item,
+    tags: { leisure: "fitness_station", sport: "gymnastics" },
+  })?.name, "Воркаут-площадка");
+});
+
+Deno.test("convert: очищает списки видов спорта без изменения порядка известных и неизвестных значений", () => {
+  const item = { type: "node", id: 9, lat: 56, lon: 44 };
+  const multi = convert({
+    ...item,
+    tags: { sport: " basketball ; ; Soccer ;basketball; ice_hockey ; swiss_wrestling " },
+  });
+  assert.equal(multi?.sport_type, "basketball;soccer;ice_hockey;swiss_wrestling");
+  assert.equal(multi?.name, "Многофункциональная спортивная площадка");
+  const repeated = convert({ ...item, tags: { sport: " soccer;unspecified;soccer;" } });
+  assert.equal(repeated?.sport_type, "soccer");
+  assert.equal(repeated?.name, "Футбольная площадка");
+  assert.equal(convert({
+    ...item,
+    tags: { sport: " ; unspecified; " },
+  })?.sport_type, "unspecified");
+  const limited = convert({
+    ...item,
+    tags: { sport: ["x".repeat(65), ...Array.from({ length: 9 }, (_, i) => `test_${i}`)].join(";") },
+  });
+  assert.deepEqual(limited?.sport_type.split(";"), Array.from({ length: 8 }, (_, i) => `test_${i}`));
+});
+
+Deno.test("convert: использует адрес только из тегов объекта и сохраняет характеристики", () => {
+  const item = { type: "node", id: 9, lat: 56, lon: 44 };
+  const inPlace = convert({
+    ...item,
+    tags: {
+      "addr:street": "  ",
+      "addr:place": "  Остров  ",
+      "addr:housenumber": " 2А ",
+      lit: "no",
+      surface: " asphalt ",
+      fitness_station: " horizontal_bar;parallel_bars ",
+    },
+  });
+  assert.equal(inPlace?.address, "Остров, 2А");
+  assert.equal(inPlace?.surface, "asphalt");
+  assert.equal(inPlace?.equipment, "horizontal_bar;parallel_bars");
+  assert.equal(inPlace?.lighting, false);
+  const missing = convert({
+    ...item,
+    tags: { "addr:housenumber": "", surface: " ", fitness_station: " ", lit: "unknown" },
+  });
+  assert.equal(missing?.address, null);
+  assert.equal(missing?.surface, null);
+  assert.equal(missing?.equipment, null);
+  assert.equal(missing?.lighting, null);
+});
+
 Deno.test("makeCacheKey: выдаёт версионный и повторяемый ключ", () => {
   const first = makeCacheKey(56.326912, 44.005987, 100, "all");
   const second = makeCacheKey(56.326912, 44.005987, 100, "all");
-  assert.equal(first, "v2:56.326912:44.005987:100:all");
+  assert.equal(first, "v3:56.326912:44.005987:100:all");
   assert.equal(first, second);
 });
 
