@@ -22,3 +22,14 @@ val MIGRATION_2_3: Migration =
             }
         }
     }
+
+val MIGRATION_3_4: Migration =
+    object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            for (table in listOf("saved_spots", "search_spots")) {
+                db.execSQL("ALTER TABLE $table ADD COLUMN address TEXT")
+                db.execSQL("ALTER TABLE $table ADD COLUMN equipment TEXT")
+                db.execSQL("ALTER TABLE $table ADD COLUMN sports TEXT")
+            }
+        }
+    }

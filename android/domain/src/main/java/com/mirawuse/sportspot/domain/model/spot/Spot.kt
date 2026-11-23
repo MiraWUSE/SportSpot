@@ -10,6 +10,10 @@ data class Spot(
     val surface: String? = null,
     val lighting: Boolean? = null,
     val photo: SpotPhoto? = null,
+    val address: String? = null,
+    val equipment: String? = null,
+    // null: older record without the sport list. An empty list means OSM did not specify a sport.
+    val sports: List<SpotSport>? = null,
 ) {
     init {
         require(name.isNotBlank()) {
@@ -17,5 +21,5 @@ data class Spot(
         }
     }
 
-    fun supportsSport(type: SportType): Boolean = sportType == type
+    fun supportsSport(type: SportType): Boolean = sports?.takeIf { it.isNotEmpty() }?.any { it.category == type } ?: (sportType == type)
 }

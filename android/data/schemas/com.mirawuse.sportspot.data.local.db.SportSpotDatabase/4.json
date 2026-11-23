@@ -1,0 +1,296 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 4,
+    "identityHash": "ca49e395dac0bf518a28b8345d26e47a",
+    "entities": [
+      {
+        "tableName": "saved_spots",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`list_position` INTEGER, `fetched_at_epoch_millis` INTEGER NOT NULL DEFAULT 0, `canonical_id` TEXT NOT NULL, `name` TEXT NOT NULL, `sport_type` TEXT NOT NULL, `latitude` REAL NOT NULL, `longitude` REAL NOT NULL, `surface` TEXT, `lighting` INTEGER, `photo_url` TEXT, `photo_source_url` TEXT, `photo_author` TEXT, `photo_license` TEXT, `photo_license_url` TEXT, `address` TEXT, `equipment` TEXT, `sports` TEXT, PRIMARY KEY(`canonical_id`))",
+        "fields": [
+          {
+            "fieldPath": "listPosition",
+            "columnName": "list_position",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "fetchedAtEpochMillis",
+            "columnName": "fetched_at_epoch_millis",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "spot.canonicalId",
+            "columnName": "canonical_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "spot.name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "spot.sportType",
+            "columnName": "sport_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "spot.latitude",
+            "columnName": "latitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "spot.longitude",
+            "columnName": "longitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "spot.surface",
+            "columnName": "surface",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "spot.lighting",
+            "columnName": "lighting",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "spot.photoUrl",
+            "columnName": "photo_url",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "spot.photoSourceUrl",
+            "columnName": "photo_source_url",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "spot.photoAuthor",
+            "columnName": "photo_author",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "spot.photoLicense",
+            "columnName": "photo_license",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "spot.photoLicenseUrl",
+            "columnName": "photo_license_url",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "spot.address",
+            "columnName": "address",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "spot.equipment",
+            "columnName": "equipment",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "spot.sports",
+            "columnName": "sports",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "canonical_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_saved_spots_list_position",
+            "unique": true,
+            "columnNames": [
+              "list_position"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_saved_spots_list_position` ON `${TABLE_NAME}` (`list_position`)"
+          }
+        ]
+      },
+      {
+        "tableName": "saved_spot_snapshot",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `fetched_at_epoch_millis` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fetchedAtEpochMillis",
+            "columnName": "fetched_at_epoch_millis",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "search_snapshots",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`query_key` TEXT NOT NULL, `fetched_at_epoch_millis` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`query_key`))",
+        "fields": [
+          {
+            "fieldPath": "queryKey",
+            "columnName": "query_key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fetchedAtEpochMillis",
+            "columnName": "fetched_at_epoch_millis",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "query_key"
+          ]
+        }
+      },
+      {
+        "tableName": "search_spots",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`query_key` TEXT NOT NULL, `position` INTEGER NOT NULL, `canonical_id` TEXT NOT NULL, `name` TEXT NOT NULL, `sport_type` TEXT NOT NULL, `latitude` REAL NOT NULL, `longitude` REAL NOT NULL, `surface` TEXT, `lighting` INTEGER, `photo_url` TEXT, `photo_source_url` TEXT, `photo_author` TEXT, `photo_license` TEXT, `photo_license_url` TEXT, `address` TEXT, `equipment` TEXT, `sports` TEXT, PRIMARY KEY(`query_key`, `position`), FOREIGN KEY(`query_key`) REFERENCES `search_snapshots`(`query_key`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "queryKey",
+            "columnName": "query_key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "spot.canonicalId",
+            "columnName": "canonical_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "spot.name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "spot.sportType",
+            "columnName": "sport_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "spot.latitude",
+            "columnName": "latitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "spot.longitude",
+            "columnName": "longitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "spot.surface",
+            "columnName": "surface",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "spot.lighting",
+            "columnName": "lighting",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "spot.photoUrl",
+            "columnName": "photo_url",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "spot.photoSourceUrl",
+            "columnName": "photo_source_url",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "spot.photoAuthor",
+            "columnName": "photo_author",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "spot.photoLicense",
+            "columnName": "photo_license",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "spot.photoLicenseUrl",
+            "columnName": "photo_license_url",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "spot.address",
+            "columnName": "address",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "spot.equipment",
+            "columnName": "equipment",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "spot.sports",
+            "columnName": "sports",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "query_key",
+            "position"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "search_snapshots",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "query_key"
+            ],
+            "referencedColumns": [
+              "query_key"
+            ]
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ca49e395dac0bf518a28b8345d26e47a')"
+    ]
+  }
+}

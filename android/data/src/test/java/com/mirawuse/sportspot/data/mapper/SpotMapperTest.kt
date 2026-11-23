@@ -8,6 +8,7 @@ import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
+import com.mirawuse.sportspot.domain.model.spot.SpotSport
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
@@ -33,6 +34,7 @@ class SpotMapperTest {
                     location = GeoPoint(56.3269, 44.0059),
                     surface = "asphalt",
                     lighting = null,
+                    sports = listOf(SpotSport.BASKETBALL),
                 ),
             ),
             response.toDomain(),
@@ -59,13 +61,41 @@ class SpotMapperTest {
     }
 
     @Test
-    fun `unknown and compound sports map to OTHER without changing identity`() {
-        listOf("unspecified", "baseball", "soccer;basketball").forEach { sport ->
+    fun `legacy sport strings preserve available sports and keep the filter enum compatible`() {
+        val sports =
+            mapOf(
+                "unspecified" to emptyList(),
+                "baseball" to listOf(SpotSport.OTHER),
+                "basketball; soccer; basketball; ; " to listOf(SpotSport.BASKETBALL, SpotSport.FOOTBALL),
+                "table_tennis" to listOf(SpotSport.TABLE_TENNIS),
+                "hockey;ice_hockey" to listOf(SpotSport.HOCKEY, SpotSport.ICE_HOCKEY),
+            )
+        for ((sport, expected) in sports) {
             val mapped = validSpot().copy(sportType = sport).toDomain()
 
             assertEquals(SportType.OTHER, mapped.sportType)
             assertEquals(SpotId("osm", "node:12345"), mapped.id)
+            assertEquals(expected, mapped.sports)
         }
+    }
+
+    @Test
+    fun `normalized JSON keeps the name address equipment and lighting`() {
+        val json =
+            fixture("search-spots.json")
+                .replace("Спортивная площадка", " Именной корт ")
+                .replace("\"basketball\"", "\"soccer;ice_hockey\"")
+                .replace("\"address\": null", "\"address\": \" Остров, 2А \"")
+                .replace("\"equipment\": null", "\"equipment\": \" horizontal_bar \"")
+                .replace("\"lighting\": null", "\"lighting\": false")
+        val spot = gson.fromJson(json, SpotSearchResponseDto::class.java).toDomain().single()
+
+        assertEquals("Именной корт", spot.name)
+        assertEquals(listOf(SpotSport.FOOTBALL, SpotSport.ICE_HOCKEY), spot.sports)
+        assertEquals("Остров, 2А", spot.address)
+        assertEquals("horizontal_bar", spot.equipment)
+        assertEquals("asphalt", spot.surface)
+        assertEquals(false, spot.lighting)
     }
 
     @Test
@@ -93,11 +123,13 @@ class SpotMapperTest {
 
     @Test
     fun `nullable surface and lighting remain null while false remains false`() {
-        val unknown = validSpot().copy(surface = null, lighting = null).toDomain()
+        val unknown = validSpot().copy(surface = " ", address = " ", equipment = " ", lighting = null).toDomain()
         val unlit = validSpot().copy(lighting = false).toDomain()
         val lit = validSpot().copy(lighting = true).toDomain()
 
         assertNull(unknown.surface)
+        assertNull(unknown.address)
+        assertNull(unknown.equipment)
         assertNull(unknown.lighting)
         assertEquals(false, unlit.lighting)
         assertEquals(true, lit.lighting)
