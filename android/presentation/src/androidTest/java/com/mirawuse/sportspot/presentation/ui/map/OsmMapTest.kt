@@ -71,10 +71,21 @@ class OsmMapTest {
         val spot = Spot(SpotId("osm", "node:1"), "Корт", SportType.BASKETBALL, original)
         val center = mutableStateOf(original)
         val selected = mutableStateOf<SpotId?>(spot.id)
+        val focusRequest = mutableStateOf(0)
         val restore = StateRestorationTester(compose)
         restore.setContent {
             SportSpotTheme {
-                if (showing.value) OsmMap(center.value, listOf(spot), selected.value, true, Modifier.size(300.dp), isOnline = false)
+                if (showing.value) {
+                    OsmMap(
+                        center.value,
+                        listOf(spot),
+                        selected.value,
+                        true,
+                        Modifier.size(300.dp),
+                        networkStatus = MapNetworkStatus.NO_NETWORK,
+                        selectionFocusRequest = focusRequest.value,
+                    )
+                }
             }
         }
         var map = nativeMap()
@@ -94,6 +105,16 @@ class OsmMapTest {
         waitForCamera(map, moved, 16.0)
         compose.runOnIdle { center.value = moved }
         waitForCamera(map, moved, 13.5)
+        compose.runOnIdle {
+            selected.value = spot.id
+            focusRequest.value++
+        }
+        waitForCamera(map, original, 15.5)
+        compose.runOnIdle { map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(moved.latitude, moved.longitude), 16.0)) }
+        waitForCamera(map, moved, 16.0)
+        restore.emulateSavedInstanceStateRestore()
+        map = nativeMap()
+        waitForCamera(map, moved, 16.0)
     }
 
     @Test
@@ -112,7 +133,7 @@ class OsmMapTest {
                         true,
                         Modifier.size(300.dp),
                         onSelect = { selected.value = it },
-                        isOnline = false,
+                        networkStatus = MapNetworkStatus.NO_NETWORK,
                     )
                 }
             }
@@ -175,7 +196,16 @@ class OsmMapTest {
         try {
             compose.setContent {
                 SportSpotTheme {
-                    if (showing.value) OsmMap(GeoPoint(-33.8688, 151.2093), emptyList(), null, true, Modifier.size(300.dp), isOnline = true)
+                    if (showing.value) {
+                        OsmMap(
+                            GeoPoint(-33.8688, 151.2093),
+                            emptyList(),
+                            null,
+                            true,
+                            Modifier.size(300.dp),
+                            networkStatus = MapNetworkStatus.UNVERIFIED,
+                        )
+                    }
                 }
             }
             nativeMap()
@@ -183,6 +213,7 @@ class OsmMapTest {
             compose.waitUntil(30_000) {
                 compose.onAllNodesWithText("Не удалось загрузить карту. Попробуйте ещё раз.").fetchSemanticsNodes().isNotEmpty()
             }
+            compose.onNodeWithText("Нет доступной сети. Сохранённая карта может отображаться частично.").assertDoesNotExist()
             val beforeRetry = requests.get()
             compose.onNodeWithText("Повторить").performClick()
             compose.waitUntil(10_000) { requests.get() > beforeRetry }

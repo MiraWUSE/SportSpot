@@ -3,11 +3,6 @@ package com.mirawuse.sportspot.presentation.ui.map
 import android.content.ComponentCallbacks2
 import android.content.res.Configuration
 import android.graphics.RectF
-import android.net.ConnectivityManager
-import android.net.Network
-import android.net.NetworkCapabilities
-import android.os.Handler
-import android.os.Looper
 import android.view.MotionEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -91,7 +87,8 @@ internal fun OsmMap(
     modifier: Modifier = Modifier,
     focus: Spot? = null,
     onSelect: (SpotId) -> Unit = {},
-    isOnline: Boolean = rememberMapOnline(),
+    networkStatus: MapNetworkStatus = rememberMapNetworkStatus(),
+    selectionFocusRequest: Int = 0,
     overlay: @Composable BoxScope.() -> Unit = {},
 ) {
     var attempt by remember { mutableIntStateOf(0) }
@@ -99,6 +96,7 @@ internal fun OsmMap(
     val camera = rememberSaveable { mutableStateOf<CameraPosition?>(null) }
     val previousCenter = rememberSaveable { mutableStateOf<String?>(null) }
     val previousFocus = rememberSaveable { mutableStateOf<String?>(null) }
+    val appliedSelectionFocus = rememberSaveable(center, focus?.id) { mutableIntStateOf(0) }
     val uriHandler = LocalUriHandler.current
     Column(modifier.background(MaterialTheme.colorScheme.surface)) {
         Box(Modifier.fillMaxWidth().weight(1f)) {
@@ -110,10 +108,13 @@ internal fun OsmMap(
                         selectedId,
                         focus,
                         isInteractive,
-                        isOnline,
+                        networkStatus,
                         camera.value,
                         previousCenter.value,
                         previousFocus.value,
+                        selectionFocusRequest,
+                        appliedSelectionFocus.intValue,
+                        onSelectionFocusApplied = { appliedSelectionFocus.intValue = selectionFocusRequest },
                         onCameraSaved = { camera.value = it },
                         onCameraApplied = {
                             previousCenter.value = mapCenterKey(center)
@@ -154,10 +155,13 @@ private fun NativeOsmMap(
     selectedId: SpotId?,
     focus: Spot?,
     interactive: Boolean,
-    online: Boolean,
+    networkStatus: MapNetworkStatus,
     savedCamera: CameraPosition?,
     previousCenter: String?,
     previousFocus: String?,
+    selectionFocusRequest: Int,
+    appliedSelectionFocus: Int,
+    onSelectionFocusApplied: () -> Unit,
     onCameraSaved: (CameraPosition) -> Unit,
     onCameraApplied: () -> Unit,
     onSelect: (SpotId) -> Unit,
@@ -339,7 +343,7 @@ private fun NativeOsmMap(
                 release()
             }
         }
-        LaunchedEffect(style, spots, selectedId, colors.primary, colors.onPrimary) {
+        LaunchedEffect(style, spots, selectedId, colors.primary, colors.onPrimary, interactive) {
             val loaded = style ?: return@LaunchedEffect
             val features =
                 mapMarkerGroups(spots).map { (point, group) ->
@@ -351,10 +355,10 @@ private fun NativeOsmMap(
                 }
             loaded.getSourceAs<GeoJsonSource>(MAP_SPOT_SOURCE)?.setGeoJson(FeatureCollection.fromFeatures(features))
             loaded.getLayerAs<CircleLayer>(SPOT_LAYER)?.setProperties(
-                circleRadius(switchCase(get("selected"), literal(12f), literal(8f))),
+                circleRadius(if (interactive) switchCase(get("selected"), literal(12f), literal(8f)) else literal(4f)),
                 circleColor(switchCase(get("selected"), color(colors.primary.toArgb()), color(colors.onPrimary.toArgb()))),
                 circleStrokeColor(switchCase(get("selected"), color(colors.onPrimary.toArgb()), color(colors.primary.toArgb()))),
-                circleStrokeWidth(2f),
+                circleStrokeWidth(if (interactive) 2f else 1.5f),
             )
         }
         LaunchedEffect(style, center, focus?.id, focus?.location) {
@@ -368,6 +372,20 @@ private fun NativeOsmMap(
                 map.moveCamera(CameraUpdateFactory.newCameraPosition(savedCamera))
             }
             onCameraApplied()
+        }
+        // A list choice may reveal an offscreen point. Marker taps keep the current camera.
+        LaunchedEffect(style, selectionFocusRequest) {
+            if (style == null || selectionFocusRequest == 0 || selectionFocusRequest == appliedSelectionFocus) return@LaunchedEffect
+            val map = nativeMap ?: return@LaunchedEffect
+            val chosen = spots.firstOrNull { it.id == selectedId }
+            if (chosen != null && isMapCoordinate(chosen.location.latitude, chosen.location.longitude)) {
+                val target = LatLng(chosen.location.latitude, chosen.location.longitude)
+                val screen = map.projection.toScreenLocation(target)
+                if (screen.x !in 0f..mapView.width.toFloat() || screen.y !in 0f..mapView.height.toFloat()) {
+                    map.moveCamera(CameraUpdateFactory.newLatLngZoom(target, maxOf(map.cameraPosition.zoom, 15.5)))
+                }
+            }
+            onSelectionFocusApplied()
         }
         AndroidView(
             factory = { mapView },
@@ -390,11 +408,12 @@ private fun NativeOsmMap(
         delay(20_000)
         if (loadState == MapLoadState.LOADING) loadState = MapLoadState.ERROR
     }
-    if (mapView == null || !online || loadState != MapLoadState.READY) {
+    if (mapView == null || networkStatus == MapNetworkStatus.NO_NETWORK || loadState != MapLoadState.READY) {
         val message =
             when {
-                !online -> R.string.map_offline
+                networkStatus == MapNetworkStatus.NO_NETWORK -> R.string.map_no_network
                 mapView == null || loadState == MapLoadState.ERROR -> R.string.map_load_error
+                networkStatus == MapNetworkStatus.UNVERIFIED -> R.string.map_network_unverified
                 else -> R.string.map_loading
             }
         Surface(color = colors.surface.copy(alpha = 0.95f), modifier = Modifier.fillMaxWidth()) {
@@ -404,52 +423,17 @@ private fun NativeOsmMap(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(stringResource(message), Modifier.weight(1f), style = MaterialTheme.typography.labelSmall)
-                if (message != R.string.map_loading) {
-                    TextButton(onClick = onRetry, enabled = online, contentPadding = PaddingValues(horizontal = 4.dp)) {
-                        Text(stringResource(R.string.map_retry), color = colors.onSurface, style = MaterialTheme.typography.labelSmall)
+                if (message == R.string.map_no_network || message == R.string.map_load_error) {
+                    TextButton(
+                        onClick = onRetry,
+                        enabled = networkStatus != MapNetworkStatus.NO_NETWORK,
+                        colors = ButtonDefaults.textButtonColors(contentColor = colors.onSurface),
+                        contentPadding = PaddingValues(horizontal = 4.dp),
+                    ) {
+                        Text(stringResource(R.string.map_retry), style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }
         }
     }
-}
-
-@Composable
-private fun rememberMapOnline(): Boolean {
-    val context = LocalContext.current
-    val manager = remember(context) { context.getSystemService(ConnectivityManager::class.java) }
-
-    fun connected(): Boolean {
-        val service = manager ?: return false
-        val capabilities = service.getNetworkCapabilities(service.activeNetwork) ?: return false
-        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-    }
-    var online by remember(context) { mutableStateOf(connected()) }
-    DisposableEffect(manager) {
-        var observing = true
-        val handler = Handler(Looper.getMainLooper())
-        val callback =
-            object : ConnectivityManager.NetworkCallback() {
-                private fun update(available: Boolean) {
-                    handler.post { if (observing) online = available }
-                }
-
-                override fun onLost(network: Network) = update(false)
-
-                override fun onCapabilitiesChanged(
-                    network: Network,
-                    capabilities: NetworkCapabilities,
-                ) = update(
-                    capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-                        capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED),
-                )
-            }
-        manager?.registerDefaultNetworkCallback(callback)
-        onDispose {
-            observing = false
-            if (manager != null) manager.unregisterNetworkCallback(callback)
-        }
-    }
-    return online
 }

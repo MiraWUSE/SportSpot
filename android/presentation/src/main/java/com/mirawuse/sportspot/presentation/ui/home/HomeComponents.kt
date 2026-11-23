@@ -40,6 +40,7 @@ import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.labelRes
 import com.mirawuse.sportspot.presentation.ui.map.OsmMap
+import com.mirawuse.sportspot.presentation.ui.map.previewMapSpots
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotPillShape
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
@@ -50,6 +51,7 @@ internal fun HomeMapPreview(
     onOpenMap: () -> Unit,
 ) {
     val view = LocalView.current
+    val markers = remember(spots, center) { previewMapSpots(spots, center) }
     var visible by remember { mutableStateOf(false) }
     Box(
         Modifier
@@ -66,8 +68,8 @@ internal fun HomeMapPreview(
         if (visible) {
             OsmMap(
                 center = center,
-                spots = spots,
-                selectedId = spots.firstOrNull()?.id,
+                spots = markers,
+                selectedId = null,
                 isInteractive = false,
                 modifier = Modifier.fillMaxSize(),
             ) {

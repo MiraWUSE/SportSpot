@@ -47,6 +47,12 @@ internal fun MapScreen(
 ) {
     var selectedSource by rememberSaveable(focus, center) { mutableStateOf(focus?.source) }
     var selectedValue by rememberSaveable(focus, center) { mutableStateOf(focus?.value) }
+    var selectionFocusRequest by rememberSaveable(focus, center) { mutableIntStateOf(0) }
+    val source = selectedSource
+    val value = selectedValue
+    val selectedId = if (source != null && value != null) SpotId(source, value) else null
+    val spots = (state as? HomeUiState.Content)?.spots.orEmpty()
+    val visibleSpot = selectedMapSpot(spots, selectedId)
     BoxWithConstraints(Modifier.fillMaxSize()) {
         var headingHeight by remember { mutableIntStateOf(0) }
         val headingDp = with(LocalDensity.current) { headingHeight.toDp() }
@@ -63,8 +69,13 @@ internal fun MapScreen(
             Column(Modifier.onSizeChanged { headingHeight = it.height }, verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.md)) {
                 Text(text = stringResource(R.string.tab_map), style = MaterialTheme.typography.headlineLarge)
                 Text(locationLabel, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-                if (focus != null && state is HomeUiState.Content && state.findSpot(focus) == null) {
+                if (focus != null && selectedId == focus && state is HomeUiState.Content && state.findSpot(focus) == null) {
                     Text(stringResource(R.string.map_focus_unavailable))
+                }
+                SpotPickerButton(spots, visibleSpot?.id) { id ->
+                    selectedSource = id.source
+                    selectedValue = id.value
+                    selectionFocusRequest++
                 }
             }
             when (state) {
@@ -77,10 +88,6 @@ internal fun MapScreen(
                     )
                 is HomeUiState.Error -> SpotSearchMessage(stringResource(R.string.home_error_title), state.message, onRetry)
                 is HomeUiState.Content -> {
-                    val source = selectedSource
-                    val value = selectedValue
-                    val selectedId = if (source != null && value != null) SpotId(source, value) else null
-                    val visibleSpot = selectedMapSpot(state.spots, selectedId)
                     val focusedSpot = focus?.let(state::findSpot)
                     OsmMap(
                         center = center,
@@ -88,6 +95,7 @@ internal fun MapScreen(
                         selectedId = visibleSpot?.id,
                         focus = focusedSpot,
                         isInteractive = true,
+                        selectionFocusRequest = selectionFocusRequest,
                         modifier = Modifier.fillMaxWidth().height(mapHeight).clip(MaterialTheme.shapes.large),
                         onSelect = { id ->
                             selectedSource = id.source

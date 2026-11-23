@@ -56,12 +56,16 @@
     <string name="map_attribution">© OpenStreetMap contributors</string>
     <string name="map_loading">Загрузка карты…</string>
     <string name="map_load_error">Не удалось загрузить карту. Попробуйте ещё раз.</string>
-    <string name="map_offline">Нет подключения. Карта может отображаться не полностью.</string>
+    <string name="map_no_network">Нет доступной сети. Сохранённая карта может отображаться частично.</string>
+    <string name="map_network_unverified">Подключение ещё не подтверждено. Загружаем карту…</string>
     <string name="map_retry">Повторить</string>
     <string name="map_area_unavailable">Эту область нельзя показать на карте.</string>
     <string name="map_focus_unavailable">Площадка отсутствует в текущих результатах. Можно выбрать другую.</string>
     <string name="map_shared_location">Площадок в этой точке: %1$d. Нажмите на маркер ещё раз, чтобы переключить выбор.</string>
     <string name="map_details">Подробнее</string>
+    <string name="map_choose_spot">Выбрать площадку</string>
+    <string name="map_selected_spot">Выбрана площадка: %1$s</string>
+    <string name="map_spot_option">%1$d. %2$s</string>
 
     <string name="sport_football">Футбол</string>
     <string name="sport_basketball">Баскетбол</string>
