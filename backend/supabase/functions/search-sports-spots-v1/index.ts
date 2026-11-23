@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { SPORTS, coord, query, convert, makeCacheKey } from "./search-logic.ts";
+import { SPORTS, coord, query, makeCacheKey } from "./search-logic.ts";
+import { searchSpotsWithPhotos } from "./commons-photos.ts";
 const BASE=Deno.env.get("SUPABASE_URL"), KEY=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const send=(obj:unknown,status=200,extra:Record<string,string>={})=>new Response(JSON.stringify(obj),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store",...extra}});
 async function rpc(name:string, body:Record<string,unknown>){return fetch(BASE+"/rest/v1/rpc/"+name,{method:"POST",headers:{apikey:KEY!,"authorization":"Bearer "+KEY,"content-type":"application/json"},body:JSON.stringify(body),signal:AbortSignal.timeout(3500)});}
@@ -65,7 +66,7 @@ for(const ep of endpoints){
   }
 }
 if(!data)return err("UPSTREAM_UNAVAILABLE","Sports data providers temporarily unavailable",503,{"retry-after":"60"});
-const spots=((data as {elements:unknown[]}).elements).map(convert).filter(Boolean).slice(0,100);
+const spots=await searchSpotsWithPhotos(data.elements);
 const payload={spots,count:spots.length,source:"Overpass API",attribution:"© OpenStreetMap contributors"};
 const savedResult=await rpc("spot_search_cache_write",{p_key:key,p_payload:payload});if(!savedResult.ok)console.error(JSON.stringify({request_id:id,code:"CACHE_WRITE_FAILED",status:savedResult.status}));
 log(200,"OK",spots.length);return send({...payload,cache:"miss"},200,{"x-request-id":id});
