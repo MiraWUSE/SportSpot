@@ -63,6 +63,9 @@ internal fun MapScreen(
             Column(Modifier.onSizeChanged { headingHeight = it.height }, verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.md)) {
                 Text(text = stringResource(R.string.tab_map), style = MaterialTheme.typography.headlineLarge)
                 Text(locationLabel, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                if (focus != null && state is HomeUiState.Content && state.findSpot(focus) == null) {
+                    Text(stringResource(R.string.map_focus_unavailable))
+                }
             }
             when (state) {
                 HomeUiState.Loading -> SpotSearchLoading()
@@ -79,7 +82,6 @@ internal fun MapScreen(
                     val selectedId = if (source != null && value != null) SpotId(source, value) else null
                     val visibleSpot = selectedMapSpot(state.spots, selectedId)
                     val focusedSpot = focus?.let(state::findSpot)
-                    if (focus != null && focusedSpot == null) Text(stringResource(R.string.map_focus_unavailable))
                     OsmMap(
                         center = center,
                         spots = state.spots,

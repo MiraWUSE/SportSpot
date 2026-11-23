@@ -1,6 +1,8 @@
 package com.mirawuse.sportspot.presentation.ui.map
 
 import android.graphics.RectF
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.size
@@ -8,6 +10,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.test.espresso.Espresso.onView
@@ -27,16 +32,21 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.maplibre.android.MapLibre
+import org.maplibre.android.ModuleProvider
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.http.HttpRequest
+import org.maplibre.android.http.HttpResponder
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.abs
 
 class OsmMapTest {
     @get:Rule
     val compose = createAndroidComposeRule<ComponentActivity>()
+    private val showing = mutableStateOf(true)
 
     @Before
     fun disableExternalTiles() {
@@ -49,6 +59,8 @@ class OsmMapTest {
 
     @After
     fun restoreConnectivity() {
+        compose.runOnIdle { showing.value = false }
+        compose.waitForIdle()
         compose.activityRule.scenario.onActivity { MapLibre.setConnected(null) }
     }
 
@@ -62,7 +74,7 @@ class OsmMapTest {
         val restore = StateRestorationTester(compose)
         restore.setContent {
             SportSpotTheme {
-                OsmMap(center.value, listOf(spot), selected.value, true, Modifier.size(300.dp))
+                if (showing.value) OsmMap(center.value, listOf(spot), selected.value, true, Modifier.size(300.dp), isOnline = false)
             }
         }
         var map = nativeMap()
@@ -92,7 +104,17 @@ class OsmMapTest {
         val selected = mutableStateOf(first.id)
         compose.setContent {
             SportSpotTheme {
-                OsmMap(center, listOf(first, second), selected.value, true, Modifier.size(300.dp), onSelect = { selected.value = it })
+                if (showing.value) {
+                    OsmMap(
+                        center,
+                        listOf(first, second),
+                        selected.value,
+                        true,
+                        Modifier.size(300.dp),
+                        onSelect = { selected.value = it },
+                        isOnline = false,
+                    )
+                }
             }
         }
         val map = nativeMap()
@@ -115,6 +137,63 @@ class OsmMapTest {
         onView(isAssignableFrom(MapView::class.java)).perform(click())
         compose.waitUntil(5_000) { selected.value == first.id }
         waitForCamera(map, center, 13.5)
+    }
+
+    @Test
+    fun tileServiceFailureShowsRetryWithoutExternalRequests() {
+        val original = MapLibre.getModuleProvider()
+        val requests = AtomicInteger()
+        val handler = Handler(Looper.getMainLooper())
+        compose.activityRule.scenario.onActivity {
+            MapLibre.setConnected(true)
+            MapLibre.setModuleProvider(
+                object : ModuleProvider by original {
+                    override fun createHttpRequest(): HttpRequest =
+                        object : HttpRequest {
+                            @Volatile private var canceled = false
+
+                            override fun executeRequest(
+                                responder: HttpResponder,
+                                nativePtr: Long,
+                                resourceUrl: String,
+                                dataRange: String?,
+                                etag: String?,
+                                modified: String?,
+                                offline: Boolean,
+                            ) {
+                                requests.incrementAndGet()
+                                handler.post { if (!canceled) responder.onResponse(503, null, null, null, null, null, null, byteArrayOf()) }
+                            }
+
+                            override fun cancelRequest() {
+                                canceled = true
+                            }
+                        }
+                },
+            )
+        }
+        try {
+            compose.setContent {
+                SportSpotTheme {
+                    if (showing.value) OsmMap(GeoPoint(-33.8688, 151.2093), emptyList(), null, true, Modifier.size(300.dp), isOnline = true)
+                }
+            }
+            nativeMap()
+            compose.waitUntil(5_000) { requests.get() > 0 }
+            compose.waitUntil(30_000) {
+                compose.onAllNodesWithText("Не удалось загрузить карту. Попробуйте ещё раз.").fetchSemanticsNodes().isNotEmpty()
+            }
+            val beforeRetry = requests.get()
+            compose.onNodeWithText("Повторить").performClick()
+            compose.waitUntil(10_000) { requests.get() > beforeRetry }
+        } finally {
+            compose.runOnIdle { showing.value = false }
+            compose.waitForIdle()
+            compose.activityRule.scenario.onActivity {
+                MapLibre.setModuleProvider(original)
+                MapLibre.setConnected(false)
+            }
+        }
     }
 
     private fun nativeMap(): MapLibreMap {

@@ -72,6 +72,7 @@ import org.maplibre.android.style.layers.PropertyFactory.circleRadius
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth
 import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.android.tile.TileOperation
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.Point
@@ -90,6 +91,7 @@ internal fun OsmMap(
     modifier: Modifier = Modifier,
     focus: Spot? = null,
     onSelect: (SpotId) -> Unit = {},
+    isOnline: Boolean = rememberMapOnline(),
     overlay: @Composable BoxScope.() -> Unit = {},
 ) {
     var attempt by remember { mutableIntStateOf(0) }
@@ -108,6 +110,7 @@ internal fun OsmMap(
                         selectedId,
                         focus,
                         isInteractive,
+                        isOnline,
                         camera.value,
                         previousCenter.value,
                         previousFocus.value,
@@ -151,6 +154,7 @@ private fun NativeOsmMap(
     selectedId: SpotId?,
     focus: Spot?,
     interactive: Boolean,
+    online: Boolean,
     savedCamera: CameraPosition?,
     previousCenter: String?,
     previousFocus: String?,
@@ -161,7 +165,6 @@ private fun NativeOsmMap(
 ) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
-    val online = rememberMapOnline()
     val colors = MaterialTheme.colorScheme
     var loadState by remember { mutableStateOf(MapLoadState.LOADING) }
     var loadGeneration by remember { mutableIntStateOf(0) }
@@ -197,8 +200,17 @@ private fun NativeOsmMap(
             var disposed = false
             var started = false
             var resumed = false
-            val rendered = MapView.OnDidFinishRenderingMapListener { fully -> if (!disposed && fully) loadState = MapLoadState.READY }
+            val rendered =
+                MapView.OnDidFinishRenderingMapListener { fully ->
+                    // A completed frame may contain failed tiles. Keep the failure until retry.
+                    if (!disposed && fully && loadState != MapLoadState.ERROR) loadState = MapLoadState.READY
+                }
             val failed = MapView.OnDidFailLoadingMapListener { if (!disposed) loadState = MapLoadState.ERROR }
+            val tileAction =
+                MapView.OnTileActionListener { operation, _, _, _, _, _, source ->
+                    if (!disposed && source == "osm" && operation == TileOperation.Error) loadState = MapLoadState.ERROR
+                }
+            val renderError = MapView.OnRenderErrorListener { if (!disposed) loadState = MapLoadState.ERROR }
             val moving =
                 MapView.OnCameraWillChangeListener { _ ->
                     if (!disposed) {
@@ -250,6 +262,8 @@ private fun NativeOsmMap(
                 nativeMap?.removeOnCameraIdleListener(idle)
                 mapView.removeOnDidFinishRenderingMapListener(rendered)
                 mapView.removeOnDidFailLoadingMapListener(failed)
+                mapView.removeOnTileActionListener(tileAction)
+                mapView.removeOnRenderErrorListener(renderError)
                 mapView.removeOnCameraWillChangeListener(moving)
                 pauseAndStop()
                 mapView.onDestroy()
@@ -292,6 +306,8 @@ private fun NativeOsmMap(
             context.applicationContext.registerComponentCallbacks(memory)
             mapView.addOnDidFinishRenderingMapListener(rendered)
             mapView.addOnDidFailLoadingMapListener(failed)
+            mapView.addOnTileActionListener(tileAction)
+            mapView.addOnRenderErrorListener(renderError)
             mapView.addOnCameraWillChangeListener(moving)
             owner.lifecycle.addObserver(observer)
             mapView.getMapAsync { map ->
@@ -415,18 +431,19 @@ private fun rememberMapOnline(): Boolean {
         val handler = Handler(Looper.getMainLooper())
         val callback =
             object : ConnectivityManager.NetworkCallback() {
-                private fun update() {
-                    handler.post { if (observing) online = connected() }
+                private fun update(available: Boolean) {
+                    handler.post { if (observing) online = available }
                 }
 
-                override fun onAvailable(network: Network) = update()
-
-                override fun onLost(network: Network) = update()
+                override fun onLost(network: Network) = update(false)
 
                 override fun onCapabilitiesChanged(
                     network: Network,
                     capabilities: NetworkCapabilities,
-                ) = update()
+                ) = update(
+                    capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                        capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED),
+                )
             }
         manager?.registerDefaultNetworkCallback(callback)
         onDispose {
