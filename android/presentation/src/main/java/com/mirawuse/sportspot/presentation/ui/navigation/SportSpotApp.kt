@@ -18,6 +18,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -28,9 +30,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import com.mirawuse.sportspot.domain.model.auth.AuthState
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.account.AuthScreen
+import com.mirawuse.sportspot.presentation.ui.account.AuthViewModel
 import com.mirawuse.sportspot.presentation.ui.account.FavoritesScreen
 import com.mirawuse.sportspot.presentation.ui.account.ProfileScreen
 import com.mirawuse.sportspot.presentation.ui.details.SpotDetailsScreen
@@ -98,6 +102,9 @@ private enum class Tab(
 @Composable
 fun SportSpotApp() {
     val navController = rememberNavController()
+    val authViewModel: AuthViewModel = hiltViewModel()
+    val authState by authViewModel.authState.collectAsStateWithLifecycle()
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { authViewModel.restore() }
     val backStackEntry by navController.currentBackStackEntryAsState()
     val destination = backStackEntry?.destination
     val selectedTab =
@@ -182,6 +189,8 @@ fun SportSpotApp() {
             }
             composable("profile") {
                 ProfileScreen(
+                    state = authState,
+                    viewModel = authViewModel,
                     onOpenAuth = { navController.navigate(AUTH_ROUTE) },
                     onPropose = { navController.navigate(PROPOSAL_ROUTE) },
                 )
@@ -192,7 +201,14 @@ fun SportSpotApp() {
                     onOpenAuth = { navController.navigate(AUTH_ROUTE) },
                 )
             }
-            composable(AUTH_ROUTE) { AuthScreen(onBack = { navController.popBackStack() }) }
+            composable(AUTH_ROUTE) {
+                AuthScreen(authState, authViewModel) {
+                    if (!authViewModel.submitting || authState is AuthState.Authenticated) {
+                        authViewModel.clearNotice()
+                        navController.popBackStack()
+                    }
+                }
+            }
             composable<SpotDetailsRoute> { entry ->
                 val viewModel = searchViewModel(navController, entry)
                 val state by viewModel.uiState.collectAsStateWithLifecycle()

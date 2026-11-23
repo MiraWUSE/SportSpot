@@ -1,5 +1,6 @@
 package com.mirawuse.sportspot.presentation.ui.account
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +14,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,6 +29,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.mirawuse.sportspot.domain.model.auth.AuthState
 import com.mirawuse.sportspot.domain.validation.FormValidation
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
@@ -37,7 +40,11 @@ import com.mirawuse.sportspot.presentation.ui.forms.FormScreen
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
 @Composable
-internal fun AuthScreen(onBack: () -> Unit) {
+internal fun AuthScreen(
+    state: AuthState,
+    viewModel: AuthViewModel,
+    onBack: () -> Unit,
+) {
     var isRegistration by rememberSaveable { mutableStateOf(false) }
     var name by rememberSaveable { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
@@ -48,9 +55,31 @@ internal fun AuthScreen(onBack: () -> Unit) {
     val nameError = if (isRegistration) FormValidation.required(name) else null
     val emailError = FormValidation.email(email)
     val passwordError = FormValidation.required(password)
+    val weakPassword = isRegistration && password.length < 6 && passwordError == null
     val colors = MaterialTheme.colorScheme
+    BackHandler { if (!viewModel.submitting) onBack() }
+    LaunchedEffect(state) {
+        if (state is AuthState.Authenticated) onBack()
+    }
+    LaunchedEffect(viewModel.confirmationPending) {
+        if (viewModel.confirmationPending) password = ""
+    }
 
     FormScreen(stringResource(R.string.auth_title), onBack) {
+        if (viewModel.confirmationPending) {
+            Text(stringResource(R.string.auth_check_email), style = MaterialTheme.typography.headlineLarge)
+            Text(stringResource(R.string.auth_confirm_in_browser), style = MaterialTheme.typography.bodyMedium)
+            SportSpotButton(
+                text = stringResource(R.string.auth_sign_in),
+                onClick = {
+                    viewModel.clearNotice()
+                    isRegistration = false
+                    attempted = false
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            return@FormScreen
+        }
         Text(stringResource(R.string.auth_welcome), style = MaterialTheme.typography.headlineLarge)
         Text(stringResource(R.string.auth_permissions), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         Row(horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.sm), modifier = Modifier.fillMaxWidth()) {
@@ -66,10 +95,11 @@ internal fun AuthScreen(onBack: () -> Unit) {
                             .weight(1f)
                             .clip(MaterialTheme.shapes.medium)
                             .background(if (selected) colors.primary else colors.surfaceVariant)
-                            .selectable(selected = selected, role = Role.Tab, onClick = {
+                            .selectable(selected = selected, enabled = !viewModel.submitting, role = Role.Tab, onClick = {
                                 isRegistration = registration
                                 attempted = false
                                 password = ""
+                                viewModel.clearNotice()
                             })
                             .padding(vertical = SportSpotSpacing.md),
                 )
@@ -101,31 +131,40 @@ internal fun AuthScreen(onBack: () -> Unit) {
             obscure = true,
         )
         SportSpotButton(
-            text = stringResource(R.string.auth_validate),
-            onClick = { attempted = true },
+            text = stringResource(if (isRegistration) R.string.auth_sign_up else R.string.auth_sign_in),
+            onClick = {
+                attempted = true
+                if (nameError == null && emailError == null && passwordError == null && !weakPassword) {
+                    viewModel.submit(name.takeIf { isRegistration }, email, password)
+                }
+            },
             modifier = Modifier.fillMaxWidth(),
+            enabled = !viewModel.restoring,
+            isLoading = viewModel.submitting,
         )
-        if (attempted && nameError == null && emailError == null && passwordError == null) {
-            Text(
-                stringResource(if (isRegistration) R.string.auth_sign_up_unavailable else R.string.auth_sign_in_unavailable),
-                style = MaterialTheme.typography.bodyMedium,
-            )
+        val notice = if (attempted && weakPassword) R.string.auth_weak_password else viewModel.error?.labelRes()
+        notice?.let {
+            Text(stringResource(it), color = colors.error, style = MaterialTheme.typography.bodyMedium)
         }
         SportSpotButton(
             text = stringResource(R.string.auth_continue_guest),
             onClick = onBack,
             modifier = Modifier.fillMaxWidth(),
             variant = SportSpotButtonVariant.TEXT,
+            enabled = !viewModel.submitting,
         )
     }
 }
 
 @Composable
 internal fun ProfileScreen(
+    state: AuthState,
+    viewModel: AuthViewModel,
     onOpenAuth: () -> Unit,
     onPropose: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
+    val profile = (state as? AuthState.Authenticated)?.profile
     FormScreen(stringResource(R.string.tab_profile)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.md)) {
             Box(
@@ -134,12 +173,16 @@ internal fun ProfileScreen(
             ) {
                 Icon(painterResource(R.drawable.ic_tab_profile), contentDescription = null, tint = colors.onPrimary)
             }
-            Text(stringResource(R.string.profile_guest), style = MaterialTheme.typography.headlineMedium)
+            val caption = if (viewModel.restoring) stringResource(R.string.auth_restoring) else stringResource(R.string.profile_guest)
+            Text(profile?.name ?: caption, style = MaterialTheme.typography.headlineMedium)
         }
+        profile?.let { Text(it.email, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium) }
         SportSpotButton(
-            text = stringResource(R.string.auth_open),
-            onClick = onOpenAuth,
+            text = stringResource(if (profile == null) R.string.auth_open else R.string.auth_sign_out),
+            onClick = if (profile == null) onOpenAuth else viewModel::logout,
             modifier = Modifier.fillMaxWidth(),
+            enabled = !viewModel.restoring,
+            isLoading = viewModel.submitting,
         )
         FormCard(stringResource(R.string.profile_my_reviews)) {
             Text(stringResource(R.string.profile_reviews_guest), style = MaterialTheme.typography.bodyMedium)
