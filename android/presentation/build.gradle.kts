@@ -43,6 +43,8 @@ dependencies {
     implementation(libs.material)
     implementation(libs.maplibre.android)
     implementation(libs.okhttp)
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
 
     // Jetpack Compose
     implementation(platform(libs.androidx.compose.bom))

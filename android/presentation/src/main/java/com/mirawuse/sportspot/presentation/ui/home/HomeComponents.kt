@@ -1,6 +1,5 @@
 package com.mirawuse.sportspot.presentation.ui.home
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -38,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.presentation.R
+import com.mirawuse.sportspot.presentation.ui.components.SpotPhotoImage
 import com.mirawuse.sportspot.presentation.ui.components.labelRes
 import com.mirawuse.sportspot.presentation.ui.map.OsmMap
 import com.mirawuse.sportspot.presentation.ui.map.previewMapSpots
@@ -137,9 +137,9 @@ internal fun HomeSpotCard(
             modifier = Modifier.padding(horizontal = SportSpotSpacing.sm, vertical = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.md),
         ) {
-            Image(
-                painter = painterResource(R.drawable.home_court),
-                contentDescription = null,
+            SpotPhotoImage(
+                spot = spot,
+                illustration = R.drawable.home_court,
                 modifier = Modifier.size(width = 104.dp, height = 83.dp).clip(MaterialTheme.shapes.medium),
             )
             Column(
