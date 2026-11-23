@@ -3,6 +3,8 @@ package com.mirawuse.sportspot.domain.usecase.favorite
 
 import com.mirawuse.sportspot.domain.model.auth.AuthState
 import com.mirawuse.sportspot.domain.model.favorite.Favorite
+import com.mirawuse.sportspot.domain.model.favorite.FavoriteList
+import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.model.user.UserProfile
 import com.mirawuse.sportspot.domain.model.user.UserRole
@@ -32,7 +34,7 @@ class GetFavoritesUseCaseTest {
             val result = useCase()
 
             assertEquals(
-                DomainResult.Success(listOf(favorite)),
+                DomainResult.Success(FavoriteList(listOf(favorite))),
                 result,
             )
             assertEquals(1, repository.getFavoritesCalls)
@@ -47,7 +49,7 @@ class GetFavoritesUseCaseTest {
             val result = useCase()
 
             assertEquals(
-                DomainResult.Success(listOf(favorite)),
+                DomainResult.Success(FavoriteList(listOf(favorite))),
                 result,
             )
             assertEquals(1, repository.getFavoritesCalls)
@@ -62,7 +64,7 @@ class GetFavoritesUseCaseTest {
             val result = useCase()
 
             assertEquals(
-                DomainResult.Success(emptyList<Favorite>()),
+                DomainResult.Success(FavoriteList(emptyList())),
                 result,
             )
             assertEquals(1, repository.getFavoritesCalls)
@@ -145,18 +147,27 @@ class GetFavoritesUseCaseTest {
     ) : FavoriteRepository {
         var getFavoritesCalls = 0
 
-        override suspend fun getFavorites(): List<Favorite> {
+        override suspend fun getFavorites(userId: String): FavoriteList {
             getFavoritesCalls++
             failure?.let { throw it }
-            return favorites
+            return FavoriteList(favorites)
         }
 
-        override suspend fun addFavorite(spotId: SpotId): Favorite = error("Метод не используется в тесте")
+        override suspend fun addFavorite(
+            userId: String,
+            spot: Spot,
+        ): Favorite = error("Метод не используется в тесте")
 
-        override suspend fun removeFavorite(spotId: SpotId) {
+        override suspend fun removeFavorite(
+            userId: String,
+            spotId: SpotId,
+        ) {
             error("Метод не используется в тесте")
         }
 
-        override suspend fun isFavorite(spotId: SpotId): Boolean = error("Метод не используется в тесте")
+        override suspend fun isFavorite(
+            userId: String,
+            spotId: SpotId,
+        ): Boolean = error("Метод не используется в тесте")
     }
 }

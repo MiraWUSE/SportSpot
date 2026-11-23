@@ -134,6 +134,7 @@ class AuthRepositoryTest {
             assertNull(repository.currentAccessToken())
             assertEquals("refresh-one", store.value?.refreshToken)
             online = true
+            store.clock += 2_000L
             enqueue("""{"error_code":"refresh_token_not_found"}""", 400)
             assertEquals(AuthState.Guest, repository.getAuthState())
             assertNull(store.value)

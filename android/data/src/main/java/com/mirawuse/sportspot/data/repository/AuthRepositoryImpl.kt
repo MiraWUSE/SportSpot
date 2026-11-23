@@ -42,8 +42,46 @@ internal class AuthRepositoryImpl
         @Volatile
         private var session: AuthSession? = null
         private var restored = false
+        private var accountGeneration = 0L
+        private var refreshFailure: Pair<Long, AuthFailure>? = null
 
         fun currentAccessToken(): String? = session?.takeIf { it.expiresAtMillis > store.nowMillis() }?.accessToken
+
+        fun ownsSession(userId: String): Boolean = session?.profile?.id == userId
+
+        suspend fun <T> withAccount(
+            userId: String,
+            request: suspend (RequestSession) -> T,
+        ): T =
+            withContext(Dispatchers.IO) {
+                val start =
+                    mutex.withLock {
+                        restore()
+                        val current = requireAccount(userId)
+                        AccountRequest(accountGeneration, refreshIfNeeded(current).accessToken)
+                    }
+                val result =
+                    try {
+                        request(RequestSession(start.token))
+                    } catch (error: NetworkException) {
+                        if ((error.error as? NetworkError.Http)?.status != 401) throw error
+                        val token =
+                            mutex.withLock {
+                                val current = requireAccount(userId, start.generation)
+                                if (current.accessToken != start.token) current.accessToken else refresh(current).accessToken
+                            }
+                        request(RequestSession(token))
+                    }
+                mutex.withLock { requireAccount(userId, start.generation) }
+                result
+            }
+
+        private fun requireAccount(
+            userId: String,
+            generation: Long = accountGeneration,
+        ): AuthSession =
+            session?.takeIf { it.profile.id == userId && generation == accountGeneration }
+                ?: throw AuthException(AuthFailure.SESSION_EXPIRED)
 
         override suspend fun getAuthState(): AuthState =
             withContext(Dispatchers.IO) {
@@ -146,6 +184,9 @@ internal class AuthRepositoryImpl
             if (current.expiresAtMillis - store.nowMillis() > REFRESH_MARGIN_MILLIS) current else refresh(current)
 
         private suspend fun refresh(current: AuthSession): AuthSession {
+            refreshFailure?.let { (retryAt, reason) ->
+                if (store.nowMillis() < retryAt) throw AuthException(reason)
+            }
             val response =
                 try {
                     network.execute {
@@ -158,28 +199,39 @@ internal class AuthRepositoryImpl
                         save(null)
                         throw AuthException(AuthFailure.SESSION_EXPIRED)
                     }
-                    throw AuthException(error.error.authFailure())
+                    val reason = error.error.authFailure()
+                    // Coalesce failures as well as success when several protected calls arrive together.
+                    refreshFailure = (store.nowMillis() + REFRESH_BACKOFF_MILLIS) to reason
+                    throw AuthException(reason)
                 }
             val uid = canonicalUid(response.user?.id)
             if (uid != current.profile.id) unavailable()
             val profile = current.profile.copy(email = response.user?.email?.takeIf { it.isNotBlank() } ?: unavailable())
             return AuthSession(validToken(response.accessToken), validToken(response.refreshToken), expiresAt(response), profile)
-                .also(::save)
+                .also { save(it, replaceAccount = false) }
         }
 
-        private fun publish(session: AuthSession?) {
+        private fun publish(
+            session: AuthSession?,
+            replaceAccount: Boolean = true,
+        ) {
+            if (replaceAccount) accountGeneration++
+            refreshFailure = null
             this.session = session
             mutableState.value = session?.let { AuthState.Authenticated(it.profile) } ?: AuthState.Guest
         }
 
-        private fun save(session: AuthSession?) {
+        private fun save(
+            session: AuthSession?,
+            replaceAccount: Boolean = true,
+        ) {
             try {
                 store.write(session)
             } catch (_: Exception) {
                 if (session == null) publish(null)
                 unavailable()
             }
-            publish(session)
+            publish(session, replaceAccount)
         }
 
         private suspend fun <T> authCall(block: suspend () -> T): T =
@@ -216,8 +268,14 @@ internal class AuthRepositoryImpl
 
         private fun unavailable(): Nothing = throw AuthException(AuthFailure.UNAVAILABLE)
 
+        private class AccountRequest(
+            val generation: Long,
+            val token: String,
+        )
+
         private companion object {
             const val REFRESH_MARGIN_MILLIS = 30_000
+            const val REFRESH_BACKOFF_MILLIS = 2_000
             val INVALID_SESSIONS = setOf("REFRESH_TOKEN_NOT_FOUND", "REFRESH_TOKEN_ALREADY_USED", "SESSION_NOT_FOUND", "SESSION_EXPIRED")
         }
     }
