@@ -12,4 +12,14 @@ data class SpotColumns(
     val longitude: Double,
     val surface: String?,
     val lighting: Boolean?,
+    @ColumnInfo(name = "photo_url")
+    val photoUrl: String? = null,
+    @ColumnInfo(name = "photo_source_url")
+    val photoSourceUrl: String? = null,
+    @ColumnInfo(name = "photo_author")
+    val photoAuthor: String? = null,
+    @ColumnInfo(name = "photo_license")
+    val photoLicense: String? = null,
+    @ColumnInfo(name = "photo_license_url")
+    val photoLicenseUrl: String? = null,
 )

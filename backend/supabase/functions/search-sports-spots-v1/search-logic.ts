@@ -33,6 +33,14 @@ export function query(
     ';);out center 100;';
 }
 
+export interface SpotPhoto {
+  url: string;
+  source_url: string;
+  author: string;
+  license: string;
+  license_url: string;
+}
+
 export interface OSMSpot {
   id: string;
   source: "osm";
@@ -46,6 +54,7 @@ export interface OSMSpot {
   surface: string | null;
   lighting: boolean | null;
   equipment: string | null;
+  photo?: SpotPhoto;
 }
 
 export function convert(value: unknown): OSMSpot | null {

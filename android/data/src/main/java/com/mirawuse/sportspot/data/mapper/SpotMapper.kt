@@ -37,6 +37,7 @@ fun SpotDto.toDomain(): Spot {
         location = GeoPoint(lat, lon),
         surface = surface,
         lighting = lighting,
+        photo = if (source == "osm") photo.toSpotPhoto() else null,
     )
 }
 

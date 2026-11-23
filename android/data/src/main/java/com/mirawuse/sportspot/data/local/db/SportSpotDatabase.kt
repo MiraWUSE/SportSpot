@@ -15,7 +15,7 @@ import com.mirawuse.sportspot.data.local.entity.SearchSnapshotEntity
         SearchSnapshotEntity::class,
         CachedSearchSpotEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class SportSpotDatabase : RoomDatabase() {

@@ -17,6 +17,7 @@ import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
+import com.mirawuse.sportspot.domain.model.spot.SpotPhoto
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -68,7 +69,7 @@ class SportSpotMigrationTest {
     fun `migration from exported version one preserves cache data and accepts new timestamps`() =
         runBlocking {
             val context = RuntimeEnvironment.getApplication().withDatabaseDirectory(folder.root)
-            createVersionOneDatabase(context)
+            createOldDatabase(context, version = 1)
 
             val database = LocalStorageModule.provideDatabase(context)
             try {
@@ -89,7 +90,7 @@ class SportSpotMigrationTest {
                 assertEquals(searchResults, dao.searchRows(POPULATED_QUERY))
                 assertEquals(SearchSnapshotEntity(EMPTY_QUERY, 0L), dao.searchSnapshot(EMPTY_QUERY))
                 assertTrue(dao.searchRows(EMPTY_QUERY).isEmpty())
-                assertEquals(2, database.openHelper.readableDatabase.version)
+                assertEquals(3, database.openHelper.readableDatabase.version)
 
                 val cache = RoomSpotCache(database)
                 val domainNode = node.expectedSpot(SpotId("osm", "node:12345"), SportType.BASKETBALL)
@@ -121,14 +122,70 @@ class SportSpotMigrationTest {
             }
         }
 
-    private fun createVersionOneDatabase(context: Context) {
-        val schema = loadVersionOneSchema()
+    @Test
+    fun `migration from version two preserves timestamps and order and caches photo metadata`() =
+        runBlocking {
+            val context = RuntimeEnvironment.getApplication().withDatabaseDirectory(folder.root)
+            createOldDatabase(context, version = 2)
+            val database = LocalStorageModule.provideDatabase(context)
+            try {
+                val cache = RoomSpotCache(database)
+                val first = way.expectedSpot(SpotId("osm", "way:456"), SportType.TENNIS)
+                val second = node.expectedSpot(SpotId("osm", "node:12345"), SportType.BASKETBALL)
+                val saved = community.expectedSpot(SpotId("community", "33333333-3333-4333-8333-333333333333"), SportType.WORKOUT)
+                assertEquals(3, database.openHelper.readableDatabase.version)
+                assertEquals(CacheSnapshot(listOf(second, saved), 1200L), cache.readSaved())
+                assertEquals(CacheSnapshot(first, 1100L), cache.readSavedSpot(way.canonicalId))
+                assertEquals(CacheSnapshot(listOf(first, second), 1300L), cache.readSearch(POPULATED_QUERY))
+                assertEquals(CacheSnapshot(emptyList<Spot>(), 1300L), cache.readSearch(EMPTY_QUERY))
+
+                val photo =
+                    SpotPhoto(
+                        "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a1/Test.jpg/500px-Test.jpg",
+                        "https://commons.wikimedia.org/wiki/File:Test.jpg",
+                        "Test Author",
+                        "CC BY 4.0",
+                        "https://creativecommons.org/licenses/by/4.0/",
+                    )
+                cache.replaceSearch(NEW_QUERY, listOf(first.copy(photo = photo), second), 1500L)
+            } finally {
+                database.close()
+            }
+            val reopened = LocalStorageModule.provideDatabase(context)
+            try {
+                val cached = requireNotNull(RoomSpotCache(reopened).readSearch(NEW_QUERY))
+                assertEquals(1500L, cached.fetchedAtEpochMillis)
+                assertEquals(
+                    "Test Author",
+                    cached.value
+                        .first()
+                        .photo
+                        ?.author,
+                )
+                assertEquals(
+                    "https://creativecommons.org/licenses/by/4.0/",
+                    cached.value
+                        .first()
+                        .photo
+                        ?.licenseUrl,
+                )
+                assertEquals(null, cached.value[1].photo)
+            } finally {
+                reopened.close()
+            }
+        }
+
+    private fun createOldDatabase(
+        context: Context,
+        version: Int,
+    ) {
+        val schema = loadSchema(version)
         val configuration =
             SupportSQLiteOpenHelper.Configuration
                 .builder(context)
                 .name(DATABASE_NAME)
                 .callback(
-                    object : SupportSQLiteOpenHelper.Callback(1) {
+                    object : SupportSQLiteOpenHelper.Callback(version) {
                         override fun onConfigure(db: SupportSQLiteDatabase) {
                             db.setForeignKeyConstraintsEnabled(true)
                         }
@@ -142,14 +199,14 @@ class SportSpotMigrationTest {
                             oldVersion: Int,
                             newVersion: Int,
                         ) {
-                            error("The fixture must be created at schema version 1")
+                            error("The fixture must be created at schema version $version")
                         }
                     },
                 ).build()
 
         FrameworkSQLiteOpenHelperFactory().create(configuration).use { helper ->
             val db = helper.writableDatabase
-            assertEquals(1, db.version)
+            assertEquals(version, db.version)
             insertSavedSpot(db, community, position = 1)
             insertSavedSpot(db, node, position = 0)
             insertSavedSpot(db, way, position = null)
@@ -159,17 +216,22 @@ class SportSpotMigrationTest {
             }
             insertSearchSpot(db, POPULATED_QUERY, position = 1, spot = node)
             insertSearchSpot(db, POPULATED_QUERY, position = 0, spot = way)
+            if (version == 2) {
+                db.execSQL("UPDATE saved_spots SET fetched_at_epoch_millis = 1100")
+                db.execSQL("UPDATE saved_spot_snapshot SET fetched_at_epoch_millis = 1200")
+                db.execSQL("UPDATE search_snapshots SET fetched_at_epoch_millis = 1300")
+            }
         }
     }
 
-    private fun loadVersionOneSchema(): JsonObject {
+    private fun loadSchema(version: Int): JsonObject {
         val directory = requireNotNull(System.getProperty("sportspot.room.schemas"))
-        val schemaFile = File(directory, "${SportSpotDatabase::class.java.name}/1.json")
+        val schemaFile = File(directory, "${SportSpotDatabase::class.java.name}/$version.json")
         val schema =
             schemaFile
                 .bufferedReader()
                 .use { JsonParser.parseReader(it).asJsonObject.getAsJsonObject("database") }
-        assertEquals(1, schema.get("version").asInt)
+        assertEquals(version, schema.get("version").asInt)
         return schema
     }
 

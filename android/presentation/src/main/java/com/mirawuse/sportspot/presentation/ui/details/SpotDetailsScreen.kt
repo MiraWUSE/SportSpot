@@ -1,6 +1,6 @@
 package com.mirawuse.sportspot.presentation.ui.details
 
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,8 +18,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import com.mirawuse.sportspot.domain.model.spot.Spot
@@ -27,6 +29,7 @@ import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButtonVariant
+import com.mirawuse.sportspot.presentation.ui.components.SpotPhotoImage
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchLoading
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchMessage
 import com.mirawuse.sportspot.presentation.ui.components.labelRes
@@ -85,11 +88,36 @@ private fun DetailsContent(
     onShowMap: (SpotId) -> Unit,
     onOpenReviews: (SpotId) -> Unit,
 ) {
-    Image(
-        painter = painterResource(R.drawable.spot_court_illustration),
-        contentDescription = null,
-        modifier = Modifier.fillMaxWidth().aspectRatio(347f / 218f),
-    )
+    val uriHandler = LocalUriHandler.current
+    SpotPhotoImage(
+        spot = spot,
+        illustration = R.drawable.spot_court_illustration,
+        modifier = Modifier.fillMaxWidth().aspectRatio(347f / 218f).clip(MaterialTheme.shapes.large),
+    ) { photo ->
+        Text(
+            text = stringResource(R.string.spot_photo_credit, photo.author, photo.license),
+            modifier =
+                Modifier
+                    .clickable(role = Role.Button) { runCatching { uriHandler.openUri(photo.licenseUrl) } }
+                    .padding(top = SportSpotSpacing.sm),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Text(
+            text = stringResource(R.string.spot_photo_crop_notice),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Text(
+            text = stringResource(R.string.spot_photo_source),
+            modifier =
+                Modifier
+                    .clickable(role = Role.Button) { runCatching { uriHandler.openUri(photo.sourceUrl) } }
+                    .padding(vertical = SportSpotSpacing.sm),
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.labelMedium,
+        )
+    }
     Column(verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs)) {
         Text(text = spot.name, style = MaterialTheme.typography.headlineSmall)
         Text(

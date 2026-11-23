@@ -1563,6 +1563,32 @@ components:
         equipment:
           type: string
           nullable: true
+        photo:
+          $ref: '#/components/schemas/SearchSpotPhoto'
+    SearchSpotPhoto:
+      type: object
+      description: Проверенное фото Wikimedia Commons из тега этой площадки. Если фото не подтверждено, поле photo отсутствует.
+      required: [url, source_url, author, license, license_url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: HTTPS-миниатюра от thumb.wikimedia.org или upload.wikimedia.org.
+        source_url:
+          type: string
+          format: uri
+          description: Страница конкретного файла на Wikimedia Commons.
+        author:
+          type: string
+          maxLength: 300
+          description: Имя автора из метаданных Commons, обычный текст.
+        license:
+          type: string
+          enum: [CC BY 4.0, CC BY-SA 4.0]
+        license_url:
+          type: string
+          format: uri
+          description: Каноническая HTTPS-ссылка на лицензию Creative Commons.
     SpotSearchResult:
       type: object
       required:
