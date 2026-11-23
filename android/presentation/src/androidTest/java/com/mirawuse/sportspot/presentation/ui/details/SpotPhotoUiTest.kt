@@ -60,6 +60,7 @@ class SpotPhotoUiTest {
         )
     private val photoLabel = "Фото площадки «Тестовый корт»"
     private val credit = "Фото: Test Author · CC BY 4.0"
+    private val cropNotice = "Кадрировано для отображения"
     private val source = "Источник фото на Wikimedia Commons"
     private val requests = AtomicInteger()
     private var loader: ImageLoader? = null
@@ -74,9 +75,10 @@ class SpotPhotoUiTest {
     fun loadedPhotoIsReusedOnDetailsAndAttributionLinksUseVerifiedUrls() {
         installFixture(200)
         val details = mutableStateOf(false)
+        val darkTheme = mutableStateOf(false)
         val opened = mutableListOf<String>()
         compose.setContent {
-            SportSpotTheme {
+            SportSpotTheme(darkTheme = darkTheme.value) {
                 CompositionLocalProvider(
                     LocalUriHandler provides
                         object : UriHandler {
@@ -96,6 +98,7 @@ class SpotPhotoUiTest {
         waitForPhoto()
         compose.onNodeWithText(spot.name).performClick()
         waitForPhoto()
+        compose.onNodeWithText(cropNotice).performScrollTo().assertIsDisplayed()
         compose
             .onNodeWithText(credit)
             .performScrollTo()
@@ -109,7 +112,9 @@ class SpotPhotoUiTest {
         compose.runOnIdle {
             assertEquals(listOf(spot.photo?.licenseUrl, spot.photo?.sourceUrl), opened)
             assertEquals(1, requests.get())
+            darkTheme.value = true
         }
+        compose.onNodeWithText(cropNotice).performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -123,12 +128,14 @@ class SpotPhotoUiTest {
         }
         compose.onNodeWithText(spot.name).assertIsDisplayed()
         compose.onNodeWithText(credit).assertDoesNotExist()
+        compose.onNodeWithText(cropNotice).assertDoesNotExist()
         assertEquals(0, requests.get())
         compose.runOnIdle { current.value = spot }
         compose.waitUntil(10_000) { requests.get() == 1 }
         compose.onNodeWithText(spot.name).assertIsDisplayed()
         compose.onNodeWithContentDescription(photoLabel).assertDoesNotExist()
         compose.onNodeWithText(source).assertDoesNotExist()
+        compose.onNodeWithText(cropNotice).assertDoesNotExist()
         compose.onNodeWithText("Показать на карте").performScrollTo().assertIsDisplayed()
     }
 

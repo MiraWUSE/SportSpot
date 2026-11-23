@@ -104,6 +104,11 @@ private fun DetailsContent(
             style = MaterialTheme.typography.bodySmall,
         )
         Text(
+            text = stringResource(R.string.spot_photo_crop_notice),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Text(
             text = stringResource(R.string.spot_photo_source),
             modifier =
                 Modifier
