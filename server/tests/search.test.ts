@@ -132,6 +132,27 @@ Deno.test("convert: определяет fitness по leisure=fitness_station", 
     tags: { leisure: "fitness_station" },
   });
   assert.equal(result?.sport_type, "fitness");
+  assert.equal(result?.name, "Воркаут-площадка");
+});
+
+Deno.test("convert: использует нейтральное описание при конфликте fitness_station и sport", () => {
+  const item = { type: "node", id: 9, lat: 56, lon: 44 };
+  for (const sport of ["soccer", "gymnastics", "fitness;soccer"]) {
+    const result = convert({
+      ...item,
+      tags: { leisure: "fitness_station", sport },
+    });
+    assert.equal(result?.sport_type, sport);
+    assert.equal(result?.name, "Спортивная площадка");
+  }
+  assert.equal(convert({
+    ...item,
+    tags: { leisure: "fitness_station", sport: "fitness" },
+  })?.name, "Воркаут-площадка");
+  assert.equal(convert({
+    ...item,
+    tags: { leisure: "fitness_station", sport: "soccer", name: "Корт «Олимп»" },
+  })?.name, "Корт «Олимп»");
 });
 
 Deno.test("convert: отклоняет некорректные исходные значения", () => {
@@ -180,10 +201,6 @@ Deno.test("convert: сохраняет собственное имя и испо
   for (const [sport, name] of sports) {
     assert.equal(convert({ ...item, tags: { name: "  ", sport } })?.name, name);
   }
-  assert.equal(convert({
-    ...item,
-    tags: { leisure: "fitness_station", sport: "gymnastics" },
-  })?.name, "Воркаут-площадка");
 });
 
 Deno.test("convert: очищает списки видов спорта без изменения порядка известных и неизвестных значений", () => {
@@ -233,6 +250,18 @@ Deno.test("convert: использует адрес только из тегов
   assert.equal(missing?.surface, null);
   assert.equal(missing?.equipment, null);
   assert.equal(missing?.lighting, null);
+});
+
+Deno.test("convert: адрес требует улицу или место даже при указанном номере дома", () => {
+  const item = { type: "node", id: 9, lat: 56, lon: 44 };
+  const address = (tags: Record<string, string>) => convert({ ...item, tags })?.address;
+
+  assert.equal(address({ "addr:housenumber": "12" }), null);
+  assert.equal(address({ "addr:street": " ", "addr:place": " ", "addr:housenumber": "12" }), null);
+  assert.equal(address({ "addr:street": "Лесная", "addr:place": "Остров", "addr:housenumber": "12" }), "Лесная, 12");
+  assert.equal(address({ "addr:place": "Остров", "addr:housenumber": "12" }), "Остров, 12");
+  assert.equal(address({ "addr:street": "Лесная" }), "Лесная");
+  assert.equal(address({ "addr:place": "Остров" }), "Остров");
 });
 
 Deno.test("makeCacheKey: выдаёт версионный и повторяемый ключ", () => {

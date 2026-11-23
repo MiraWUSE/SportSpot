@@ -77,8 +77,10 @@ function readSports(tag: unknown): string[] {
 }
 
 function describeSpot(sports: string[], fitnessStation: boolean): string {
+  if (fitnessStation && (sports.length !== 1 || sports[0] !== "fitness")) {
+    return "Спортивная площадка";
+  }
   if (sports.length > 1) return "Многофункциональная спортивная площадка";
-  if (fitnessStation) return "Воркаут-площадка";
   return fallbackNames.get(sports[0]) ?? "Спортивная площадка";
 }
 
@@ -118,6 +120,7 @@ export function convert(value: unknown): OSMSpot | null {
   const sports = readSports(tags.sport);
   if (sports.length === 0 && fitnessStation) sports.push("fitness");
   const streetOrPlace = getTag("addr:street") ?? getTag("addr:place");
+  const houseNumber = getTag("addr:housenumber");
 
   return {
     id: `osm:${osmType}:${osmId}`,
@@ -128,8 +131,9 @@ export function convert(value: unknown): OSMSpot | null {
     sport_type: sports.join(";") || "unspecified",
     latitude: lat,
     longitude: lon,
-    address: [streetOrPlace, getTag("addr:housenumber")]
-      .filter(Boolean).join(", ") || null,
+    address: streetOrPlace && houseNumber
+      ? `${streetOrPlace}, ${houseNumber}`
+      : streetOrPlace,
     surface: getTag("surface"),
     lighting: tags.lit === "yes" ? true : tags.lit === "no" ? false : null,
     equipment: getTag("fitness_station"),
