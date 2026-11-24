@@ -144,10 +144,15 @@ class SpotPhotoUiTest {
         compose.onNodeWithText(cropNotice).assertDoesNotExist()
         compose.onNodeWithText("Адрес не указан").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Вид спорта не указан").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Покрытие: не указано").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Освещение: не указано").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Оборудование: не указано").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Характеристики не указаны").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Покрытие:", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Освещение:", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Оборудование:", substring = true).assertDoesNotExist()
         assertEquals(0, requests.get())
+        compose.runOnIdle { current.value = current.value.copy(lighting = false, equipment = " ;  ; ") }
+        compose.onNodeWithText("Освещение: нет").assertIsDisplayed()
+        compose.onNodeWithText("Характеристики не указаны").assertDoesNotExist()
+        compose.onNodeWithText("Оборудование:", substring = true).assertDoesNotExist()
         compose.runOnIdle { current.value = current.value.copy(photo = spot.photo) }
         compose.waitUntil(10_000) { requests.get() == 1 }
         compose.onNodeWithText(spot.name).performScrollTo().assertIsDisplayed()

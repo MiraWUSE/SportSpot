@@ -41,6 +41,7 @@ import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.SpotCardSummary
 import com.mirawuse.sportspot.presentation.ui.components.SpotPhotoImage
+import com.mirawuse.sportspot.presentation.ui.components.spotCardContainerColor
 import com.mirawuse.sportspot.presentation.ui.map.OsmMap
 import com.mirawuse.sportspot.presentation.ui.map.previewMapSpots
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotPillShape
@@ -131,11 +132,10 @@ internal fun HomeSpotCard(
     showPhotoLicense: Boolean = false,
 ) {
     val colors = MaterialTheme.colorScheme
-    val cardColor = if (colors.background.luminance() < 0.5f) colors.surfaceVariant else colors.surface
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = cardColor, contentColor = colors.onSurface),
+        colors = CardDefaults.cardColors(containerColor = spotCardContainerColor(), contentColor = colors.onSurface),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(SportSpotSpacing.sm),
