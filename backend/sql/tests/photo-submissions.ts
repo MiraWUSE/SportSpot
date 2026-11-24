@@ -338,6 +338,20 @@ try {
       (await action("image", { id: photo })).status,
       decision === "approved" ? 200 : 404,
     );
+    if (decision === "approved") {
+      const community = target("spot", "community:" + proposal);
+      const additional = crypto.randomUUID();
+      equal((await upload(bob, community, additional)).status, 201);
+      deepEqual(await (await action("gallery", community)).json(), [photo]);
+      equal(
+        (await action("approve", { id: additional }, moderator)).status,
+        200,
+      );
+      const gallery: string[] = await (await action("gallery", community))
+        .json();
+      deepEqual(gallery.sort(), [photo, additional].sort());
+      equal((await action("remove", { id: additional }, bob)).status, 200);
+    }
   }
 
   const rejected = crypto.randomUUID();
@@ -361,14 +375,41 @@ try {
     200,
   );
   equal((await action("preview", { id: rejected }, alice)).status, 403);
-  equal((await action("cleanup", {})).status, 403);
-  await pg.exec("update app_private.photo_cleanup set available_at=now()");
-  const cleanup = await handler(
-    new Request(origin + "/?action=cleanup", {
-      method: "POST",
-      headers: { "x-photo-cleanup-token": cleanupToken },
-    }),
+  const own = await (await action("mine", spotTarget, alice)).json();
+  equal(own[0].rejection_reason, "No consent");
+  deepEqual(await (await action("mine", spotTarget, bob)).json(), []);
+
+  // Simulate an interrupted upload that left a private Storage object.
+  const stale = crypto.randomUUID();
+  const reserved = await pg.query<{ key: string }>(
+    "select photo_command('reserve',$1,$2,'spot',$3,repeat('0',64))->>'object_key' as key",
+    [alice, stale, spot],
   );
+  const stalePath = "sportspot-photo-pending/" + reserved.rows[0].key;
+  files.set(stalePath, image);
+  await pg.query(
+    "update public.photo_submissions set created_at=now()-interval '2 hours' where id=$1",
+    [stale],
+  );
+  equal((await action("preview", { id: stale }, alice)).status, 403);
+  equal((await action("cleanup", {})).status, 403);
+  const clean = () =>
+    handler(
+      new Request(origin + "/?action=cleanup", {
+        method: "POST",
+        headers: { "x-photo-cleanup-token": cleanupToken },
+      }),
+    );
+  equal((await clean()).status, 200);
+  equal(
+    (await pg.query("select id from public.photo_submissions where id=$1", [
+      stale,
+    ])).rows.length,
+    0,
+  );
+  ok(files.has(stalePath));
+  await pg.exec("update app_private.photo_cleanup set available_at=now()");
+  const cleanup = await clean();
   equal(cleanup.status, 200);
   equal(
     (await pg.query("select * from app_private.photo_cleanup")).rows.length,

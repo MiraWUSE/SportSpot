@@ -2,13 +2,24 @@ package com.mirawuse.sportspot.data.remote
 
 import com.mirawuse.sportspot.data.remote.api.UserPhotoApi
 import com.mirawuse.sportspot.data.remote.error.NetworkError
+import com.mirawuse.sportspot.data.repository.ALICE_ID
+import com.mirawuse.sportspot.data.repository.ContentHttpFixture
+import com.mirawuse.sportspot.data.repository.ITEM_ID
+import com.mirawuse.sportspot.data.repository.UserPhotoRepositoryImpl
 import com.mirawuse.sportspot.data.repository.toPhotoError
+import com.mirawuse.sportspot.domain.model.photo.PhotoAttachment
 import com.mirawuse.sportspot.domain.model.photo.PhotoError
+import com.mirawuse.sportspot.domain.model.photo.PhotoException
+import com.mirawuse.sportspot.domain.model.photo.PhotoStatus
+import com.mirawuse.sportspot.domain.model.photo.PhotoTarget
+import com.mirawuse.sportspot.domain.model.photo.PhotoTargetType
 import kotlinx.coroutines.runBlocking
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okio.Buffer
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Rule
@@ -47,6 +58,40 @@ class UserPhotoApiTest {
             assertNull(server.takeRequest().getHeader("Authorization"))
             client.connectionPool.evictAll()
             client.dispatcher.executorService.shutdown()
+        }
+
+    @Test
+    fun repositoryReadsPendingAndSeparatesPublicDownloadsFromPrivateUploads() =
+        runBlocking {
+            val fixture = ContentHttpFixture(server)
+            val api = fixture.retrofit.create(UserPhotoApi::class.java)
+            val photos = UserPhotoRepositoryImpl(api, fixture.auth, fixture.network)
+            val target = PhotoTarget(PhotoTargetType.SPOT, "osm:way:123")
+            val bytes = byteArrayOf(1, 2, 3)
+            fixture.enqueue(
+                """{"id":"$ITEM_ID","owner_id":"$ALICE_ID","target_type":"spot","target_id":"osm:way:123","status":"pending"}""",
+                201,
+            )
+            val pending = photos.upload(ALICE_ID, target, PhotoAttachment(ITEM_ID, bytes))
+            assertEquals(PhotoStatus.PENDING, pending.status)
+            assertEquals(target, pending.target)
+            assertArrayEquals(bytes, fixture.next().body.readByteArray())
+
+            server.enqueue(MockResponse().setHeader("Content-Type", "image/jpeg").setBody(Buffer().write(bytes)))
+            assertArrayEquals(bytes, photos.image(ITEM_ID))
+            val image = fixture.next()
+            assertNull(image.getHeader("Authorization"))
+            assertEquals("image", image.requestUrl?.queryParameter("action"))
+
+            fixture.enqueue("""{"code":"PHOTO_LIMIT"}""", 409)
+            val limit = runCatching { photos.upload(ALICE_ID, target, PhotoAttachment(ITEM_ID, bytes)) }.exceptionOrNull()
+            assertEquals(PhotoError.LIMIT, (limit as? PhotoException)?.error)
+            fixture.next()
+
+            fixture.online = false
+            val offline = runCatching { photos.image(ITEM_ID) }.exceptionOrNull()
+            assertEquals(PhotoError.OFFLINE, (offline as? PhotoException)?.error)
+            assertEquals(3, server.requestCount)
         }
 
     @Test
