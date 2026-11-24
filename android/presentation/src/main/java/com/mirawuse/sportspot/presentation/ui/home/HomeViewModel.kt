@@ -1,11 +1,14 @@
 package com.mirawuse.sportspot.presentation.ui.home
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mirawuse.sportspot.domain.model.location.GeoPoint
+import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.repository.DeviceLocationProvider
 import com.mirawuse.sportspot.domain.usecase.spot.SearchNearbySpotsUseCase
 import com.mirawuse.sportspot.presentation.R
+import com.mirawuse.sportspot.presentation.ui.search.SearchFilterState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -19,6 +22,8 @@ import javax.inject.Inject
 
 internal val spotSearchCenter = GeoPoint(latitude = 56.3269, longitude = 44.0059)
 internal const val SPOT_SEARCH_RADIUS_METERS = 1000
+private const val SEARCH_QUERY_KEY = "spotSearchQuery"
+private const val SEARCH_SPORT_KEY = "spotSearchSport"
 
 @HiltViewModel
 class HomeViewModel
@@ -26,17 +31,44 @@ class HomeViewModel
     constructor(
         private val searchNearbySpots: SearchNearbySpotsUseCase,
         private val deviceLocation: DeviceLocationProvider,
+        private val savedState: SavedStateHandle = SavedStateHandle(),
     ) : ViewModel() {
         private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
         val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
         private val _location = MutableStateFlow(SearchLocationState())
         val location: StateFlow<SearchLocationState> = _location.asStateFlow()
+        private val mutableSearchFilter =
+            MutableStateFlow(
+                SearchFilterState(
+                    query = savedState.get<String>(SEARCH_QUERY_KEY).orEmpty(),
+                    sport = savedState.get<String>(SEARCH_SPORT_KEY)?.let { name -> SportType.entries.find { it.name == name } },
+                ),
+            )
+        internal val searchFilter = mutableSearchFilter.asStateFlow()
         private var searchJob: Job? = null
         private var locationJob: Job? = null
         private var locationRequest = 0
 
         init {
             loadSpots()
+        }
+
+        internal fun setSearchQuery(query: String) {
+            updateSearchFilter(mutableSearchFilter.value.copy(query = query))
+        }
+
+        internal fun setSearchSport(sport: SportType?) {
+            updateSearchFilter(mutableSearchFilter.value.copy(sport = sport))
+        }
+
+        internal fun resetSearchFilter() {
+            updateSearchFilter(SearchFilterState())
+        }
+
+        private fun updateSearchFilter(filter: SearchFilterState) {
+            savedState[SEARCH_QUERY_KEY] = filter.query
+            savedState[SEARCH_SPORT_KEY] = filter.sport?.name
+            mutableSearchFilter.value = filter
         }
 
         fun retry() {

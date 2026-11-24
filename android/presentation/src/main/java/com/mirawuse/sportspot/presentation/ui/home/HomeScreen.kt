@@ -58,6 +58,8 @@ import com.mirawuse.sportspot.presentation.ui.components.SpotSearchLoading
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchMessage
 import com.mirawuse.sportspot.presentation.ui.components.labelRes
 import com.mirawuse.sportspot.presentation.ui.components.sportLabel
+import com.mirawuse.sportspot.presentation.ui.search.SearchFilterState
+import com.mirawuse.sportspot.presentation.ui.search.filterSpots
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotPillShape
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
@@ -117,7 +119,7 @@ internal fun HomeScreen(
                     SpotSearchMessage(stringResource(R.string.home_error_title), state.message, onRetry)
                 }
             is HomeUiState.Content -> {
-                val filtered = filterHomeSpots(state.spots, query, sport) { it.sportLabel(resources::getString) }
+                val filtered = filterSpots(state.spots, SearchFilterState(query, sport)) { it.sportLabel(resources::getString) }
                 item { HomeMapPreview(filtered, location.center, onOpenMap) }
                 item {
                     Row(
@@ -303,17 +305,4 @@ private fun HomeSearchBar(
 private fun homeAccentText(): Color {
     val colors = MaterialTheme.colorScheme
     return if (colors.background.luminance() < 0.5f) colors.primary else lerp(colors.primary, colors.onBackground, 0.58f)
-}
-
-internal fun filterHomeSpots(
-    spots: List<Spot>,
-    query: String,
-    sport: SportType?,
-    sportLabel: (Spot) -> String,
-): List<Spot> {
-    val text = query.trim()
-    return spots.filter { spot ->
-        (sport == null || spot.supportsSport(sport)) &&
-            (spot.name.contains(text, ignoreCase = true) || sportLabel(spot).contains(text, ignoreCase = true))
-    }
 }
