@@ -46,8 +46,8 @@ jobs:
       - name: Check Kotlin formatting
         run: ./gradlew ktlintCheck --no-daemon
 
-      - name: Run Domain and network unit tests
-        run: ./gradlew :domain:test :data:testDebugUnitTest --no-daemon
+      - name: Run Domain, Data and Presentation unit tests
+        run: ./gradlew :domain:test :data:testDebugUnitTest :presentation:testDebugUnitTest --no-daemon
 
       - name: Build Debug APK
         run: ./gradlew :app:assembleDebug --no-daemon

@@ -27,6 +27,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
+import com.mirawuse.sportspot.presentation.ui.search.SearchFilterState
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotTheme
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -141,6 +142,10 @@ class DeviceLocationControlTest {
                         onRetry = {},
                         onOpenSpot = {},
                         onOpenMap = {},
+                        filter = SearchFilterState(),
+                        onSearchQuery = {},
+                        onSearchSport = {},
+                        onResetSearch = {},
                     )
                 }
             }
