@@ -6,14 +6,34 @@ import android.graphics.Color
 import android.media.ExifInterface
 import android.net.Uri
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import com.mirawuse.sportspot.domain.model.auth.AuthState
 import com.mirawuse.sportspot.domain.model.photo.MAX_USER_PHOTO_BYTES
 import com.mirawuse.sportspot.domain.model.photo.PhotoAttachment
@@ -29,6 +49,7 @@ import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.UserPhotoRepository
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotTheme
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -86,6 +107,87 @@ class UserPhotosUiTest {
     }
 
     @Test
+    fun proposalHasOneDisclosureForAllPhotosAndNoDisclosureWhenEmpty() {
+        val item = PhotoSubmission(id, alice, PhotoTarget.proposal(bob), PhotoStatus.PENDING, null)
+        val second = item.copy(id = alice, status = PhotoStatus.APPROVED)
+        val images = CompletableDeferred<List<PhotoSubmission>>()
+        val photos = FakePhotos(item)
+        var failed = false
+        photos.readQueue = { proposalId ->
+            when {
+                proposalId == bob -> images.await()
+                !failed -> {
+                    failed = true
+                    throw PhotoException(PhotoError.OFFLINE)
+                }
+                else -> emptyList()
+            }
+        }
+        val model = PhotosViewModel(compose.activity.applicationContext, FakeAuth(profile(alice, UserRole.MODERATOR)), photos)
+        compose.setContent {
+            SportSpotTheme(darkTheme = true) {
+                CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, 1.6f)) {
+                    Column(Modifier.width(300.dp).verticalScroll(rememberScrollState())) {
+                        Box(Modifier.testTag("with-photos")) { ProposalPhotoEvidence(alice, bob, model) }
+                        Box(Modifier.testTag("without-photos")) { ProposalPhotoEvidence(alice, alice, model) }
+                    }
+                }
+            }
+        }
+        val first = hasAnyAncestor(hasTestTag("with-photos"))
+        val other = hasAnyAncestor(hasTestTag("without-photos"))
+        val check = hasText(label(R.string.moderation_check_attachments))
+        val hide = hasText(label(R.string.photos_hide_preview))
+        val show = hasText(label(R.string.photos_show_preview))
+        compose.runOnIdle { assertEquals(emptyList<String?>(), photos.queueRequests) }
+        compose.onNode(first and check).performScrollTo().performClick()
+        val progress = SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)
+        compose.onNode(first and progress).assertIsDisplayed()
+        compose.runOnIdle { images.complete(listOf(item, second)) }
+        compose.onAllNodes(first and hide).assertCountEquals(1)
+        compose.onNode(first and hasText(label(R.string.photos_pending))).assertHasNoClickAction()
+        compose
+            .onNode(
+                first and hasText(compose.activity.getString(R.string.moderation_photo_number, 2)),
+            ).performScrollTo()
+            .assertIsDisplayed()
+        compose.onNode(first and hide).performScrollTo().performClick()
+        compose.onNode(first and show).assertIsDisplayed()
+        compose.onNode(first and hasText(label(R.string.photos_pending))).assertDoesNotExist()
+        compose.onNode(other and check).performScrollTo().performClick()
+        compose.onNode(other and hasText(label(R.string.photos_offline))).performScrollTo().assertIsDisplayed()
+        compose.onNode(other and hasText(label(R.string.home_retry))).performScrollTo().performClick()
+        compose.onNode(other and hasText(label(R.string.moderation_no_attachments))).performScrollTo().assertIsDisplayed()
+        compose.onNode(other and show).assertDoesNotExist()
+        compose.onNode(other and hide).assertDoesNotExist()
+    }
+
+    @Test
+    fun photoQueueRefreshAndDecisionsUseTheExistingPhotoIds() {
+        val first = PhotoSubmission(id, alice, target, PhotoStatus.PENDING, null)
+        val second = first.copy(id = bob)
+        val photos = FakePhotos(first)
+        photos.readQueue = { listOf(first, second).filterNot { photo -> photos.decisions.any { it.second == photo.id } } }
+        val model = PhotosViewModel(compose.activity.applicationContext, FakeAuth(profile(alice, UserRole.MODERATOR)), photos)
+        compose.setContent {
+            SportSpotTheme(darkTheme = false) {
+                Column(Modifier.verticalScroll(rememberScrollState())) { PhotoModeration(alice, model) }
+            }
+        }
+        val approve = label(R.string.moderation_approve)
+        val reject = label(R.string.moderation_reject)
+        compose.onNodeWithText(label(R.string.photos_refresh)).performClick()
+        compose.runOnIdle { assertEquals(listOf(null, null), photos.queueRequests) }
+        compose.onAllNodes(hasText(approve))[0].performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(listOf(Triple(alice, id, null)), photos.decisions) }
+        compose.onNodeWithText(reject).performScrollTo().performClick()
+        compose.onNodeWithText(label(R.string.moderation_reason)).performTextInput("Фото не относится к площадке")
+        compose.onNodeWithText(label(R.string.moderation_confirm_rejection)).performClick()
+        compose.runOnIdle { assertEquals(Triple(alice, bob, "Фото не относится к площадке"), photos.decisions.last()) }
+        compose.onNodeWithText(label(R.string.photos_queue_empty)).assertIsDisplayed()
+    }
+
+    @Test
     fun preparationResizesJpegStripsGpsAndRejectsNonImages() =
         runBlocking {
             val context = compose.activity.applicationContext
@@ -119,7 +221,10 @@ class UserPhotosUiTest {
 
     private fun label(res: Int) = compose.activity.getString(res)
 
-    private fun profile(id: String) = AuthState.Authenticated(UserProfile(id, "Tester", "tester@example.invalid", UserRole.USER))
+    private fun profile(
+        id: String,
+        role: UserRole = UserRole.USER,
+    ) = AuthState.Authenticated(UserProfile(id, "Tester", "tester@example.invalid", role))
 
     private class FakeAuth(
         initialState: AuthState,
@@ -149,6 +254,9 @@ class UserPhotosUiTest {
     ) : UserPhotoRepository {
         var approved = false
         var lastPreviewOwner: String? = "No image requested"
+        var readQueue: suspend (String?) -> List<PhotoSubmission> = { emptyList() }
+        val queueRequests = mutableListOf<String?>()
+        val decisions = mutableListOf<Triple<String, String, String?>>()
 
         override suspend fun upload(
             ownerId: String,
@@ -179,13 +287,18 @@ class UserPhotosUiTest {
         override suspend fun queue(
             moderatorId: String,
             proposalId: String?,
-        ) = emptyList<PhotoSubmission>()
+        ): List<PhotoSubmission> {
+            queueRequests.add(proposalId)
+            return readQueue(proposalId)
+        }
 
         override suspend fun decide(
             moderatorId: String,
             photoId: String,
             rejectionReason: String?,
-        ) = Unit
+        ) {
+            decisions.add(Triple(moderatorId, photoId, rejectionReason))
+        }
     }
 }
 

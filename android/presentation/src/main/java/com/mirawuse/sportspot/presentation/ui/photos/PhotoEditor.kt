@@ -12,12 +12,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,6 +40,10 @@ import com.mirawuse.sportspot.domain.model.photo.PhotoStatus
 import com.mirawuse.sportspot.domain.model.photo.PhotoTarget
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
+import com.mirawuse.sportspot.presentation.ui.components.SportSpotButtonVariant
+import com.mirawuse.sportspot.presentation.ui.components.SportSpotStatusBadge
+import com.mirawuse.sportspot.presentation.ui.components.StatusTone
+import com.mirawuse.sportspot.presentation.ui.forms.FormCard
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -72,7 +74,7 @@ internal fun PhotoEditor(
             key(attachment.id) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     PhotoBitmap(attachment.jpeg, Modifier.size(64.dp))
-                    PhotoTextButton(R.string.photos_discard, enabled = !state.busy && editable) { model.discard(owner, attachment.id) }
+                    PhotoActionButton(R.string.photos_discard, enabled = !state.busy && editable) { model.discard(owner, attachment.id) }
                 }
             }
         }
@@ -82,11 +84,11 @@ internal fun PhotoEditor(
             Text(stringResource(R.string.photos_progress, state.completed, state.total))
         }
         if (state.busy && state.total != 0 || state.preparing) {
-            PhotoTextButton(R.string.content_cancel) { model.cancel(owner) }
+            PhotoActionButton(R.string.content_cancel) { model.cancel(owner) }
         }
         state.error?.let { PhotoErrorText(it) }
         val canChoose = editable && !state.busy && state.attachments.size + attachmentsUsed < limit
-        PhotoTextButton(R.string.photos_choose, enabled = canChoose) {
+        PhotoActionButton(R.string.photos_choose, enabled = canChoose) {
             picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
         }
         if (target != null && allowUpload && state.attachments.isNotEmpty()) {
@@ -114,19 +116,21 @@ internal fun PhotoHistory(
         Text(stringResource(R.string.photos_mine), style = MaterialTheme.typography.titleMedium)
         if (history.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
         history.error?.let { PhotoErrorText(it) }
-        for (item in history.items) {
+        for ((index, item) in history.items.withIndex()) {
             key(owner, item.id) {
                 var preview by remember { mutableStateOf(false) }
-                Text(stringResource(item.status.labelRes()))
-                item.rejectionReason?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                if (item.status == PhotoStatus.PENDING || item.status == PhotoStatus.APPROVED) {
-                    PhotoTextButton(if (preview) R.string.photos_hide_preview else R.string.photos_preview) { preview = !preview }
-                    if (preview) RemotePhoto(item.id, model, owner)
+                FormCard(stringResource(R.string.moderation_photo_number, index + 1)) {
+                    PhotoStatusBadge(item.status)
+                    item.rejectionReason?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                    if (item.status == PhotoStatus.PENDING || item.status == PhotoStatus.APPROVED) {
+                        PhotoVisibilityButton(preview) { preview = !preview }
+                        if (preview) RemotePhoto(item.id, model, owner)
+                    }
+                    PhotoActionButton(R.string.photos_remove, enabled = !busy, danger = true) { model.remove(owner, target, item) }
                 }
-                PhotoTextButton(R.string.photos_remove, enabled = !busy) { model.remove(owner, target, item) }
             }
         }
-        PhotoTextButton(R.string.photos_refresh, enabled = !history.loading) { model.load(owner, target) }
+        PhotoActionButton(R.string.photos_refresh, enabled = !history.loading) { model.load(owner, target) }
     }
 }
 
@@ -157,7 +161,7 @@ internal fun RemotePhoto(
             error != null ->
                 Column {
                     PhotoErrorText(error.error)
-                    PhotoTextButton(R.string.home_retry) { attempt++ }
+                    PhotoActionButton(R.string.home_retry) { attempt++ }
                 }
             else -> Box(modifier, contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp)) }
         }
@@ -184,18 +188,32 @@ private fun PhotoBitmap(
 }
 
 @Composable
-internal fun PhotoTextButton(
+internal fun PhotoActionButton(
     label: Int,
     enabled: Boolean = true,
+    danger: Boolean = false,
+    icon: Int? = if (label == R.string.photos_refresh) R.drawable.ic_action_refresh else null,
     onClick: () -> Unit,
 ) {
-    TextButton(
+    SportSpotButton(
+        text = stringResource(label),
         onClick = onClick,
         enabled = enabled,
-        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
-    ) {
-        Text(stringResource(label))
-    }
+        icon = icon,
+        variant = if (danger) SportSpotButtonVariant.DANGER else SportSpotButtonVariant.SECONDARY,
+    )
+}
+
+@Composable
+internal fun PhotoVisibilityButton(
+    expanded: Boolean,
+    onClick: () -> Unit,
+) {
+    PhotoActionButton(
+        label = if (expanded) R.string.photos_hide_preview else R.string.photos_show_preview,
+        icon = if (expanded) R.drawable.ic_photo_hidden else R.drawable.ic_photo_visibility,
+        onClick = onClick,
+    )
 }
 
 @Composable
@@ -203,13 +221,17 @@ internal fun PhotoErrorText(error: PhotoError) {
     Text(stringResource(error.labelRes()), color = MaterialTheme.colorScheme.error)
 }
 
-internal fun PhotoStatus.labelRes(): Int =
-    when (this) {
-        PhotoStatus.UPLOADING -> R.string.photos_incomplete
-        PhotoStatus.PENDING -> R.string.photos_pending
-        PhotoStatus.APPROVED -> R.string.photos_approved
-        PhotoStatus.REJECTED -> R.string.photos_rejected
-    }
+@Composable
+internal fun PhotoStatusBadge(status: PhotoStatus) {
+    val (label, tone) =
+        when (status) {
+            PhotoStatus.UPLOADING -> R.string.photos_incomplete to StatusTone.NEUTRAL
+            PhotoStatus.PENDING -> R.string.photos_pending to StatusTone.PENDING
+            PhotoStatus.APPROVED -> R.string.photos_approved to StatusTone.APPROVED
+            PhotoStatus.REJECTED -> R.string.photos_rejected to StatusTone.REJECTED
+        }
+    SportSpotStatusBadge(stringResource(label), tone)
+}
 
 private fun PhotoError.labelRes(): Int =
     when (this) {

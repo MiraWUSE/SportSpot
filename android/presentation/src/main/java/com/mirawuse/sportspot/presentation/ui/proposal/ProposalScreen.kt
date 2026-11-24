@@ -58,7 +58,7 @@ internal fun ProposalScreen(
             }
             submission is DomainResult.Success -> {
                 FormCard(stringResource(R.string.proposal_sent)) {
-                    ProposalStatusText(submission.value)
+                    ProposalStatusBadge(submission.value.status)
                     Text(stringResource(R.string.proposal_number, submission.value.id))
                 }
                 photoAttachments(submission.value)

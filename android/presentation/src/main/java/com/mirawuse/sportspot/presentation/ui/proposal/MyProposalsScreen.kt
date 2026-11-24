@@ -12,7 +12,10 @@ import com.mirawuse.sportspot.domain.model.proposal.SpotProposal
 import com.mirawuse.sportspot.domain.result.DomainResult
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
+import com.mirawuse.sportspot.presentation.ui.components.SportSpotButtonVariant
+import com.mirawuse.sportspot.presentation.ui.components.SportSpotStatusBadge
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchLoading
+import com.mirawuse.sportspot.presentation.ui.components.StatusTone
 import com.mirawuse.sportspot.presentation.ui.forms.ContentErrorText
 import com.mirawuse.sportspot.presentation.ui.forms.FormCard
 import com.mirawuse.sportspot.presentation.ui.forms.FormScreen
@@ -43,7 +46,7 @@ internal fun MyProposalsScreen(
                 if (state.value.isEmpty()) Text(stringResource(R.string.proposals_empty))
                 state.value.forEach { proposal ->
                     FormCard(proposal.name) {
-                        ProposalStatusText(proposal)
+                        ProposalStatusBadge(proposal.status)
                         proposal.createdAt?.take(10)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                         proposal.rejectReason?.takeIf { proposal.status == ProposalStatus.REJECTED }?.let {
                             Text(stringResource(R.string.proposals_reason, it))
@@ -51,19 +54,24 @@ internal fun MyProposalsScreen(
                         photoHistory(proposal)
                     }
                 }
-                TextButton(onClick = onRetry) { Text(stringResource(R.string.content_refresh)) }
+                SportSpotButton(
+                    text = stringResource(R.string.content_refresh),
+                    onClick = onRetry,
+                    variant = SportSpotButtonVariant.SECONDARY,
+                    icon = R.drawable.ic_action_refresh,
+                )
             }
         }
     }
 }
 
 @Composable
-internal fun ProposalStatusText(proposal: SpotProposal) {
-    val label =
-        when (proposal.status) {
-            ProposalStatus.PENDING -> R.string.proposals_pending
-            ProposalStatus.APPROVED -> R.string.proposals_approved
-            ProposalStatus.REJECTED -> R.string.proposals_rejected
+internal fun ProposalStatusBadge(status: ProposalStatus) {
+    val (label, tone) =
+        when (status) {
+            ProposalStatus.PENDING -> R.string.proposals_pending to StatusTone.PENDING
+            ProposalStatus.APPROVED -> R.string.proposals_approved to StatusTone.APPROVED
+            ProposalStatus.REJECTED -> R.string.proposals_rejected to StatusTone.REJECTED
         }
-    Text(stringResource(label), style = MaterialTheme.typography.bodyMedium)
+    SportSpotStatusBadge(stringResource(label), tone)
 }

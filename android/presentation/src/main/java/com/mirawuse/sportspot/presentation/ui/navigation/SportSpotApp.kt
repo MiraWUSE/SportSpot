@@ -69,11 +69,11 @@ import com.mirawuse.sportspot.presentation.ui.map.MapScreen
 import com.mirawuse.sportspot.presentation.ui.map.MapViewModel
 import com.mirawuse.sportspot.presentation.ui.moderation.ModerationScreen
 import com.mirawuse.sportspot.presentation.ui.moderation.ModerationViewModel
+import com.mirawuse.sportspot.presentation.ui.photos.PhotoActionButton
 import com.mirawuse.sportspot.presentation.ui.photos.PhotoEditor
 import com.mirawuse.sportspot.presentation.ui.photos.PhotoGallery
 import com.mirawuse.sportspot.presentation.ui.photos.PhotoHistory
 import com.mirawuse.sportspot.presentation.ui.photos.PhotoModeration
-import com.mirawuse.sportspot.presentation.ui.photos.PhotoTextButton
 import com.mirawuse.sportspot.presentation.ui.photos.PhotosViewModel
 import com.mirawuse.sportspot.presentation.ui.photos.ProposalPhotoEvidence
 import com.mirawuse.sportspot.presentation.ui.proposal.MyProposalsScreen
@@ -370,14 +370,14 @@ fun SportSpotApp() {
                                     PhotoHistory(accountId, target, photos)
                                 }
                                 val closeLabel = if (draft.attachments.isEmpty()) R.string.photos_done else R.string.content_cancel
-                                PhotoTextButton(closeLabel, enabled = !draft.busy) {
+                                PhotoActionButton(closeLabel, enabled = !draft.busy) {
                                     photos.clearDraft(accountId)
                                     editingPhotosFor = null
                                 }
                             } else {
                                 PhotoHistory(accountId, target, photos)
                                 if (proposal.status != ProposalStatus.REJECTED) {
-                                    PhotoTextButton(R.string.photos_add, enabled = editingPhotosFor == null) {
+                                    PhotoActionButton(R.string.photos_add, enabled = editingPhotosFor == null) {
                                         editingPhotosFor = proposal.id
                                     }
                                 }

@@ -1,15 +1,23 @@
 package com.mirawuse.sportspot.presentation.ui.reviews
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import com.mirawuse.sportspot.domain.model.auth.AuthState
 import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.proposal.SpotProposal
@@ -113,22 +121,48 @@ class CommunityContentUiTest {
     }
 
     @Test
-    fun moderatorQueueIsHiddenFromRegularUserAndRejectRequiresAReason() {
+    fun moderatorQueueFitsNarrowScreenAndKeepsProposalActions() {
         val regular = UserProfile("reviewer", "Спортсмен", "reviewer@example.test", UserRole.USER)
         val auth = mutableStateOf(AuthState.Authenticated(regular))
-        val proposal = SpotProposal("proposal", "alice", "Будущий корт", SportType.TENNIS, GeoPoint(56.3, 44.0))
+        val busy = mutableStateOf(false)
+        val title = "Будущий теннисный корт рядом с городским парком"
+        val description = "Две площадки для одиночной и парной игры. Вход со стороны центральной аллеи."
+        val proposal = SpotProposal("proposal", "alice", title, SportType.TENNIS, GeoPoint(56.3, 44.0), description = description)
+        var refreshes = 0
+        var approval: String? = null
         var rejection: Pair<String, String>? = null
         compose.setContent {
             SportSpotTheme(darkTheme = false) {
-                ModerationScreen(auth.value, false, DomainResult.Success(listOf(proposal)), false, null, {}, {}, {}, { id, reason ->
-                    rejection = id to reason
-                })
+                CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, 1.6f)) {
+                    Box(Modifier.width(300.dp)) {
+                        ModerationScreen(
+                            auth = auth.value,
+                            restoring = false,
+                            pending = DomainResult.Success(listOf(proposal)),
+                            busy = busy.value,
+                            actionError = null,
+                            onBack = {},
+                            onRetry = { refreshes++ },
+                            onApprove = { approval = it },
+                            onReject = { id, reason -> rejection = id to reason },
+                        )
+                    }
+                }
             }
         }
-        compose.onNodeWithText("Будущий корт").assertDoesNotExist()
+        compose.onNodeWithText(title).assertDoesNotExist()
         compose.onNodeWithText("Раздел открыт только модератору.").assertIsDisplayed()
         compose.runOnIdle { auth.value = AuthState.Authenticated(regular.copy(role = UserRole.MODERATOR)) }
-        compose.onNodeWithText("Будущий корт").assertIsDisplayed()
+        compose.onNodeWithText(title).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Обновить").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(1, refreshes) }
+        compose.onNodeWithText(description).performScrollTo().assertIsDisplayed()
+        compose.runOnIdle { busy.value = true }
+        compose.onNodeWithText("Одобрить").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("Отклонить").performScrollTo().assertIsNotEnabled()
+        compose.runOnIdle { busy.value = false }
+        compose.onNodeWithText("Одобрить").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals("proposal", approval) }
         compose.onNodeWithText("Отклонить").performScrollTo().performClick()
         compose.onNodeWithText("Подтвердить отклонение").performScrollTo().performClick()
         compose.runOnIdle { assertNull(rejection) }

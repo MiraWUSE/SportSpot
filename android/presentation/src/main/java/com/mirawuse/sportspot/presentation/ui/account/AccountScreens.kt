@@ -195,17 +195,17 @@ internal fun ProfileScreen(
                 SportSpotButton(
                     text = stringResource(R.string.proposals_open),
                     onClick = onMyProposals,
-                    variant = SportSpotButtonVariant.OUTLINED,
+                    variant = SportSpotButtonVariant.SECONDARY,
                 )
             }
             SportSpotButton(
                 text = stringResource(R.string.proposal_title),
                 onClick = onPropose,
-                variant = SportSpotButtonVariant.OUTLINED,
+                variant = SportSpotButtonVariant.SECONDARY,
             )
         }
         if (onModeration != null) {
-            SportSpotButton(stringResource(R.string.moderation_title), onModeration, variant = SportSpotButtonVariant.OUTLINED)
+            SportSpotButton(stringResource(R.string.moderation_title), onModeration, variant = SportSpotButtonVariant.SECONDARY)
         }
         FormCard(stringResource(R.string.profile_settings)) {
             Text(stringResource(R.string.profile_theme_setting), style = MaterialTheme.typography.bodyMedium)
