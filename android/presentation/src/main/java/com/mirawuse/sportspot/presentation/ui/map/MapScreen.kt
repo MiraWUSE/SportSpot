@@ -12,7 +12,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -30,11 +32,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.mirawuse.sportspot.domain.model.location.GeoPoint
+import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
-import com.mirawuse.sportspot.presentation.ui.components.SpotSearchLoading
-import com.mirawuse.sportspot.presentation.ui.components.SpotSearchMessage
 import com.mirawuse.sportspot.presentation.ui.components.SpotSummary
 import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
@@ -48,6 +49,9 @@ internal fun MapScreen(
     onRetry: () -> Unit,
     onOpenSpot: (SpotId) -> Unit,
     onRefresh: (() -> Unit)? = null,
+    viewport: MapViewportState? = null,
+    onViewportMoveStarted: (() -> Unit)? = null,
+    onViewportIdle: ((MapViewport, MapViewport?) -> Unit)? = null,
 ) {
     var selectedSource by rememberSaveable(focus, center) { mutableStateOf(focus?.source) }
     var selectedValue by rememberSaveable(focus, center) { mutableStateOf(focus?.value) }
@@ -55,12 +59,22 @@ internal fun MapScreen(
     val source = selectedSource
     val value = selectedValue
     val selectedId = if (source != null && value != null) SpotId(source, value) else null
-    val spots = (state as? HomeUiState.Content)?.spots.orEmpty()
+    val initial = state as? HomeUiState.Content
+    val spots = viewport?.spots ?: initial?.spots.orEmpty()
     val visibleSpot = selectedMapSpot(spots, selectedId)
+    val focusedSpot = focus?.let { initial?.findSpot(it) }
+    val status = viewport?.status ?: MapSearchStatus.INITIAL
+    val loading = status == MapSearchStatus.LOADING || (status == MapSearchStatus.INITIAL && state == HomeUiState.Loading)
+    val error =
+        when {
+            status == MapSearchStatus.ERROR -> stringResource(R.string.map_search_error)
+            status == MapSearchStatus.INITIAL && state is HomeUiState.Error -> state.message
+            else -> null
+        }
+    val empty = spots.isEmpty() && (status == MapSearchStatus.READY || status == MapSearchStatus.INITIAL && state == HomeUiState.Empty)
     BoxWithConstraints(Modifier.fillMaxSize()) {
         var headingHeight by remember { mutableIntStateOf(0) }
         val headingDp = with(LocalDensity.current) { headingHeight.toDp() }
-        // Keep the entire map and attribution visible in landscape as well.
         val mapHeight =
             minOf(
                 maxWidth - SportSpotSpacing.lg * 2,
@@ -77,71 +91,96 @@ internal fun MapScreen(
                         style = MaterialTheme.typography.headlineLarge,
                         modifier = Modifier.weight(1f),
                     )
-                    if (onRefresh != null && state is HomeUiState.Content) {
-                        TextButton(onClick = onRefresh) { Text(stringResource(R.string.content_refresh)) }
+                    if (onRefresh != null) {
+                        TextButton(onClick = onRefresh, enabled = !loading && status != MapSearchStatus.ZOOM_IN) {
+                            Text(stringResource(R.string.content_refresh))
+                        }
                     }
                 }
                 Text(locationLabel, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-                if (focus != null && selectedId == focus && state is HomeUiState.Content && state.findSpot(focus) == null) {
-                    Text(stringResource(R.string.map_focus_unavailable))
-                }
                 SpotPickerButton(spots, visibleSpot?.id) { id ->
                     selectedSource = id.source
                     selectedValue = id.value
                     selectionFocusRequest++
                 }
             }
-            when (state) {
-                HomeUiState.Loading -> SpotSearchLoading()
-                HomeUiState.Empty ->
-                    SpotSearchMessage(
-                        stringResource(R.string.home_empty_title),
-                        stringResource(R.string.home_empty_message),
-                        onRetry,
-                    )
-                is HomeUiState.Error -> SpotSearchMessage(stringResource(R.string.home_error_title), state.message, onRetry)
-                is HomeUiState.Content -> {
-                    val focusedSpot = focus?.let(state::findSpot)
-                    OsmMap(
-                        center = center,
-                        spots = state.spots,
-                        selectedId = visibleSpot?.id,
-                        focus = focusedSpot,
-                        isInteractive = true,
-                        selectionFocusRequest = selectionFocusRequest,
-                        modifier = Modifier.fillMaxWidth().height(mapHeight).clip(MaterialTheme.shapes.large),
-                        onSelect = { id ->
-                            selectedSource = id.source
-                            selectedValue = id.value
-                        },
-                    )
-                    if (visibleSpot != null) {
-                        val sharedCount = state.spots.count { it.location == visibleSpot.location }
-                        if (sharedCount > 1) {
-                            Text(stringResource(R.string.map_shared_location, sharedCount), style = MaterialTheme.typography.bodySmall)
+            OsmMap(
+                center = center,
+                spots = spots,
+                selectedId = visibleSpot?.id,
+                focus = focusedSpot,
+                isInteractive = true,
+                selectionFocusRequest = selectionFocusRequest,
+                modifier = Modifier.fillMaxWidth().height(mapHeight).clip(MaterialTheme.shapes.large),
+                onSelect = { id ->
+                    selectedSource = id.source
+                    selectedValue = id.value
+                },
+                onViewportMoveStarted = onViewportMoveStarted,
+                onViewportIdle = onViewportIdle,
+            ) {
+                val message =
+                    when {
+                        error != null -> error
+                        loading -> stringResource(R.string.map_search_loading)
+                        viewport?.limited == true -> stringResource(R.string.map_search_zoom_in)
+                        empty -> stringResource(R.string.map_search_empty)
+                        else -> null
+                    }
+                if (message != null) {
+                    Surface(
+                        modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                    ) {
+                        Column {
+                            if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+                            Text(
+                                message,
+                                Modifier.padding(horizontal = SportSpotSpacing.sm, vertical = SportSpotSpacing.xs),
+                                style = MaterialTheme.typography.labelMedium,
+                            )
                         }
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = MaterialTheme.shapes.large,
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        ) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth().padding(SportSpotSpacing.lg),
-                                verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.md),
-                            ) {
-                                SpotSummary(visibleSpot)
-                                SportSpotButton(
-                                    text = stringResource(R.string.map_details),
-                                    onClick = { onOpenSpot(visibleSpot.id) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                            }
-                        }
-                    } else {
-                        Text(stringResource(R.string.details_not_found_message))
                     }
                 }
             }
+            if (error != null) {
+                TextButton(onClick = onRetry) { Text(stringResource(R.string.map_search_retry)) }
+            }
+            if (focus != null && selectedId == focus && spots.isNotEmpty() && spots.none { it.id == focus }) {
+                Text(stringResource(R.string.map_focus_unavailable))
+            }
+            if (visibleSpot != null) {
+                SelectedSpotCard(visibleSpot, spots, onOpenSpot)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SelectedSpotCard(
+    spot: Spot,
+    spots: List<Spot>,
+    onOpenSpot: (SpotId) -> Unit,
+) {
+    val sharedCount = spots.count { it.location == spot.location }
+    if (sharedCount > 1) {
+        Text(stringResource(R.string.map_shared_location, sharedCount), style = MaterialTheme.typography.bodySmall)
+    }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(SportSpotSpacing.lg),
+            verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.md),
+        ) {
+            SpotSummary(spot)
+            SportSpotButton(
+                text = stringResource(R.string.map_details),
+                onClick = { onOpenSpot(spot.id) },
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
