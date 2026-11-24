@@ -38,7 +38,11 @@ internal fun PhotoGallery(
     key(target) {
         var expanded by rememberSaveable { mutableStateOf(!collapsible) }
         if (collapsible) {
-            PhotoTextButton(if (expanded) R.string.photos_hide_preview else R.string.photos_review_gallery) { expanded = !expanded }
+            if (expanded) {
+                PhotoVisibilityButton(true) { expanded = false }
+            } else {
+                PhotoActionButton(R.string.photos_review_gallery, icon = R.drawable.ic_photo_visibility) { expanded = true }
+            }
         }
         if (expanded) GalleryContent(target, model, showTitle = !collapsible)
     }
@@ -81,13 +85,13 @@ private fun GalleryContent(
                     }
                 }
         }
-        PhotoTextButton(if (error != null) R.string.home_retry else R.string.photos_refresh, enabled = gallery != null) { attempt++ }
+        PhotoActionButton(if (error != null) R.string.home_retry else R.string.photos_refresh, enabled = gallery != null) { attempt++ }
     }
     opened?.takeIf { images?.contains(it) == true }?.let { id ->
         AlertDialog(
             onDismissRequest = { opened = null },
             text = { RemotePhoto(id, model, modifier = Modifier.fillMaxWidth().height(280.dp)) },
-            confirmButton = { PhotoTextButton(R.string.content_cancel) { opened = null } },
+            confirmButton = { PhotoActionButton(R.string.content_cancel) { opened = null } },
         )
     }
 }

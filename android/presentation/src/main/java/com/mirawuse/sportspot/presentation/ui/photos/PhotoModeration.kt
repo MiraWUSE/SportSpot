@@ -1,16 +1,21 @@
 package com.mirawuse.sportspot.presentation.ui.photos
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -22,6 +27,9 @@ import com.mirawuse.sportspot.domain.model.photo.PhotoSubmission
 import com.mirawuse.sportspot.domain.model.photo.PhotoTargetType
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.forms.FormCard
+import com.mirawuse.sportspot.presentation.ui.moderation.ModerationDecisionButtons
+import com.mirawuse.sportspot.presentation.ui.moderation.ModerationField
+import com.mirawuse.sportspot.presentation.ui.moderation.ModerationHeading
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
 @Composable
@@ -32,47 +40,55 @@ internal fun PhotoModeration(
     val ready = model.readyFor(owner)
     LaunchedEffect(owner, ready) { if (ready) model.loadModeration(owner) }
     val queue = model.moderationFor(owner)
+    ModerationHeading(stringResource(R.string.moderation_photo_queue)) {
+        PhotoActionButton(R.string.photos_refresh, enabled = ready && !queue.loading) { model.loadModeration(owner) }
+    }
     if (!ready || queue.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
     queue.error?.let { PhotoErrorText(it) }
     if (ready && !queue.loading && queue.items.isEmpty() && queue.error == null) {
         Text(stringResource(R.string.photos_queue_empty))
     }
-    for (photo in queue.items) {
+    for ((index, photo) in queue.items.withIndex()) {
         key(owner, photo.id) {
-            PhotoModerationCard(owner, photo, model, enabled = !queue.loading)
+            PhotoModerationCard(owner, photo, index + 1, model, enabled = !queue.loading)
         }
     }
-    PhotoTextButton(R.string.photos_refresh, enabled = ready && !queue.loading) { model.loadModeration(owner) }
 }
 
 @Composable
 private fun PhotoModerationCard(
     owner: String,
     photo: PhotoSubmission,
+    number: Int,
     model: PhotosViewModel,
     enabled: Boolean,
 ) {
     var reject by rememberSaveable { mutableStateOf(false) }
     var reason by rememberSaveable { mutableStateOf("") }
-    val label =
+    var preview by rememberSaveable { mutableStateOf(false) }
+    val targetLabel =
         when (photo.target.type) {
             PhotoTargetType.SPOT -> R.string.photos_target_spot
             PhotoTargetType.REVIEW -> R.string.photos_target_review
             PhotoTargetType.PROPOSAL -> R.string.photos_target_proposal
         }
-    FormCard(stringResource(label)) {
-        Text(stringResource(R.string.photos_target_id, photo.target.id))
-        Text(stringResource(R.string.photos_author_id, photo.ownerId))
-        PrivatePreview(owner, photo.id, model)
-        Row(horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.sm)) {
-            PhotoTextButton(R.string.moderation_approve, enabled = enabled) { model.moderate(owner, photo.id, null) }
-            PhotoTextButton(R.string.moderation_reject, enabled = enabled) { reject = true }
-        }
+    FormCard(stringResource(R.string.moderation_photo_title, stringResource(targetLabel), number)) {
+        PhotoStatusBadge(photo.status)
+        ModerationField(stringResource(R.string.moderation_target_id), photo.target.id)
+        ModerationField(stringResource(R.string.moderation_author_id), photo.ownerId)
+        PhotoVisibilityButton(preview) { preview = !preview }
+        if (preview) RemotePhoto(photo.id, model, owner)
+        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+        ModerationDecisionButtons(
+            enabled = enabled,
+            onApprove = { model.moderate(owner, photo.id, null) },
+            onReject = { reject = true },
+        )
     }
     if (reject) {
         AlertDialog(
             onDismissRequest = { reject = false },
-            title = { Text(stringResource(R.string.moderation_reject)) },
+            title = { Text(stringResource(R.string.moderation_reject_photo_title)) },
             text = {
                 OutlinedTextField(
                     value = reason,
@@ -81,12 +97,12 @@ private fun PhotoModerationCard(
                 )
             },
             confirmButton = {
-                PhotoTextButton(R.string.moderation_confirm_rejection, enabled = enabled && reason.isNotBlank()) {
+                PhotoActionButton(R.string.moderation_confirm_rejection, enabled = enabled && reason.isNotBlank(), danger = true) {
                     reject = false
                     model.moderate(owner, photo.id, reason.trim())
                 }
             },
-            dismissButton = { PhotoTextButton(R.string.content_cancel) { reject = false } },
+            dismissButton = { PhotoActionButton(R.string.content_cancel) { reject = false } },
         )
     }
 }
@@ -98,13 +114,12 @@ internal fun ProposalPhotoEvidence(
     model: PhotosViewModel,
 ) {
     key(owner, proposalId) {
+        val ready = model.readyFor(owner)
         var expanded by rememberSaveable { mutableStateOf(false) }
-        PhotoTextButton(
-            if (expanded) R.string.photos_hide_preview else R.string.photos_proposal_evidence,
-            enabled = model.readyFor(owner),
-        ) { expanded = !expanded }
-        if (expanded && model.readyFor(owner)) {
-            val result by produceState<Result<List<PhotoSubmission>>?>(null) {
+        var attempt by rememberSaveable { mutableIntStateOf(0) }
+        val result by produceState<Result<List<PhotoSubmission>>?>(null, ready, expanded, attempt) {
+            if (ready && expanded) {
+                value = null
                 value =
                     try {
                         Result.success(model.queue(owner, proposalId))
@@ -112,31 +127,50 @@ internal fun ProposalPhotoEvidence(
                         Result.failure(error)
                     }
             }
+        }
+        if (ready) {
             val photos = result?.getOrNull()
             val error = result?.exceptionOrNull() as? PhotoException
-            when {
-                error != null -> PhotoErrorText(error.error)
-                photos == null -> LinearProgressIndicator(Modifier.fillMaxWidth())
-                photos.isEmpty() -> Text(stringResource(R.string.photos_queue_empty))
-                else ->
-                    photos.forEach { photo ->
-                        key(photo.id) {
-                            Text(stringResource(photo.status.labelRes()))
-                            PrivatePreview(owner, photo.id, model)
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+            ) {
+                Column(
+                    modifier = Modifier.padding(SportSpotSpacing.md),
+                    verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.sm),
+                ) {
+                    ModerationHeading(stringResource(R.string.photos_proposal_evidence), R.drawable.ic_photo_image) {
+                        if (photos?.isNotEmpty() == true) {
+                            PhotoVisibilityButton(expanded) { expanded = !expanded }
+                        } else if (!expanded) {
+                            PhotoActionButton(R.string.moderation_check_attachments) { expanded = true }
                         }
                     }
+                    when {
+                        !expanded -> Unit
+                        error != null -> {
+                            PhotoErrorText(error.error)
+                            PhotoActionButton(R.string.home_retry) { attempt++ }
+                        }
+                        photos == null -> LinearProgressIndicator(Modifier.fillMaxWidth())
+                        photos.isEmpty() -> Text(stringResource(R.string.moderation_no_attachments))
+                        else ->
+                            photos.forEachIndexed { index, photo ->
+                                key(photo.id) {
+                                    if (index > 0) HorizontalDivider()
+                                    Text(
+                                        stringResource(R.string.moderation_photo_number, index + 1),
+                                        style = MaterialTheme.typography.titleMedium,
+                                    )
+                                    PhotoStatusBadge(photo.status)
+                                    RemotePhoto(photo.id, model, owner)
+                                }
+                            }
+                    }
+                }
             }
         }
     }
-}
-
-@Composable
-private fun PrivatePreview(
-    owner: String,
-    id: String,
-    model: PhotosViewModel,
-) {
-    var preview by rememberSaveable { mutableStateOf(false) }
-    PhotoTextButton(if (preview) R.string.photos_hide_preview else R.string.photos_preview) { preview = !preview }
-    if (preview) RemotePhoto(id, model, owner)
 }

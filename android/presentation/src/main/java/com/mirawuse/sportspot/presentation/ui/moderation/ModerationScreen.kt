@@ -1,12 +1,12 @@
 package com.mirawuse.sportspot.presentation.ui.moderation
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -31,6 +31,7 @@ import com.mirawuse.sportspot.presentation.ui.forms.ContentErrorText
 import com.mirawuse.sportspot.presentation.ui.forms.FormCard
 import com.mirawuse.sportspot.presentation.ui.forms.FormField
 import com.mirawuse.sportspot.presentation.ui.forms.FormScreen
+import com.mirawuse.sportspot.presentation.ui.proposal.ProposalStatusBadge
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
 @Composable
@@ -57,22 +58,32 @@ internal fun ModerationScreen(
             }
             else -> {
                 photoQueue?.let { content ->
-                    TextButton(onClick = { showPhotos = !showPhotos }) {
-                        Text(stringResource(if (showPhotos) R.string.moderation_queue else R.string.photos_queue))
-                    }
+                    SportSpotButton(
+                        text = stringResource(if (showPhotos) R.string.moderation_switch_proposals else R.string.photos_queue),
+                        onClick = { showPhotos = !showPhotos },
+                        variant = SportSpotButtonVariant.SECONDARY,
+                        icon = if (showPhotos) null else R.drawable.ic_photo_image,
+                    )
                     if (showPhotos) {
                         content()
                         return@FormScreen
                     }
                 }
-                Text(stringResource(R.string.moderation_queue), style = MaterialTheme.typography.headlineSmall)
+                ModerationHeading(title = stringResource(R.string.moderation_queue)) {
+                    SportSpotButton(
+                        text = stringResource(R.string.content_refresh),
+                        onClick = onRetry,
+                        variant = SportSpotButtonVariant.SECONDARY,
+                        icon = R.drawable.ic_action_refresh,
+                        enabled = !busy && pending != null,
+                    )
+                }
                 if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 actionError?.let { ContentErrorText(it) }
                 when (pending) {
                     null -> SpotSearchLoading()
                     is DomainResult.Failure -> {
                         ContentErrorText(pending.error)
-                        TextButton(onClick = onRetry) { Text(stringResource(R.string.home_retry)) }
                     }
                     is DomainResult.Success -> {
                         if (pending.value.isEmpty()) Text(stringResource(R.string.moderation_queue_empty))
@@ -81,7 +92,6 @@ internal fun ModerationScreen(
                                 ModerationProposal(proposal, busy, onApprove, onReject, proposalPhotos)
                             }
                         }
-                        TextButton(onClick = onRetry, enabled = !busy) { Text(stringResource(R.string.content_refresh)) }
                     }
                 }
             }
@@ -104,48 +114,49 @@ private fun ModerationProposal(
     val reasonTooLong = reason.trim().length > 1000
 
     FormCard(proposal.name) {
-        Text(stringResource(proposal.sportType.labelRes()))
-        Text(stringResource(R.string.moderation_coordinates, proposal.location.latitude, proposal.location.longitude))
-        proposal.address?.let { Text(it) }
-        proposal.description?.let { Text(it) }
-        proposal.surface?.let { Text(stringResource(R.string.details_surface, it)) }
-        proposal.equipment?.let { Text(stringResource(R.string.details_equipment, it)) }
-        proposal.lighting?.let { Text(stringResource(R.string.details_lighting, stringResource(lightingLabelRes(it)))) }
-        photoAttachments(proposal)
-    }
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.sm)) {
-        SportSpotButton(
-            text = stringResource(R.string.moderation_approve),
-            onClick = { onApprove(proposal.id) },
-            modifier = Modifier.weight(1f),
-            enabled = !busy,
-        )
-        SportSpotButton(
-            text = stringResource(R.string.moderation_reject),
-            onClick = { rejectionOpen = !rejectionOpen },
-            modifier = Modifier.weight(1f),
-            variant = SportSpotButtonVariant.OUTLINED,
-            enabled = !busy,
-        )
-    }
-    if (rejectionOpen) {
-        FormField(
-            label = stringResource(R.string.moderation_reason),
-            value = reason,
-            onValueChange = { if (!busy) reason = it },
-            error = if (attempted) reasonError else null,
-            singleLine = false,
-        )
-        if (attempted && reasonTooLong) {
-            Text(stringResource(R.string.moderation_reason_length), color = MaterialTheme.colorScheme.error)
+        ProposalStatusBadge(proposal.status)
+        Column(verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.sm)) {
+            ModerationField(stringResource(R.string.moderation_sport_label), stringResource(proposal.sportType.labelRes()))
+            ModerationField(
+                stringResource(R.string.moderation_coordinates_label),
+                stringResource(R.string.moderation_coordinate_values, proposal.location.latitude, proposal.location.longitude),
+            )
+            proposal.address?.let { ModerationField(stringResource(R.string.moderation_address_label), it) }
+            proposal.description?.let { ModerationField(stringResource(R.string.moderation_description_label), it) }
+            proposal.surface?.let { ModerationField(stringResource(R.string.moderation_surface_label), it) }
+            proposal.equipment?.let { ModerationField(stringResource(R.string.moderation_equipment_label), it) }
+            proposal.lighting?.let {
+                ModerationField(stringResource(R.string.moderation_lighting_label), stringResource(lightingLabelRes(it)))
+            }
         }
-        SportSpotButton(
-            text = stringResource(R.string.moderation_confirm_rejection),
-            onClick = {
-                attempted = true
-                if (reasonError == null && !reasonTooLong) onReject(proposal.id, reason)
-            },
-            isLoading = busy,
+        photoAttachments(proposal)
+        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+        ModerationDecisionButtons(
+            enabled = !busy,
+            onApprove = { onApprove(proposal.id) },
+            onReject = { rejectionOpen = !rejectionOpen },
         )
+        if (rejectionOpen) {
+            FormField(
+                label = stringResource(R.string.moderation_reason),
+                value = reason,
+                onValueChange = { if (!busy) reason = it },
+                error = if (attempted) reasonError else null,
+                singleLine = false,
+            )
+            if (attempted && reasonTooLong) {
+                Text(stringResource(R.string.moderation_reason_length), color = MaterialTheme.colorScheme.error)
+            }
+            SportSpotButton(
+                text = stringResource(R.string.moderation_confirm_rejection),
+                onClick = {
+                    attempted = true
+                    if (reasonError == null && !reasonTooLong) onReject(proposal.id, reason)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                variant = SportSpotButtonVariant.DANGER,
+                isLoading = busy,
+            )
+        }
     }
 }

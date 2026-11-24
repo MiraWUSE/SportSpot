@@ -212,7 +212,23 @@
     <string name="favorites_offline_error">Нет связи с сервером. Попробуйте, когда появится сеть.</string>
     <string name="favorites_spot_unavailable">Данные сохранённой площадки недоступны</string>
     <string name="moderation_title">Модерация</string>
-    <string name="moderation_coordinates">Координаты: %1$.6f, %2$.6f</string>
+    <string name="moderation_coordinates_label">Координаты</string>
+    <string name="moderation_coordinate_values">%1$.6f, %2$.6f</string>
+    <string name="moderation_sport_label">Вид спорта</string>
+    <string name="moderation_address_label">Адрес</string>
+    <string name="moderation_description_label">Описание</string>
+    <string name="moderation_surface_label">Покрытие</string>
+    <string name="moderation_equipment_label">Оборудование</string>
+    <string name="moderation_lighting_label">Освещение</string>
+    <string name="moderation_switch_proposals">К заявкам площадок</string>
+    <string name="moderation_photo_queue">Фотографии на проверке</string>
+    <string name="moderation_photo_title">%1$s · %2$d</string>
+    <string name="moderation_photo_number">Фото %1$d</string>
+    <string name="moderation_reject_photo_title">Отклонить фотографию</string>
+    <string name="moderation_target_id">ID цели</string>
+    <string name="moderation_author_id">ID автора</string>
+    <string name="moderation_check_attachments">Проверить</string>
+    <string name="moderation_no_attachments">Фото не приложены</string>
     <string name="moderation_confirm_rejection">Подтвердить отклонение</string>
     <string name="moderation_reason_length">Причина должна содержать до 1000 символов.</string>
     <string name="moderation_access">Доступ по роли</string>
@@ -234,6 +250,7 @@
     <string name="photos_mine">Мои фотографии</string>
     <string name="photos_preview">Предпросмотр фото</string>
     <string name="photos_hide_preview">Скрыть фото</string>
+    <string name="photos_show_preview">Показать фото</string>
     <string name="photos_remove">Удалить фото</string>
     <string name="photos_refresh">Обновить статус</string>
     <string name="photos_pending">На проверке</string>
@@ -260,7 +277,5 @@
     <string name="photos_target_spot">Фото площадки</string>
     <string name="photos_target_review">Фото к отзыву</string>
     <string name="photos_target_proposal">Фото к предложению</string>
-    <string name="photos_target_id">ID: %1$s</string>
-    <string name="photos_author_id">ID автора: %1$s</string>
     <string name="photos_proposal_evidence">Фото предложения</string>
 </resources>
