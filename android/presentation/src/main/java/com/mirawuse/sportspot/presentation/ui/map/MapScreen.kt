@@ -3,13 +3,14 @@ package com.mirawuse.sportspot.presentation.ui.map
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearProgressIndicator
@@ -18,6 +19,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -28,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.LocalPinnableContainer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
@@ -66,6 +69,7 @@ internal fun MapScreen(
     onSearchQuery: (String) -> Unit = {},
     onSearchSport: (SportType?) -> Unit = {},
     onResetSearch: () -> Unit = {},
+    showVisibleSpots: Boolean = false,
 ) {
     var selectedSource by rememberSaveable(focus, center) { mutableStateOf(focus?.source) }
     var selectedValue by rememberSaveable(focus, center) { mutableStateOf(focus?.value) }
@@ -73,16 +77,24 @@ internal fun MapScreen(
     val source = selectedSource
     val value = selectedValue
     val selectedId = if (source != null && value != null) SpotId(source, value) else null
+    var visibility by remember(center, focus, showVisibleSpots) { mutableStateOf<MapSpotVisibility>(MapSpotVisibility.Loading) }
+    var listExpanded by rememberSaveable { mutableStateOf(true) }
     val initial = state as? HomeUiState.Content
     val availableSpots = viewport?.spots ?: initial?.spots.orEmpty()
     val resources = LocalResources.current
     val spots = if (filter == null) availableSpots else filterSpots(availableSpots, filter) { it.sportLabel(resources::getString) }
-    val visibleSpot = selectedMapSpot(spots, selectedId)
-    if (selectedId != null && selectedId != visibleSpot?.id && availableSpots.any { it.id == selectedId }) {
-        LaunchedEffect(selectedId, visibleSpot?.id) {
-            selectedSource = visibleSpot?.id?.source
-            selectedValue = visibleSpot?.id?.value
+    val visibleIds = (visibility as? MapSpotVisibility.Ready)?.ids
+    val visibleSpots = visibleIds?.let { ids -> spots.filter { it.id in ids }.distinctBy(Spot::id) }
+    val selectedSpot = selectedMapSpot(if (focus == null) visibleSpots ?: spots else spots, selectedId)
+    if (selectedId != null && spots.none { it.id == selectedId } && availableSpots.any { it.id == selectedId }) {
+        LaunchedEffect(selectedId, selectedSpot?.id) {
+            selectedSource = selectedSpot?.id?.source
+            selectedValue = selectedSpot?.id?.value
         }
+    }
+    val selectSpot: (SpotId) -> Unit = { id ->
+        selectedSource = id.source
+        selectedValue = id.value
     }
     val focusedSpot = focus?.let { initial?.findSpot(it) }
     val status = viewport?.status ?: MapSearchStatus.INITIAL
@@ -100,119 +112,183 @@ internal fun MapScreen(
         availableSpots.isNotEmpty() &&
             spots.isEmpty() &&
             (status == MapSearchStatus.READY || status == MapSearchStatus.INITIAL && initial != null)
+    val searchMessage =
+        when {
+            error != null -> error
+            status == MapSearchStatus.RATE_LIMITED -> stringResource(R.string.map_search_rate_limited)
+            status == MapSearchStatus.WAITING -> stringResource(R.string.map_search_waiting)
+            loading -> stringResource(R.string.map_search_loading)
+            viewport?.limited == true || status == MapSearchStatus.ZOOM_IN -> stringResource(R.string.map_search_zoom_in)
+            else -> null
+        }
+    val listMessage =
+        if (showVisibleSpots) {
+            when (visibility) {
+                MapSpotVisibility.Loading -> stringResource(R.string.map_list_loading)
+                MapSpotVisibility.Moving -> stringResource(R.string.map_list_updating)
+                MapSpotVisibility.Unavailable -> stringResource(R.string.map_list_unavailable)
+                is MapSpotVisibility.Ready ->
+                    when {
+                        searchMessage != null && !visibleSpots.isNullOrEmpty() && status != MapSearchStatus.READY ->
+                            stringResource(R.string.map_list_previous, searchMessage)
+                        searchMessage != null -> searchMessage
+                        empty -> stringResource(R.string.map_search_empty)
+                        noMatches -> stringResource(R.string.map_no_matches)
+                        visibleSpots.isNullOrEmpty() -> stringResource(R.string.map_list_empty)
+                        else -> null
+                    }
+            }
+        } else {
+            null
+        }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         var headingHeight by remember { mutableIntStateOf(0) }
         val headingDp = with(LocalDensity.current) { headingHeight.toDp() }
         val mapHeight =
             minOf(
                 maxWidth - SportSpotSpacing.lg * 2,
-                (maxHeight - headingDp - SportSpotSpacing.lg * 2 - SportSpotSpacing.md).coerceAtLeast(48.dp),
+                (maxHeight - headingDp - SportSpotSpacing.lg * 2 - SportSpotSpacing.md)
+                    .coerceAtLeast(if (showVisibleSpots) 180.dp else 48.dp),
             )
-        Column(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(SportSpotSpacing.lg),
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(SportSpotSpacing.lg),
             verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.md),
         ) {
-            Column(Modifier.onSizeChanged { headingHeight = it.height }, verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.md)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = stringResource(R.string.tab_map),
-                        style = MaterialTheme.typography.headlineLarge,
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (onRefresh != null) {
-                        TextButton(onClick = onRefresh, enabled = !loading && status != MapSearchStatus.ZOOM_IN) {
-                            Text(stringResource(R.string.content_refresh))
-                        }
-                    }
+            item(key = "map") {
+                // Keep the native camera and projection alive when the list scrolls past the map.
+                val container = LocalPinnableContainer.current
+                DisposableEffect(container) {
+                    val pin = container?.pin()
+                    onDispose { pin?.release() }
                 }
-                Text(locationLabel, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-                if (filter != null) {
-                    Column(verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs)) {
-                        SpotSearchBar(filter, onSearchQuery, onSearchSport)
-                        Text(
-                            stringResource(R.string.map_search_scope),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                    }
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.sm),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    SpotPickerButton(spots, visibleSpot?.id) { id ->
-                        selectedSource = id.source
-                        selectedValue = id.value
-                        selectionFocusRequest++
-                    }
-                    if (filter != null) {
-                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+                Column(verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.md)) {
+                    Column(
+                        Modifier.onSizeChanged { headingHeight = it.height },
+                        verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.md),
+                    ) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = stringResource(filter.sport?.labelRes() ?: R.string.home_filter_all),
-                                style = MaterialTheme.typography.labelMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                                text = stringResource(R.string.tab_map),
+                                style = MaterialTheme.typography.headlineLarge,
+                                modifier = Modifier.weight(1f),
                             )
-                            if (spots.isNotEmpty() || noMatches) {
-                                Text(stringResource(R.string.home_results_count, spots.size), style = MaterialTheme.typography.labelSmall)
+                            if (onRefresh != null) {
+                                TextButton(onClick = onRefresh, enabled = !loading && status != MapSearchStatus.ZOOM_IN) {
+                                    Text(stringResource(R.string.content_refresh))
+                                }
+                            }
+                        }
+                        Text(
+                            locationLabel,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        if (filter != null) {
+                            Column(verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs)) {
+                                SpotSearchBar(filter, onSearchQuery, onSearchSport)
+                                Text(
+                                    stringResource(R.string.map_search_scope),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.sm),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            SpotPickerButton(spots, selectedSpot?.id) { id ->
+                                selectSpot(id)
+                                selectionFocusRequest++
+                            }
+                            if (filter != null) {
+                                Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        text = stringResource(filter.sport?.labelRes() ?: R.string.home_filter_all),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    if (spots.isNotEmpty() || noMatches) {
+                                        Text(
+                                            stringResource(R.string.home_results_count, spots.size),
+                                            style = MaterialTheme.typography.labelSmall,
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
-                }
-            }
-            OsmMap(
-                center = center,
-                spots = spots,
-                selectedId = visibleSpot?.id,
-                focus = focusedSpot,
-                isInteractive = true,
-                selectionFocusRequest = selectionFocusRequest,
-                modifier = Modifier.fillMaxWidth().height(mapHeight).clip(MaterialTheme.shapes.large),
-                onSelect = { id ->
-                    selectedSource = id.source
-                    selectedValue = id.value
-                },
-                onViewportMoveStarted = onViewportMoveStarted,
-                onViewportIdle = onViewportIdle,
-            ) {
-                val message =
-                    when {
-                        error != null -> error
-                        status == MapSearchStatus.RATE_LIMITED -> stringResource(R.string.map_search_rate_limited)
-                        status == MapSearchStatus.WAITING -> stringResource(R.string.map_search_waiting)
-                        loading -> stringResource(R.string.map_search_loading)
-                        viewport?.limited == true -> stringResource(R.string.map_search_zoom_in)
-                        empty -> stringResource(R.string.map_search_empty)
-                        else -> null
-                    }
-                if (message != null) {
-                    Surface(
-                        modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                    OsmMap(
+                        center = center,
+                        spots = spots,
+                        selectedId = selectedSpot?.id,
+                        focus = focusedSpot,
+                        isInteractive = true,
+                        selectionFocusRequest = selectionFocusRequest,
+                        selectionFocusId = selectedId,
+                        modifier = Modifier.fillMaxWidth().height(mapHeight).clip(MaterialTheme.shapes.large),
+                        onSelect = selectSpot,
+                        onViewportMoveStarted = onViewportMoveStarted,
+                        onViewportIdle = onViewportIdle,
+                        onSpotVisibility = if (showVisibleSpots) ({ visibility = it }) else null,
                     ) {
-                        Column {
-                            if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-                            Text(
-                                message,
-                                Modifier.padding(horizontal = SportSpotSpacing.sm, vertical = SportSpotSpacing.xs),
-                                style = MaterialTheme.typography.labelMedium,
-                            )
+                        val message = searchMessage ?: if (empty) stringResource(R.string.map_search_empty) else null
+                        if (message != null) {
+                            Surface(
+                                modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                            ) {
+                                Column {
+                                    if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+                                    Text(
+                                        message,
+                                        Modifier.padding(horizontal = SportSpotSpacing.sm, vertical = SportSpotSpacing.xs),
+                                        style = MaterialTheme.typography.labelMedium,
+                                    )
+                                }
+                            }
                         }
                     }
+                    if (error != null || status == MapSearchStatus.RATE_LIMITED) {
+                        TextButton(onClick = onRetry) { Text(stringResource(R.string.map_search_retry)) }
+                    }
+                    if (noMatches) {
+                        SpotFilterEmpty(stringResource(R.string.map_no_matches), onResetSearch)
+                    }
+                    if (focus != null && selectedId == focus && availableSpots.isNotEmpty() && availableSpots.none { it.id == focus }) {
+                        Text(stringResource(R.string.map_focus_unavailable))
+                    }
+                    if (selectedSpot != null) {
+                        SelectedSpotCard(selectedSpot, spots, onOpenSpot)
+                    }
                 }
             }
-            if (error != null || status == MapSearchStatus.RATE_LIMITED) {
-                TextButton(onClick = onRetry) { Text(stringResource(R.string.map_search_retry)) }
-            }
-            if (noMatches) {
-                SpotFilterEmpty(stringResource(R.string.map_no_matches), onResetSearch)
-            }
-            if (focus != null && selectedId == focus && availableSpots.isNotEmpty() && availableSpots.none { it.id == focus }) {
-                Text(stringResource(R.string.map_focus_unavailable))
-            }
-            if (visibleSpot != null) {
-                SelectedSpotCard(visibleSpot, spots, onOpenSpot)
+            if (showVisibleSpots) {
+                item(key = "visible-spots") {
+                    VisibleMapSpotsHeader(
+                        count = visibleSpots?.size?.takeIf { it > 0 || searchMessage == null },
+                        expanded = listExpanded,
+                        onToggle = { listExpanded = !listExpanded },
+                    )
+                }
+                if (listExpanded) {
+                    if (listMessage != null) {
+                        item(key = "visible-spots-status") {
+                            Text(listMessage, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                    items(visibleSpots.orEmpty(), key = { "${it.id.source.length}:${it.id.source}${it.id.value}" }) { spot ->
+                        VisibleMapSpotRow(
+                            spot = spot,
+                            selected = selectedSpot?.id == spot.id,
+                            onSelect = { selectSpot(spot.id) },
+                            onOpen = { onOpenSpot(spot.id) },
+                        )
+                    }
+                }
             }
         }
     }

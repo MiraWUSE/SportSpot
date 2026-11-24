@@ -10,8 +10,10 @@ import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -76,7 +78,7 @@ class MapReviewUiTest {
         }
         compose.onNodeWithText("Площадка отсутствует в текущих результатах. Можно выбрать другую.").assertIsDisplayed()
         compose.onNodeWithText("Выбрать площадку").assertHasClickAction().performClick()
-        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(55)
+        compose.onNode(hasScrollToIndexAction() and hasAnyAncestor(isDialog())).performScrollToIndex(55)
         compose
             .onNode(hasText("56. Площадка") and hasText("Футбол"))
             .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton))
@@ -103,7 +105,7 @@ class MapReviewUiTest {
             }
         }
         compose.onNodeWithText("Выбрать площадку").assertIsNotEnabled()
-        compose.onNode(hasScrollToIndexAction()).assertDoesNotExist()
+        compose.onNode(isDialog()).assertDoesNotExist()
     }
 
     @Test

@@ -89,6 +89,18 @@
     <string name="map_choose_spot">Выбрать площадку</string>
     <string name="map_selected_spot">Выбрана площадка: %1$s</string>
     <string name="map_spot_option">%1$d. %2$s</string>
+    <string name="map_list_title">Площадки на карте</string>
+    <string name="map_list_count">Загружено и видно: %1$d</string>
+    <string name="map_list_expand">Развернуть</string>
+    <string name="map_list_collapse">Свернуть</string>
+    <string name="map_list_expanded">Список развёрнут</string>
+    <string name="map_list_collapsed">Список свёрнут</string>
+    <string name="map_list_loading">Определяем видимую область карты…</string>
+    <string name="map_list_updating">Обновляем список…</string>
+    <string name="map_list_unavailable">Видимая область карты недоступна.</string>
+    <string name="map_list_empty">На экране карты нет загруженных площадок.</string>
+    <string name="map_list_previous">%1$s Показаны ранее загруженные площадки.</string>
+    <string name="map_list_details">Подробнее о площадке «%1$s»</string>
 
     <string name="sport_football">Футбол</string>
     <string name="sport_basketball">Баскетбол</string>

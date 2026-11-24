@@ -4,6 +4,7 @@ import android.content.ComponentCallbacks2
 import android.content.res.Configuration
 import android.graphics.RectF
 import android.view.MotionEvent
+import android.view.View
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -35,12 +36,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -89,8 +92,10 @@ internal fun OsmMap(
     onSelect: (SpotId) -> Unit = {},
     networkStatus: MapNetworkStatus = rememberMapNetworkStatus(),
     selectionFocusRequest: Int = 0,
+    selectionFocusId: SpotId? = selectedId,
     onViewportMoveStarted: (() -> Unit)? = null,
     onViewportIdle: ((MapViewport, MapViewport?) -> Unit)? = null,
+    onSpotVisibility: ((MapSpotVisibility) -> Unit)? = null,
     overlay: @Composable BoxScope.() -> Unit = {},
 ) {
     var attempt by remember { mutableIntStateOf(0) }
@@ -116,6 +121,7 @@ internal fun OsmMap(
                         previousFocus.value,
                         selectionFocusRequest,
                         appliedSelectionFocus.intValue,
+                        selectionFocusId,
                         onSelectionFocusApplied = { appliedSelectionFocus.intValue = selectionFocusRequest },
                         onCameraSaved = { camera.value = it },
                         onCameraApplied = {
@@ -126,9 +132,11 @@ internal fun OsmMap(
                         onRetry = { attempt++ },
                         onViewportMoveStarted = onViewportMoveStarted.takeIf { isInteractive },
                         onViewportIdle = onViewportIdle.takeIf { isInteractive },
+                        onSpotVisibility = onSpotVisibility,
                     )
                 }
             } else {
+                LaunchedEffect(onSpotVisibility != null) { onSpotVisibility?.invoke(MapSpotVisibility.Unavailable) }
                 Text(stringResource(R.string.map_area_unavailable), Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall)
             }
             overlay()
@@ -165,6 +173,7 @@ private fun NativeOsmMap(
     previousFocus: String?,
     selectionFocusRequest: Int,
     appliedSelectionFocus: Int,
+    selectionFocusId: SpotId?,
     onSelectionFocusApplied: () -> Unit,
     onCameraSaved: (CameraPosition) -> Unit,
     onCameraApplied: () -> Unit,
@@ -172,6 +181,7 @@ private fun NativeOsmMap(
     onRetry: () -> Unit,
     onViewportMoveStarted: (() -> Unit)?,
     onViewportIdle: ((MapViewport, MapViewport?) -> Unit)?,
+    onSpotVisibility: ((MapSpotVisibility) -> Unit)?,
 ) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
@@ -181,6 +191,11 @@ private fun NativeOsmMap(
     var nativeMap by remember { mutableStateOf<MapLibreMap?>(null) }
     var style by remember { mutableStateOf<Style?>(null) }
     var cameraApplied by remember { mutableStateOf(false) }
+    var mapSize by remember { mutableStateOf(IntSize.Zero) }
+    var settledCamera by remember { mutableIntStateOf(0) }
+    var cameraMoving by remember { mutableStateOf(false) }
+    var projectionFailed by remember { mutableStateOf(false) }
+    val spotVisibility by rememberUpdatedState(onSpotVisibility)
     val currentSpots by rememberUpdatedState(spots)
     val currentSelected by rememberUpdatedState(selectedId)
     val select by rememberUpdatedState(onSelect)
@@ -219,12 +234,23 @@ private fun NativeOsmMap(
                     // A completed frame may contain failed tiles. Keep the failure until retry.
                     if (!disposed && fully && loadState != MapLoadState.ERROR) loadState = MapLoadState.READY
                 }
-            val failed = MapView.OnDidFailLoadingMapListener { if (!disposed) loadState = MapLoadState.ERROR }
+
+            fun projectionError() {
+                if (!disposed) {
+                    loadState = MapLoadState.ERROR
+                    projectionFailed = true
+                }
+            }
+            val failed = MapView.OnDidFailLoadingMapListener { projectionError() }
             val tileAction =
                 MapView.OnTileActionListener { operation, _, _, _, _, _, source ->
                     if (!disposed && source == "osm" && operation == TileOperation.Error) loadState = MapLoadState.ERROR
                 }
-            val renderError = MapView.OnRenderErrorListener { if (!disposed) loadState = MapLoadState.ERROR }
+            val renderError = MapView.OnRenderErrorListener { projectionError() }
+            val layoutChanged =
+                View.OnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
+                    mapSize = IntSize(view.width, view.height)
+                }
             val moving =
                 MapView.OnCameraWillChangeListener { _ ->
                     if (!disposed) {
@@ -234,6 +260,7 @@ private fun NativeOsmMap(
                 }
             val moveStarted =
                 MapLibreMap.OnCameraMoveStartedListener { reason ->
+                    if (!disposed && cameraApplied && resumed && spotVisibility != null) cameraMoving = true
                     if (!disposed && cameraApplied && resumed && viewportIdle != null) {
                         gesture = reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE
                         if (gesture) viewportMoveStarted?.invoke()
@@ -244,6 +271,10 @@ private fun NativeOsmMap(
                     if (disposed || !cameraApplied) return@OnCameraIdleListener
                     val map = nativeMap ?: return@OnCameraIdleListener
                     saveCamera(map.cameraPosition)
+                    if (spotVisibility != null) {
+                        cameraMoving = false
+                        settledCamera++
+                    }
                     val afterGesture = gesture
                     gesture = false
                     val callback = viewportIdle ?: return@OnCameraIdleListener
@@ -300,6 +331,7 @@ private fun NativeOsmMap(
                 mapView.removeOnTileActionListener(tileAction)
                 mapView.removeOnRenderErrorListener(renderError)
                 mapView.removeOnCameraWillChangeListener(moving)
+                mapView.removeOnLayoutChangeListener(layoutChanged)
                 pauseAndStop()
                 mapView.onDestroy()
             }
@@ -319,6 +351,7 @@ private fun NativeOsmMap(
                         Lifecycle.Event.ON_PAUSE ->
                             if (resumed) {
                                 gesture = false
+                                cameraMoving = false
                                 mapView.onPause()
                                 resumed = false
                             }
@@ -345,6 +378,10 @@ private fun NativeOsmMap(
             mapView.addOnTileActionListener(tileAction)
             mapView.addOnRenderErrorListener(renderError)
             mapView.addOnCameraWillChangeListener(moving)
+            if (spotVisibility != null) {
+                mapSize = IntSize(mapView.width, mapView.height)
+                mapView.addOnLayoutChangeListener(layoutChanged)
+            }
             owner.lifecycle.addObserver(observer)
             mapView.getMapAsync { map ->
                 if (!disposed) {
@@ -412,11 +449,11 @@ private fun NativeOsmMap(
         LaunchedEffect(style, selectionFocusRequest) {
             if (style == null || selectionFocusRequest == 0 || selectionFocusRequest == appliedSelectionFocus) return@LaunchedEffect
             val map = nativeMap ?: return@LaunchedEffect
-            val chosen = spots.firstOrNull { it.id == selectedId }
+            val chosen = spots.firstOrNull { it.id == selectionFocusId }
             if (chosen != null && isMapCoordinate(chosen.location.latitude, chosen.location.longitude)) {
                 val target = LatLng(chosen.location.latitude, chosen.location.longitude)
                 val screen = map.projection.toScreenLocation(target)
-                if (screen.x !in 0f..mapView.width.toFloat() || screen.y !in 0f..mapView.height.toFloat()) {
+                if (!Offset(screen.x, screen.y).isInMap(IntSize(mapView.width, mapView.height))) {
                     map.moveCamera(CameraUpdateFactory.newLatLngZoom(target, maxOf(map.cameraPosition.zoom, 15.5)))
                 }
             }
@@ -438,6 +475,28 @@ private fun NativeOsmMap(
         )
         // The Compose gesture surface lets the parent LazyColumn keep vertical scrolling.
         if (!interactive) Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures {} })
+    }
+    if (onSpotVisibility != null) {
+        val geometryUnavailable = mapView == null || projectionFailed || (!cameraApplied && loadState == MapLoadState.ERROR)
+        LaunchedEffect(cameraApplied, cameraMoving, settledCamera, mapSize, spots, geometryUnavailable) {
+            val map = nativeMap
+            val visibility =
+                when {
+                    geometryUnavailable -> MapSpotVisibility.Unavailable
+                    map == null || !cameraApplied || mapSize.width == 0 || mapSize.height == 0 -> MapSpotVisibility.Loading
+                    cameraMoving -> MapSpotVisibility.Moving
+                    else -> {
+                        val projection = map.projection
+                        MapSpotVisibility.Ready(
+                            projectedSpotIds(spots, mapSize) { point ->
+                                val screen = projection.toScreenLocation(LatLng(point.latitude, point.longitude))
+                                Offset(screen.x, screen.y)
+                            },
+                        )
+                    }
+                }
+            spotVisibility?.invoke(visibility)
+        }
     }
     LaunchedEffect(loadGeneration) {
         delay(20_000)

@@ -272,6 +272,7 @@ fun SportSpotApp() {
                     onSearchQuery = viewModel::setSearchQuery,
                     onSearchSport = viewModel::setSearchSport,
                     onResetSearch = viewModel::resetSearchFilter,
+                    showVisibleSpots = !route.favorite,
                 )
             }
             composable("favorites") {
