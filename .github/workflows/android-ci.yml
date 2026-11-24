@@ -50,7 +50,14 @@ jobs:
         run: ./gradlew :domain:test :data:testDebugUnitTest :presentation:testDebugUnitTest --no-daemon
 
       - name: Build Debug APK
-        run: ./gradlew :app:assembleDebug --no-daemon
+        env:
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_PUBLISHABLE_KEY" ]; then
+            echo "::error::Missing SUPABASE_PUBLISHABLE_KEY"
+            exit 1
+          fi
+          ./gradlew :app:assembleDebug --no-daemon
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v7

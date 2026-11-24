@@ -35,6 +35,7 @@ class RemoteSpotDataSourceTest {
 
     private val gson = NetworkClient.createGson()
     private val clients = mutableListOf<OkHttpClient>()
+    private val testPublishableKey = "test-publishable-key"
     private val center = GeoPoint(56.3269, 44.0059)
     private val osmId = SpotId("osm", "node:12345")
     private val communityId = SpotId("community", "33333333-3333-4333-8333-333333333333")
@@ -59,7 +60,9 @@ class RemoteSpotDataSourceTest {
             val repo = repository(stubCommunity = false)
             assertEquals(listOf(osmId, communityId), repo.searchNearby(center, 1000, SportType.BASKETBALL).map(Spot::id))
             assertEquals("/functions/v1/search-sports-spots-v1", takeRequest().requestUrl?.encodedPath)
-            val request = checkNotNull(takeRequest().requestUrl)
+            val communityRequest = takeRequest()
+            assertEquals(testPublishableKey, communityRequest.getHeader("apikey"))
+            val request = checkNotNull(communityRequest.requestUrl)
             assertEquals("/rest/v1/spots", request.encodedPath)
             assertEquals("eq.community", request.queryParameter("source"))
             assertEquals("eq.basketball", request.queryParameter("sport_type"))
@@ -123,7 +126,7 @@ class RemoteSpotDataSourceTest {
             assertEquals("44.0059", url.queryParameter("lon"))
             assertEquals("1000", url.queryParameter("radius"))
             assertEquals("basketball", url.queryParameter("sport"))
-            assertEquals("test-publishable-key", request.getHeader("apikey"))
+            assertEquals(testPublishableKey, request.getHeader("apikey"))
             assertNull(request.getHeader("Authorization"))
         }
 
@@ -462,7 +465,7 @@ class RemoteSpotDataSourceTest {
         val config =
             NetworkConfig(
                 baseUrl = server.url("/"),
-                publishableKey = "test-publishable-key",
+                publishableKey = testPublishableKey,
                 connectTimeoutMillis = 1000,
                 readTimeoutMillis = readTimeoutMillis,
                 writeTimeoutMillis = 1000,
