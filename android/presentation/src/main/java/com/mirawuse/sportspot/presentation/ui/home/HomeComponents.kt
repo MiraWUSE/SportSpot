@@ -125,6 +125,9 @@ internal fun HomeSpotCard(
     spot: Spot,
     onClick: () -> Unit,
     onFavorite: () -> Unit,
+    isFavorite: Boolean = false,
+    favoriteEnabled: Boolean = true,
+    showPhotoLicense: Boolean = false,
 ) {
     val colors = MaterialTheme.colorScheme
     val cardColor = if (colors.background.luminance() < 0.5f) colors.surfaceVariant else colors.surface
@@ -142,7 +145,11 @@ internal fun HomeSpotCard(
                 spot = spot,
                 illustration = R.drawable.home_court,
                 modifier = Modifier.size(width = 104.dp, height = 83.dp).clip(MaterialTheme.shapes.medium),
-            )
+            ) { photo ->
+                if (showPhotoLicense) {
+                    Text(photo.license, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                }
+            }
             Column(
                 modifier = Modifier.weight(1f).padding(vertical = SportSpotSpacing.xs),
                 verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs),
@@ -166,10 +173,10 @@ internal fun HomeSpotCard(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            IconButton(onClick = onFavorite, modifier = Modifier.size(32.dp)) {
+            IconButton(onClick = onFavorite, modifier = Modifier.size(32.dp), enabled = favoriteEnabled) {
                 Icon(
-                    painterResource(R.drawable.ic_tab_favorites),
-                    contentDescription = stringResource(R.string.tab_favorites),
+                    painterResource(if (isFavorite) R.drawable.ic_favorite_selected else R.drawable.ic_tab_favorites),
+                    contentDescription = stringResource(if (isFavorite) R.string.favorites_remove else R.string.favorites_add),
                     tint = colors.onSurfaceVariant,
                 )
             }

@@ -88,12 +88,16 @@ class NetworkCall
         private fun parseServerCode(text: String): String? {
             val json = gson.fromJson(text, JsonObject::class.java) ?: return null
             val error = json["error"] as? JsonObject ?: json
-            val code = error["code"] as? JsonPrimitive ?: return null
-            return code.takeIf { it.isString }?.asString?.takeIf(SAFE_CODE::matches)
+            val code = (error["error_code"] ?: error["code"]) as? JsonPrimitive ?: return null
+            return code
+                .takeIf { it.isString }
+                ?.asString
+                ?.takeIf(SAFE_CODE::matches)
+                ?.uppercase()
         }
 
         companion object {
             private const val MAX_ERROR_BODY_CHARS = 8192
-            private val SAFE_CODE = Regex("[A-Z0-9_]{1,64}")
+            private val SAFE_CODE = Regex("[A-Za-z0-9_]{1,64}")
         }
     }

@@ -73,6 +73,11 @@ internal fun HomeScreen(
     onRetry: () -> Unit,
     onOpenSpot: (SpotId) -> Unit,
     onOpenMap: () -> Unit,
+    signedIn: Boolean = false,
+    savedSpotIds: Set<SpotId> = emptySet(),
+    favoriteEnabled: Boolean = true,
+    onFavorite: (Spot) -> Unit = {},
+    onOpenAuth: () -> Unit = {},
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var sport by rememberSaveable { mutableStateOf<SportType?>(null) }
@@ -143,7 +148,13 @@ internal fun HomeScreen(
                     }
                 }
                 items(filtered) { spot ->
-                    HomeSpotCard(spot, onClick = { onOpenSpot(spot.id) }, onFavorite = { favoritesInfo = true })
+                    HomeSpotCard(
+                        spot,
+                        onClick = { onOpenSpot(spot.id) },
+                        onFavorite = { if (signedIn) onFavorite(spot) else favoritesInfo = true },
+                        isFavorite = spot.id in savedSpotIds,
+                        favoriteEnabled = favoriteEnabled,
+                    )
                 }
             }
         }
@@ -152,8 +163,14 @@ internal fun HomeScreen(
         AlertDialog(
             onDismissRequest = { favoritesInfo = false },
             title = { Text(stringResource(R.string.tab_favorites)) },
-            text = { Text(stringResource(R.string.home_favorites_unavailable)) },
+            text = { Text(stringResource(R.string.favorites_guest_message)) },
             confirmButton = {
+                TextButton(onClick = {
+                    favoritesInfo = false
+                    onOpenAuth()
+                }) { Text(stringResource(R.string.auth_sign_in)) }
+            },
+            dismissButton = {
                 TextButton(onClick = { favoritesInfo = false }) { Text(stringResource(R.string.home_close)) }
             },
         )

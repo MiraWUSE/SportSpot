@@ -29,10 +29,6 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideAccessTokenProvider(): AccessTokenProvider = AccessTokenProvider { null }
-
-    @Provides
-    @Singleton
     fun provideGson(): Gson = NetworkClient.createGson()
 
     @Provides
