@@ -7,6 +7,8 @@ import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.model.spot.SpotSport
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.sportLabel
+import com.mirawuse.sportspot.presentation.ui.search.SearchFilterState
+import com.mirawuse.sportspot.presentation.ui.search.filterSpots
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -22,6 +24,7 @@ class HomeFilterTest {
             R.string.sport_basketball to "Баскетбол",
             R.string.sport_other to "Другой вид спорта",
             R.string.sport_ice_hockey to "Хоккей с шайбой",
+            R.string.sport_hockey to "Хоккей",
             R.string.sport_table_tennis to "Настольный теннис",
             R.string.sport_unspecified to "Вид спорта не указан",
         )
@@ -30,25 +33,27 @@ class HomeFilterTest {
 
     @Test
     fun `text matches the name or localized sport regardless of case`() {
-        assertEquals(listOf(football), filterHomeSpots(spots, " СТАД ", null, ::sportLabel))
-        assertEquals(listOf(basketball), filterHomeSpots(spots, "БАСКЕТ", null, ::sportLabel))
+        assertEquals(listOf(football), filterSpots(spots, SearchFilterState(" СТАД ", null), ::sportLabel))
+        assertEquals(listOf(basketball), filterSpots(spots, SearchFilterState("БАСКЕТ", null), ::sportLabel))
     }
 
     @Test
     fun `category and query are both applied`() {
-        assertEquals(listOf(basketball), filterHomeSpots(spots, "площадка", SportType.BASKETBALL, ::sportLabel))
-        assertTrue(filterHomeSpots(spots, "площадка", SportType.FOOTBALL, ::sportLabel).isEmpty())
+        assertEquals(listOf(basketball), filterSpots(spots, SearchFilterState("площадка", SportType.BASKETBALL), ::sportLabel))
+        assertTrue(filterSpots(spots, SearchFilterState("площадка", SportType.FOOTBALL), ::sportLabel).isEmpty())
     }
 
     @Test
     fun `compound sports are searchable by each localized sport and compatible category`() {
         val mixed = other.copy(sports = listOf(SpotSport.FOOTBALL, SpotSport.ICE_HOCKEY))
         val table = other.copy(id = SpotId("osm", "node:4"), sports = listOf(SpotSport.TABLE_TENNIS))
-        val candidates = listOf(mixed, table)
+        val hockey = other.copy(id = SpotId("osm", "node:5"), sports = listOf(SpotSport.HOCKEY))
+        val candidates = listOf(mixed, table, hockey)
+        assertEquals(listOf(mixed, hockey), filterSpots(candidates, SearchFilterState("хоккей"), ::sportLabel))
 
-        assertEquals(listOf(mixed), filterHomeSpots(candidates, "ХоКкЕй", SportType.FOOTBALL, ::sportLabel))
-        assertEquals(listOf(table), filterHomeSpots(candidates, "настольный теннис", null, ::sportLabel))
-        assertTrue(filterHomeSpots(candidates, "", SportType.TENNIS, ::sportLabel).isEmpty())
+        assertEquals(listOf(mixed), filterSpots(candidates, SearchFilterState("ХоКкЕй", SportType.FOOTBALL), ::sportLabel))
+        assertEquals(listOf(table), filterSpots(candidates, SearchFilterState("настольный теннис", null), ::sportLabel))
+        assertTrue(filterSpots(candidates, SearchFilterState("", SportType.TENNIS), ::sportLabel).isEmpty())
     }
 
     @Test
@@ -57,12 +62,27 @@ class HomeFilterTest {
         val unsupported = other.copy(sports = listOf(SpotSport.OTHER))
         val candidates = listOf(missing, unsupported)
 
-        assertEquals(listOf(missing), filterHomeSpots(candidates, "не указан", null, ::sportLabel))
-        assertEquals(listOf(unsupported), filterHomeSpots(candidates, "другой", null, ::sportLabel))
+        assertEquals(listOf(missing), filterSpots(candidates, SearchFilterState("не указан", null), ::sportLabel))
+        assertEquals(listOf(unsupported), filterSpots(candidates, SearchFilterState("другой", null), ::sportLabel))
     }
 
     @Test
     fun `clearing filters includes every sport from the original snapshot`() {
-        assertEquals(spots, filterHomeSpots(spots, " ", null, ::sportLabel))
+        assertEquals(spots, filterSpots(spots, SearchFilterState(" ", null), ::sportLabel))
+    }
+
+    @Test
+    fun `matches an available address without inventing a missing address`() {
+        val addressed = basketball.copy(address = "Красная улица, 14")
+        val candidates = listOf(football, addressed, other.copy(address = ""))
+        assertEquals(listOf(addressed), filterSpots(candidates, SearchFilterState(" УЛИЦА, 14 "), ::sportLabel))
+        assertTrue(filterSpots(candidates, SearchFilterState("адрес не указан"), ::sportLabel).isEmpty())
+    }
+
+    @Test
+    fun `keeps identical names and values from different sources in input order`() {
+        val community = football.copy(id = SpotId("community", football.id.value))
+        val candidates = listOf(community, basketball, football)
+        assertEquals(listOf(community, football), filterSpots(candidates, SearchFilterState("стадион"), ::sportLabel))
     }
 }

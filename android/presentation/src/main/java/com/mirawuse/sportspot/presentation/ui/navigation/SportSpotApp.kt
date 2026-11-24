@@ -19,6 +19,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -50,6 +51,7 @@ import com.mirawuse.sportspot.presentation.ui.account.labelRes
 import com.mirawuse.sportspot.presentation.ui.account.visibleFor
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButtonVariant
+import com.mirawuse.sportspot.presentation.ui.components.sportLabel
 import com.mirawuse.sportspot.presentation.ui.details.SpotDetailsScreen
 import com.mirawuse.sportspot.presentation.ui.home.HomeScreen
 import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
@@ -205,6 +207,7 @@ fun SportSpotApp() {
                 val viewModel = searchViewModel(navController, entry)
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
                 val location by viewModel.location.collectAsStateWithLifecycle()
+                val filter by viewModel.searchFilter.collectAsStateWithLifecycle()
                 HomeScreen(
                     state = state,
                     location = location,
@@ -214,6 +217,10 @@ fun SportSpotApp() {
                     onRetry = viewModel::retry,
                     onOpenSpot = { navController.navigate(SpotDetailsRoute(it.source, it.value)) },
                     onOpenMap = { navController.selectTab(Tab.MAP) },
+                    filter = filter,
+                    onSearchQuery = viewModel::setSearchQuery,
+                    onSearchSport = viewModel::setSearchSport,
+                    onResetSearch = viewModel::resetSearchFilter,
                     signedIn = authState is AuthState.Authenticated,
                     savedSpotIds = savedIds,
                     favoriteEnabled = favoriteEnabled,
@@ -226,6 +233,7 @@ fun SportSpotApp() {
                 val viewModel = searchViewModel(navController, entry)
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
                 val location by viewModel.location.collectAsStateWithLifecycle()
+                val filter by viewModel.searchFilter.collectAsStateWithLifecycle()
                 val anchor = MapAnchor(location.center, route.spotId)
                 if (!route.favorite) {
                     LifecycleResumeEffect(anchor) {
@@ -260,6 +268,10 @@ fun SportSpotApp() {
                     viewport = viewport,
                     onViewportMoveStarted = if (route.favorite) null else mapViewModel::onMoveStarted,
                     onViewportIdle = if (route.favorite) null else mapViewModel::onViewportIdle,
+                    filter = filter.takeUnless { route.favorite },
+                    onSearchQuery = viewModel::setSearchQuery,
+                    onSearchSport = viewModel::setSearchSport,
+                    onResetSearch = viewModel::resetSearchFilter,
                 )
             }
             composable("favorites") {
@@ -345,15 +357,17 @@ fun SportSpotApp() {
                 val route = entry.toRoute<SpotDetailsRoute>()
                 val viewModel = searchViewModel(navController, entry)
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
+                val resources = LocalResources.current
+                val detailsState =
+                    if (route.favorite) {
+                        favoriteDestinationState(favoriteState, route.spotId, favoriteError)
+                    } else {
+                        state.withOpenedMapSpot(route.spotId, openedMapSpot)
+                    }
                 LaunchedEffect(route.spotId) { reviews.load(route.spotId) }
                 SpotDetailsScreen(
                     spotId = route.spotId,
-                    state =
-                        if (route.favorite) {
-                            favoriteDestinationState(favoriteState, route.spotId, favoriteError)
-                        } else {
-                            state.withOpenedMapSpot(route.spotId, openedMapSpot)
-                        },
+                    state = detailsState,
                     onRetry = if (route.favorite) favorites::retry else viewModel::retry,
                     onBack = { navController.popBackStack() },
                     onOpenReviews = { navController.navigate(ReviewsRoute(it.source, it.value)) },
@@ -361,6 +375,9 @@ fun SportSpotApp() {
                         if (route.favorite) {
                             navController.navigate(MapRoute(id.source, id.value, favorite = true)) { launchSingleTop = true }
                         } else {
+                            (detailsState as? HomeUiState.Content)?.findSpot(id)?.let { spot ->
+                                viewModel.clearConflictingSearchFilter(spot) { it.sportLabel(resources::getString) }
+                            }
                             navController.clearBackStack<MapRoute>()
                             navController.navigate(MapRoute(id.source, id.value)) {
                                 popUpTo(HOME_ROUTE)

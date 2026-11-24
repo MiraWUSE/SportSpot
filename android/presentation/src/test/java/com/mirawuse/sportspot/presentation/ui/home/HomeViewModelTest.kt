@@ -1,5 +1,6 @@
 package com.mirawuse.sportspot.presentation.ui.home
 
+import androidx.lifecycle.SavedStateHandle
 import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
@@ -7,6 +8,7 @@ import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.repository.SpotRepository
 import com.mirawuse.sportspot.domain.usecase.spot.SearchNearbySpotsUseCase
 import com.mirawuse.sportspot.presentation.R
+import com.mirawuse.sportspot.presentation.ui.search.SearchFilterState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -60,6 +62,49 @@ class HomeViewModelTest {
             advanceUntilIdle()
 
             assertEquals(HomeUiState.Content(listOf(spot)), viewModel.uiState.value)
+            assertEquals(1, repository.searchCalls)
+        }
+
+    @Test
+    fun `text and sport persist together and can be cleared without querying again`() =
+        runTest(dispatcher) {
+            val repository = FakeSpotRepository { _, _, _ -> listOf(spot) }
+            val search = SearchNearbySpotsUseCase(repository)
+            val saved = SavedStateHandle()
+            val viewModel = HomeViewModel(search, FakeDeviceLocationProvider(), saved)
+            advanceUntilIdle()
+
+            viewModel.setSearchQuery(" Красная улица ")
+            viewModel.setSearchSport(SportType.BASKETBALL)
+            advanceUntilIdle()
+            assertEquals(SearchFilterState(" Красная улица ", SportType.BASKETBALL), viewModel.searchFilter.value)
+            assertEquals(1, repository.searchCalls)
+
+            val restoredHandle = SavedStateHandle(saved.keys().associateWith { saved.get<Any?>(it) })
+            val restored = HomeViewModel(search, FakeDeviceLocationProvider(), restoredHandle)
+            advanceUntilIdle()
+            assertEquals(viewModel.searchFilter.value, restored.searchFilter.value)
+            restored.resetSearchFilter()
+            advanceUntilIdle()
+            assertEquals(SearchFilterState(), restored.searchFilter.value)
+            assertEquals(2, repository.searchCalls)
+        }
+
+    @Test
+    fun `explicit map focus clears only a conflicting filter without another search`() =
+        runTest(dispatcher) {
+            val repository = FakeSpotRepository { _, _, _ -> listOf(spot) }
+            val viewModel = HomeViewModel(SearchNearbySpotsUseCase(repository), FakeDeviceLocationProvider())
+            advanceUntilIdle()
+            viewModel.setSearchQuery("БАСКЕТ")
+            viewModel.setSearchSport(SportType.BASKETBALL)
+            viewModel.clearConflictingSearchFilter(spot) { "Баскетбол" }
+            assertEquals(SearchFilterState("БАСКЕТ", SportType.BASKETBALL), viewModel.searchFilter.value)
+
+            viewModel.setSearchSport(SportType.VOLLEYBALL)
+            viewModel.clearConflictingSearchFilter(spot) { "Баскетбол" }
+            advanceUntilIdle()
+            assertEquals(SearchFilterState(), viewModel.searchFilter.value)
             assertEquals(1, repository.searchCalls)
         }
 
