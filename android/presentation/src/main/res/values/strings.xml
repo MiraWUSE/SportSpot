@@ -252,4 +252,15 @@
     <string name="photos_unavailable">Не удалось загрузить фотографии. Попробуйте ещё раз.</string>
     <string name="photos_review_saved">Отзыв сохранён</string>
     <string name="photos_done">Готово</string>
+    <string name="photos_gallery">Фото пользователей</string>
+    <string name="photos_review_gallery">Фото отзыва</string>
+    <string name="photos_empty_gallery">Пока нет одобренных фото</string>
+    <string name="photos_queue">Модерация фотографий</string>
+    <string name="photos_queue_empty">Нет фотографий для просмотра</string>
+    <string name="photos_target_spot">Фото площадки</string>
+    <string name="photos_target_review">Фото к отзыву</string>
+    <string name="photos_target_proposal">Фото к предложению</string>
+    <string name="photos_target_id">ID: %1$s</string>
+    <string name="photos_author_id">ID автора: %1$s</string>
+    <string name="photos_proposal_evidence">Фото предложения</string>
 </resources>

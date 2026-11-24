@@ -43,7 +43,7 @@ internal data class PhotoDraftState(
 internal class PhotosViewModel
     @Inject
     constructor(
-        @ApplicationContext private val context: Context,
+        @param:ApplicationContext private val context: Context,
         private val auth: AuthRepository,
         private val repository: UserPhotoRepository,
     ) : ViewModel() {
@@ -53,6 +53,8 @@ internal class PhotosViewModel
         private val history = mutableStateMapOf<PhotoTarget, PhotoHistoryState>()
         private val reads = mutableMapOf<PhotoTarget, Job>()
         private var work: Job? = null
+        private var moderation by mutableStateOf(PhotoHistoryState())
+        private var moderationJob: Job? = null
 
         init {
             viewModelScope.launch {
@@ -61,6 +63,8 @@ internal class PhotosViewModel
                     if (owner != sessionOwner) {
                         sessionOwner = owner
                         work?.cancel()
+                        moderationJob?.cancel()
+                        moderation = PhotoHistoryState()
                         reads.values.forEach(Job::cancel)
                         reads.clear()
                         draft = PhotoDraftState()
@@ -140,6 +144,10 @@ internal class PhotosViewModel
             if (current(owner)) work?.cancel()
         }
 
+        fun clearDraft(owner: String) {
+            if (current(owner) && !draft.busy) draft = PhotoDraftState()
+        }
+
         fun afterParentSaved(
             owner: String,
             target: PhotoTarget,
@@ -216,9 +224,36 @@ internal class PhotosViewModel
             proposalId: String?,
         ): List<PhotoSubmission> = repository.queue(owner, proposalId)
 
-        suspend fun decide(
+        fun moderationFor(owner: String): PhotoHistoryState = if (current(owner)) moderation else PhotoHistoryState()
+
+        fun loadModeration(owner: String) = updateModeration(owner)
+
+        fun moderate(
             owner: String,
             id: String,
             reason: String?,
-        ) = repository.decide(owner, id, reason)
+        ) = updateModeration(owner, id, reason)
+
+        private fun updateModeration(
+            owner: String,
+            id: String? = null,
+            reason: String? = null,
+        ) {
+            if (!current(owner) || moderationJob?.isActive == true) return
+            moderation = moderation.copy(loading = true, error = null)
+            moderationJob =
+                viewModelScope.launch {
+                    try {
+                        if (id != null) {
+                            repository.decide(owner, id, reason)
+                            if (!current(owner)) return@launch
+                            moderation = moderation.copy(items = moderation.items.filterNot { it.id == id })
+                        }
+                        val items = repository.queue(owner, null)
+                        if (current(owner)) moderation = PhotoHistoryState(items)
+                    } catch (error: PhotoException) {
+                        if (current(owner)) moderation = moderation.copy(loading = false, error = error.error)
+                    }
+                }
+        }
     }

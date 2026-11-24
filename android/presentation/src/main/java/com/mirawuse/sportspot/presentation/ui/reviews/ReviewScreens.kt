@@ -46,6 +46,7 @@ internal fun ReviewsScreen(
     onWrite: () -> Unit,
     onDelete: (Review) -> Unit,
     onRetry: () -> Unit,
+    reviewPhotos: @Composable (Review) -> Unit = {},
 ) {
     var confirmDelete by rememberSaveable(owner) { mutableStateOf(false) }
     FormScreen(stringResource(R.string.reviews_title), onBack) {
@@ -76,6 +77,7 @@ internal fun ReviewsScreen(
                             review.title?.let { Text(it, style = MaterialTheme.typography.titleMedium) }
                             Text(review.text, style = MaterialTheme.typography.bodyMedium)
                             review.createdAt?.take(10)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                            reviewPhotos(review)
                         }
                     }
                 }

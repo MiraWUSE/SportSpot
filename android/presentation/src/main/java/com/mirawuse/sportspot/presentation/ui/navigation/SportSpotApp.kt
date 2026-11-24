@@ -17,7 +17,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
@@ -39,6 +42,7 @@ import androidx.navigation.toRoute
 import com.mirawuse.sportspot.domain.model.auth.AuthState
 import com.mirawuse.sportspot.domain.model.photo.PhotoTarget
 import com.mirawuse.sportspot.domain.model.photo.PhotoTargetType
+import com.mirawuse.sportspot.domain.model.proposal.ProposalStatus
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.policy.AuthorizationPolicy
@@ -66,8 +70,12 @@ import com.mirawuse.sportspot.presentation.ui.map.MapViewModel
 import com.mirawuse.sportspot.presentation.ui.moderation.ModerationScreen
 import com.mirawuse.sportspot.presentation.ui.moderation.ModerationViewModel
 import com.mirawuse.sportspot.presentation.ui.photos.PhotoEditor
+import com.mirawuse.sportspot.presentation.ui.photos.PhotoGallery
 import com.mirawuse.sportspot.presentation.ui.photos.PhotoHistory
+import com.mirawuse.sportspot.presentation.ui.photos.PhotoModeration
+import com.mirawuse.sportspot.presentation.ui.photos.PhotoTextButton
 import com.mirawuse.sportspot.presentation.ui.photos.PhotosViewModel
+import com.mirawuse.sportspot.presentation.ui.photos.ProposalPhotoEvidence
 import com.mirawuse.sportspot.presentation.ui.proposal.MyProposalsScreen
 import com.mirawuse.sportspot.presentation.ui.proposal.ProposalScreen
 import com.mirawuse.sportspot.presentation.ui.proposal.ProposalsViewModel
@@ -341,6 +349,7 @@ fun SportSpotApp() {
             }
             composable(MY_PROPOSALS_ROUTE) { entry ->
                 val photos: PhotosViewModel = hiltViewModel(entry)
+                var editingPhotosFor by rememberSaveable(accountId) { mutableStateOf<String?>(null) }
                 LaunchedEffect(accountId) { proposals.load(accountId) }
                 LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { proposals.load(accountId) }
                 MyProposalsScreen(
@@ -351,12 +360,35 @@ fun SportSpotApp() {
                     onOpenAuth = { navController.navigate(AUTH_ROUTE) },
                     onRetry = { proposals.load(accountId) },
                     photoHistory = { proposal ->
-                        if (accountId != null) PhotoHistory(accountId, PhotoTarget.proposal(proposal.id), photos)
+                        if (accountId != null) {
+                            val target = PhotoTarget.proposal(proposal.id)
+                            if (editingPhotosFor == proposal.id) {
+                                val draft = photos.draftFor(accountId)
+                                if (proposal.status != ProposalStatus.REJECTED) {
+                                    PhotoEditor(accountId, target.type.limit, photos, target)
+                                } else {
+                                    PhotoHistory(accountId, target, photos)
+                                }
+                                val closeLabel = if (draft.attachments.isEmpty()) R.string.photos_done else R.string.content_cancel
+                                PhotoTextButton(closeLabel, enabled = !draft.busy) {
+                                    photos.clearDraft(accountId)
+                                    editingPhotosFor = null
+                                }
+                            } else {
+                                PhotoHistory(accountId, target, photos)
+                                if (proposal.status != ProposalStatus.REJECTED) {
+                                    PhotoTextButton(R.string.photos_add, enabled = editingPhotosFor == null) {
+                                        editingPhotosFor = proposal.id
+                                    }
+                                }
+                            }
+                        }
                     },
                 )
             }
             composable(MODERATION_ROUTE) { entry ->
                 val moderation: ModerationViewModel = hiltViewModel(entry)
+                val photos: PhotosViewModel = hiltViewModel(entry)
                 val search = searchViewModel(navController, entry)
                 LaunchedEffect(moderatorId) { moderation.load(moderatorId) }
                 ModerationScreen(
@@ -373,6 +405,8 @@ fun SportSpotApp() {
                     onReject = { proposalId, reason ->
                         moderatorId?.let { moderation.decide(it, proposalId, reason) }
                     },
+                    photoQueue = moderatorId?.let { owner -> { PhotoModeration(owner, photos) } },
+                    proposalPhotos = { proposal -> moderatorId?.let { ProposalPhotoEvidence(it, proposal.id, photos) } },
                 )
             }
             composable(AUTH_ROUTE) {
@@ -431,18 +465,20 @@ fun SportSpotApp() {
                         (reviews.stateFor(route.spotId) as? ReviewsState.Content)?.let { ReviewScore(it.items) }
                     },
                     userPhotos = { spot ->
-                        if (accountId != null) {
-                            runCatching { PhotoTarget.spot(spot.id) }.getOrNull()?.let { target ->
+                        runCatching { PhotoTarget.spot(spot.id) }.getOrNull()?.let { target ->
+                            PhotoGallery(target, photos)
+                            if (accountId != null) {
                                 PhotoEditor(accountId, target.type.limit, photos, target)
+                            } else {
+                                SportSpotButton(stringResource(R.string.photos_add), { navController.navigate(AUTH_ROUTE) })
                             }
-                        } else {
-                            SportSpotButton(stringResource(R.string.photos_add), { navController.navigate(AUTH_ROUTE) })
                         }
                     },
                 )
             }
             composable<ReviewsRoute> { entry ->
                 val route = entry.toRoute<ReviewsRoute>()
+                val photos: PhotosViewModel = hiltViewModel(entry)
                 val viewModel = searchViewModel(navController, entry)
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
                 LaunchedEffect(route.spotId) { reviews.load(route.spotId) }
@@ -462,6 +498,7 @@ fun SportSpotApp() {
                     },
                     onDelete = { review -> accountId?.let { reviews.delete(it, review) } },
                     onRetry = { reviews.load(route.spotId, refresh = true) },
+                    reviewPhotos = { review -> PhotoGallery(PhotoTarget.review(review.id), photos, collapsible = true) },
                 )
             }
             composable<ReviewFormRoute> { entry ->

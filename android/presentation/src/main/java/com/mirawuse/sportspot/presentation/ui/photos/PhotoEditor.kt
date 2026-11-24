@@ -22,9 +22,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,7 +58,13 @@ internal fun PhotoEditor(
     val state = model.draftFor(owner)
     val editable = enabled && model.readyFor(owner)
     val contract = remember(limit) { ActivityResultContracts.PickMultipleVisualMedia(limit) }
-    val picker = rememberLauncherForActivityResult(contract) { images -> model.select(owner, images, limit) }
+    val attachmentsUsed =
+        target?.let { current ->
+            model.historyFor(owner, current).items.count { photo ->
+                photo.status != PhotoStatus.REJECTED && state.attachments.none { it.id == photo.id }
+            }
+        } ?: 0
+    val picker = rememberLauncherForActivityResult(contract) { images -> model.select(owner, images, limit - attachmentsUsed) }
     Column(verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.sm)) {
         Text(stringResource(R.string.photos_add), style = MaterialTheme.typography.titleMedium)
         Text(stringResource(R.string.photos_limits, limit), style = MaterialTheme.typography.bodySmall)
@@ -77,7 +85,8 @@ internal fun PhotoEditor(
             PhotoTextButton(R.string.content_cancel) { model.cancel(owner) }
         }
         state.error?.let { PhotoErrorText(it) }
-        PhotoTextButton(R.string.photos_choose, enabled = editable && !state.busy && state.attachments.size < limit) {
+        val canChoose = editable && !state.busy && state.attachments.size + attachmentsUsed < limit
+        PhotoTextButton(R.string.photos_choose, enabled = canChoose) {
             picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
         }
         if (target != null && allowUpload && state.attachments.isNotEmpty()) {
@@ -126,10 +135,14 @@ internal fun RemotePhoto(
     id: String,
     model: PhotosViewModel,
     owner: String? = null,
+    modifier: Modifier = Modifier.fillMaxWidth().height(200.dp),
+    scale: ContentScale = ContentScale.Fit,
 ) {
     // Scope the state itself to the account. produceState keys alone retain the old value during a reload.
     key(owner, id) {
-        val result by produceState<Result<ByteArray>?>(null) {
+        var attempt by rememberSaveable { mutableIntStateOf(0) }
+        val result by produceState<Result<ByteArray>?>(null, attempt) {
+            value = null
             value =
                 try {
                     Result.success(model.image(id, owner))
@@ -140,9 +153,13 @@ internal fun RemotePhoto(
         val error = result?.exceptionOrNull() as? PhotoException
         val bytes = result?.getOrNull()
         when {
-            bytes != null -> PhotoBitmap(bytes, Modifier.fillMaxWidth().height(160.dp))
-            error != null -> PhotoErrorText(error.error)
-            else -> CircularProgressIndicator(Modifier.size(24.dp))
+            bytes != null -> PhotoBitmap(bytes, modifier, scale)
+            error != null ->
+                Column {
+                    PhotoErrorText(error.error)
+                    PhotoTextButton(R.string.home_retry) { attempt++ }
+                }
+            else -> Box(modifier, contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp)) }
         }
     }
 }
@@ -151,6 +168,7 @@ internal fun RemotePhoto(
 private fun PhotoBitmap(
     bytes: ByteArray,
     modifier: Modifier,
+    scale: ContentScale = ContentScale.Crop,
 ) {
     val bitmap by produceState<ImageBitmap?>(null, bytes) {
         value =
@@ -160,7 +178,7 @@ private fun PhotoBitmap(
     }
     Box(modifier.clip(MaterialTheme.shapes.medium), contentAlignment = Alignment.Center) {
         bitmap?.let { image ->
-            Image(image, stringResource(R.string.photos_preview), Modifier.matchParentSize(), contentScale = ContentScale.Crop)
+            Image(image, stringResource(R.string.photos_preview), Modifier.matchParentSize(), contentScale = scale)
         }
     }
 }
@@ -185,7 +203,7 @@ internal fun PhotoErrorText(error: PhotoError) {
     Text(stringResource(error.labelRes()), color = MaterialTheme.colorScheme.error)
 }
 
-private fun PhotoStatus.labelRes(): Int =
+internal fun PhotoStatus.labelRes(): Int =
     when (this) {
         PhotoStatus.UPLOADING -> R.string.photos_incomplete
         PhotoStatus.PENDING -> R.string.photos_pending
