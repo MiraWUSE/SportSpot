@@ -27,6 +27,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 class AuthRepositoryTest {
@@ -160,6 +161,17 @@ class AuthRepositoryTest {
             assertEquals(AuthState.Guest, repository.getAuthState())
         }
 
+    @Test
+    fun logoutClearsTheActiveAccountEvenWhenStorageReportsAnError() =
+        runBlocking {
+            signInAndDrain()
+            store.failOnClear = true
+
+            assertEquals(AuthFailure.UNAVAILABLE, failureOf { repository.signOut() })
+            assertEquals(AuthState.Guest, repository.getAuthState())
+            assertNull(repository.currentAccessToken())
+        }
+
     private fun newRepository() = AuthRepositoryImpl(api, NetworkCall(NetworkMonitor { online }, gson), store)
 
     private suspend fun signInAndDrain() {
@@ -199,10 +211,12 @@ class AuthRepositoryTest {
     private class MemorySessionStore : AuthSessionStore {
         var value: AuthSession? = null
         var clock: Long = 100_000
+        var failOnClear = false
 
         override fun read() = value
 
         override fun write(session: AuthSession?) {
+            if (session == null && failOnClear) throw IOException("Test cleanup failure")
             value = session
         }
 
