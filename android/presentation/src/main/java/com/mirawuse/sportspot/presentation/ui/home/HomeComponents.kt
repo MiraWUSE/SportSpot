@@ -167,11 +167,6 @@ internal fun HomeSpotCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    stringResource(R.string.home_ratings_unavailable),
-                    color = colors.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                )
             }
             IconButton(onClick = onFavorite, modifier = Modifier.size(32.dp), enabled = favoriteEnabled) {
                 Icon(

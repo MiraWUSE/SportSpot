@@ -17,7 +17,6 @@
     <string name="home_no_matches">Площадок по этому запросу нет. Измените поиск или вид спорта.</string>
     <string name="home_close">Закрыть</string>
     <string name="home_results_count">Найдено %1$d</string>
-    <string name="home_ratings_unavailable">Оценки недоступны</string>
     <string name="home_demo_location">Нижний Новгород</string>
     <string name="location_current">Моё местоположение</string>
     <string name="location_approximate">Примерное местоположение</string>
@@ -100,16 +99,30 @@
 
     <string name="reviews_title">Отзывы</string>
     <string name="reviews_write">Написать отзыв</string>
-    <string name="reviews_unavailable">Отзывы пока недоступны</string>
-    <string name="reviews_read_unavailable">Можно заполнить форму, публикация пока недоступна.</string>
+    <string name="reviews_none">Нет отзывов</string>
+    <string name="review_score_empty">Пока нет оценок</string>
+    <string name="review_score">★ %1$.1f из 5 · Отзывов: %2$d</string>
+    <string name="review_anonymous_author">Пользователь</string>
+    <string name="review_own_author">Вы</string>
+    <string name="review_sign_in">Войдите, чтобы оставить отзыв.</string>
+    <string name="review_edit">Редактировать отзыв</string>
+    <string name="review_delete">Удалить отзыв</string>
+    <string name="review_delete_question">Удалить ваш отзыв об этой площадке?</string>
+    <string name="review_publish">Опубликовать отзыв</string>
+    <string name="content_save">Сохранить</string>
+    <string name="content_cancel">Отмена</string>
+    <string name="content_sign_in_again">Войдите снова, чтобы продолжить.</string>
+    <string name="content_forbidden">У вас нет доступа к этому действию.</string>
+    <string name="content_conflict">Данные уже изменились. Проверьте их перед повтором.</string>
+    <string name="content_not_found">Запись больше недоступна.</string>
+    <string name="content_unavailable">Не удалось связаться с сервером. Попробуйте ещё раз.</string>
+    <string name="content_unexpected">Не удалось обработать ответ сервера.</string>
     <string name="review_rating">Ваша оценка</string>
     <string name="review_rating_choice">Оценка %1$d из 5</string>
     <string name="review_title_optional">Заголовок (необязательно)</string>
     <string name="review_title_hint">Кратко о площадке</string>
     <string name="review_comment">Комментарий</string>
     <string name="review_comment_hint">Что понравилось? Что можно улучшить?</string>
-    <string name="review_validate">Проверить отзыв</string>
-    <string name="review_send_unavailable">Поля заполнены. Публикация отзывов пока недоступна.</string>
 
     <string name="proposal_title">Предложить площадку</string>
     <string name="proposal_heading">Новая спортивная площадка</string>

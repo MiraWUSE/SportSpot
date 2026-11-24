@@ -45,6 +45,7 @@ internal fun SpotDetailsScreen(
     onOpenReviews: (SpotId) -> Unit,
     onShowMap: (SpotId) -> Unit,
     favoriteAction: (@Composable (Spot) -> Unit)? = null,
+    reviewSummary: (@Composable () -> Unit)? = null,
 ) {
     val backLabel = stringResource(R.string.details_back)
     Column(modifier = Modifier.fillMaxSize()) {
@@ -69,7 +70,7 @@ internal fun SpotDetailsScreen(
                 state is HomeUiState.Loading -> SpotSearchLoading()
                 state is HomeUiState.Error ->
                     SpotSearchMessage(stringResource(R.string.home_error_title), state.message, onRetry)
-                spot != null -> DetailsContent(spot, onShowMap, onOpenReviews, favoriteAction)
+                spot != null -> DetailsContent(spot, onShowMap, onOpenReviews, favoriteAction, reviewSummary)
                 else ->
                     SpotSearchMessage(
                         title = stringResource(R.string.details_not_found),
@@ -87,6 +88,7 @@ private fun DetailsContent(
     onShowMap: (SpotId) -> Unit,
     onOpenReviews: (SpotId) -> Unit,
     favoriteAction: (@Composable (Spot) -> Unit)?,
+    reviewSummary: (@Composable () -> Unit)?,
 ) {
     val uriHandler = LocalUriHandler.current
     SpotPhotoImage(
@@ -120,6 +122,7 @@ private fun DetailsContent(
     }
     Column(verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs)) {
         Text(text = spot.name, style = MaterialTheme.typography.headlineSmall)
+        reviewSummary?.invoke()
         Text(
             text = spot.address?.takeIf { it.isNotBlank() } ?: stringResource(R.string.details_no_address),
             color = MaterialTheme.colorScheme.onSurfaceVariant,

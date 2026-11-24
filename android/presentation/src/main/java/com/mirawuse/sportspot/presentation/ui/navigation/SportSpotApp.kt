@@ -54,7 +54,10 @@ import com.mirawuse.sportspot.presentation.ui.home.HomeViewModel
 import com.mirawuse.sportspot.presentation.ui.map.MapScreen
 import com.mirawuse.sportspot.presentation.ui.proposal.ProposalScreen
 import com.mirawuse.sportspot.presentation.ui.reviews.ReviewFormScreen
+import com.mirawuse.sportspot.presentation.ui.reviews.ReviewScore
 import com.mirawuse.sportspot.presentation.ui.reviews.ReviewsScreen
+import com.mirawuse.sportspot.presentation.ui.reviews.ReviewsState
+import com.mirawuse.sportspot.presentation.ui.reviews.ReviewsViewModel
 import kotlinx.serialization.Serializable
 
 private const val APP_GRAPH = "sportspot"
@@ -117,6 +120,8 @@ fun SportSpotApp() {
     val authViewModel: AuthViewModel = hiltViewModel()
     val favorites: FavoritesViewModel = hiltViewModel()
     val authState by authViewModel.authState.collectAsStateWithLifecycle()
+    val reviews: ReviewsViewModel = hiltViewModel()
+    val reviewOwner = (authState as? AuthState.Authenticated)?.profile?.id
     val favoriteState = favorites.state.visibleFor(authState)
     val favoriteList = (favoriteState as? FavoritesUiState.Content)?.list?.items.orEmpty()
     val savedIds = favoriteList.mapTo(mutableSetOf()) { it.spotId }
@@ -257,6 +262,7 @@ fun SportSpotApp() {
                 val route = entry.toRoute<SpotDetailsRoute>()
                 val viewModel = searchViewModel(navController, entry)
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(route.spotId) { reviews.load(route.spotId) }
                 SpotDetailsScreen(
                     spotId = route.spotId,
                     state = if (route.favorite) favoriteDestinationState(favoriteState, route.spotId, favoriteError) else state,
@@ -285,26 +291,57 @@ fun SportSpotApp() {
                             enabled = favoriteEnabled,
                         )
                     },
+                    reviewSummary = {
+                        (reviews.stateFor(route.spotId) as? ReviewsState.Content)?.let { ReviewScore(it.items) }
+                    },
                 )
             }
             composable<ReviewsRoute> { entry ->
                 val route = entry.toRoute<ReviewsRoute>()
                 val viewModel = searchViewModel(navController, entry)
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(route.spotId) { reviews.load(route.spotId) }
                 ReviewsScreen(
-                    spotName = (state as? HomeUiState.Content)?.findSpot(route.spotId)?.name,
+                    spotName =
+                        (state as? HomeUiState.Content)?.findSpot(route.spotId)?.name
+                            ?: favoriteList.firstOrNull { it.spotId == route.spotId }?.spot?.name,
+                    state = reviews.stateFor(route.spotId),
+                    owner = reviewOwner,
+                    busy = reviews.busy,
+                    error = reviews.errorFor(reviewOwner),
                     onBack = { navController.popBackStack() },
-                    onWrite = { navController.navigate(ReviewFormRoute(route.source, route.value)) },
+                    onWrite = {
+                        reviews.clearError()
+                        navController.navigate(ReviewFormRoute(route.source, route.value))
+                    },
+                    onDelete = { review -> reviewOwner?.let { reviews.delete(it, review) } },
+                    onRetry = { reviews.load(route.spotId, refresh = true) },
                 )
             }
             composable<ReviewFormRoute> { entry ->
                 val route = entry.toRoute<ReviewFormRoute>()
                 val viewModel = searchViewModel(navController, entry)
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(route.spotId) { reviews.load(route.spotId) }
                 ReviewFormScreen(
-                    spotName = (state as? HomeUiState.Content)?.findSpot(route.spotId)?.name,
+                    spotName =
+                        (state as? HomeUiState.Content)?.findSpot(route.spotId)?.name
+                            ?: favoriteList.firstOrNull { it.spotId == route.spotId }?.spot?.name,
+                    state = reviews.stateFor(route.spotId),
+                    owner = reviewOwner,
+                    restoring = authViewModel.restoring,
+                    busy = reviews.busy,
+                    error = reviews.errorFor(reviewOwner),
                     onBack = { navController.popBackStack() },
                     onOpenAuth = { navController.navigate(AUTH_ROUTE) },
+                    onRetry = { reviews.load(route.spotId, refresh = true) },
+                    onSubmit = { existing, rating, text, title ->
+                        if (reviewOwner != null) {
+                            reviews.save(route.spotId, reviewOwner, existing, rating, text, title) {
+                                if (navController.currentBackStackEntry == entry) navController.popBackStack()
+                            }
+                        }
+                    },
                 )
             }
         }

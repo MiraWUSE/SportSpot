@@ -1,12 +1,13 @@
-
 package com.mirawuse.sportspot.domain.usecase.review
 
+import com.mirawuse.sportspot.domain.model.auth.AuthState
 import com.mirawuse.sportspot.domain.model.review.Review
 import com.mirawuse.sportspot.domain.policy.AuthorizationPolicy
 import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.ReviewRepository
 import com.mirawuse.sportspot.domain.result.DomainError
 import com.mirawuse.sportspot.domain.result.DomainResult
+import com.mirawuse.sportspot.domain.result.contentResult
 
 class UpdateReviewUseCase(
     private val authRepository: AuthRepository,
@@ -16,45 +17,17 @@ class UpdateReviewUseCase(
         reviewId: String,
         rating: Int,
         text: String,
+        title: String? = null,
+        expectedUserId: String? = null,
     ): DomainResult<Review> {
         val authState = authRepository.getAuthState()
-        val accessError = AuthorizationPolicy.authenticatedError(authState)
-
-        if (accessError != null) {
-            return DomainResult.Failure(accessError)
+        AuthorizationPolicy.authenticatedError(authState)?.let { return DomainResult.Failure(it) }
+        val userId = (authState as AuthState.Authenticated).profile.id
+        if (expectedUserId != null && expectedUserId != userId) return DomainResult.Failure(DomainError.Unauthorized)
+        if (reviewId.isBlank()) return DomainResult.Failure(DomainError.Validation("Идентификатор отзыва не может быть пустым"))
+        reviewValidation(rating, text, title)?.let { return DomainResult.Failure(it) }
+        return contentResult {
+            reviewRepository.updateReview(userId, reviewId.trim(), rating, text.trim(), title?.trim()?.takeIf(String::isNotEmpty))
         }
-
-        if (reviewId.isBlank()) {
-            return DomainResult.Failure(
-                DomainError.Validation(
-                    "Идентификатор отзыва не может быть пустым",
-                ),
-            )
-        }
-
-        if (rating !in 1..5) {
-            return DomainResult.Failure(
-                DomainError.Validation(
-                    "Оценка должна быть от 1 до 5",
-                ),
-            )
-        }
-
-        if (text.isBlank()) {
-            return DomainResult.Failure(
-                DomainError.Validation(
-                    "Текст отзыва не может быть пустым",
-                ),
-            )
-        }
-
-        val review =
-            reviewRepository.updateReview(
-                reviewId = reviewId.trim(),
-                rating = rating,
-                text = text.trim(),
-            )
-
-        return DomainResult.Success(review)
     }
 }

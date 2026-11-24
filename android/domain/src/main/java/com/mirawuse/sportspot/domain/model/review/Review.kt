@@ -10,6 +10,8 @@ data class Review(
     val rating: Int,
     val text: String,
     val photoUrls: List<String> = emptyList(),
+    val title: String? = null,
+    val createdAt: String? = null,
 ) {
     init {
         require(id.isNotBlank()) {

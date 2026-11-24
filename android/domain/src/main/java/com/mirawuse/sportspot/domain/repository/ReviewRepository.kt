@@ -7,16 +7,23 @@ interface ReviewRepository {
     suspend fun getReviewsBySpot(spotId: SpotId): List<Review>
 
     suspend fun createReview(
+        userId: String,
         spotId: SpotId,
         rating: Int,
         text: String,
+        title: String?,
     ): Review
 
     suspend fun updateReview(
+        userId: String,
         reviewId: String,
         rating: Int,
         text: String,
+        title: String?,
     ): Review
 
-    suspend fun deleteReview(reviewId: String)
+    suspend fun deleteReview(
+        userId: String,
+        reviewId: String,
+    )
 }
