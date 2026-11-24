@@ -1,6 +1,7 @@
 
 package com.mirawuse.sportspot.domain.usecase.proposal
 
+import com.mirawuse.sportspot.domain.model.auth.AuthState
 import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.proposal.SpotProposal
 import com.mirawuse.sportspot.domain.model.spot.SportType
@@ -9,6 +10,7 @@ import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.SpotProposalRepository
 import com.mirawuse.sportspot.domain.result.DomainError
 import com.mirawuse.sportspot.domain.result.DomainResult
+import com.mirawuse.sportspot.domain.result.contentResult
 
 class CreateProposalUseCase(
     private val authRepository: AuthRepository,
@@ -18,6 +20,8 @@ class CreateProposalUseCase(
         name: String,
         sportType: SportType,
         location: GeoPoint,
+        address: String? = null,
+        expectedUserId: String? = null,
     ): DomainResult<SpotProposal> {
         val authState = authRepository.getAuthState()
         val accessError = AuthorizationPolicy.authenticatedError(authState)
@@ -34,13 +38,21 @@ class CreateProposalUseCase(
             )
         }
 
-        val proposal =
+        val userId = (authState as AuthState.Authenticated).profile.id
+        if (expectedUserId != null && expectedUserId != userId) return DomainResult.Failure(DomainError.Unauthorized)
+        val cleanName = name.trim()
+        val cleanAddress = address?.trim()?.takeIf(String::isNotEmpty)
+        if (cleanName.length > 120 || (cleanAddress?.length ?: 0) > 250) {
+            return DomainResult.Failure(DomainError.Validation("Название — до 120 символов, адрес — до 250"))
+        }
+        return contentResult {
             proposalRepository.createProposal(
-                name = name.trim(),
+                userId = userId,
+                name = cleanName,
                 sportType = sportType,
                 location = location,
+                address = cleanAddress,
             )
-
-        return DomainResult.Success(proposal)
+        }
     }
 }

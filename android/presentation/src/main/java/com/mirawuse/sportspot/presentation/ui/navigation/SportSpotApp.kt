@@ -52,7 +52,9 @@ import com.mirawuse.sportspot.presentation.ui.home.HomeScreen
 import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
 import com.mirawuse.sportspot.presentation.ui.home.HomeViewModel
 import com.mirawuse.sportspot.presentation.ui.map.MapScreen
+import com.mirawuse.sportspot.presentation.ui.proposal.MyProposalsScreen
 import com.mirawuse.sportspot.presentation.ui.proposal.ProposalScreen
+import com.mirawuse.sportspot.presentation.ui.proposal.ProposalsViewModel
 import com.mirawuse.sportspot.presentation.ui.reviews.ReviewFormScreen
 import com.mirawuse.sportspot.presentation.ui.reviews.ReviewScore
 import com.mirawuse.sportspot.presentation.ui.reviews.ReviewsScreen
@@ -63,6 +65,7 @@ import kotlinx.serialization.Serializable
 private const val APP_GRAPH = "sportspot"
 private const val HOME_ROUTE = "home"
 private const val PROPOSAL_ROUTE = "proposal"
+private const val MY_PROPOSALS_ROUTE = "my-proposals"
 private const val AUTH_ROUTE = "auth"
 
 @Serializable
@@ -121,7 +124,8 @@ fun SportSpotApp() {
     val favorites: FavoritesViewModel = hiltViewModel()
     val authState by authViewModel.authState.collectAsStateWithLifecycle()
     val reviews: ReviewsViewModel = hiltViewModel()
-    val reviewOwner = (authState as? AuthState.Authenticated)?.profile?.id
+    val proposals: ProposalsViewModel = hiltViewModel()
+    val accountId = (authState as? AuthState.Authenticated)?.profile?.id
     val favoriteState = favorites.state.visibleFor(authState)
     val favoriteList = (favoriteState as? FavoritesUiState.Content)?.list?.items.orEmpty()
     val savedIds = favoriteList.mapTo(mutableSetOf()) { it.spotId }
@@ -241,13 +245,36 @@ fun SportSpotApp() {
                     state = authState,
                     viewModel = authViewModel,
                     onOpenAuth = { navController.navigate(AUTH_ROUTE) },
-                    onPropose = { navController.navigate(PROPOSAL_ROUTE) },
+                    onPropose = {
+                        proposals.clearSubmission()
+                        navController.navigate(PROPOSAL_ROUTE)
+                    },
+                    onMyProposals = { navController.navigate(MY_PROPOSALS_ROUTE) },
                 )
             }
             composable(PROPOSAL_ROUTE) {
                 ProposalScreen(
+                    owner = accountId,
+                    restoring = authViewModel.restoring,
+                    busy = proposals.submitting,
+                    submission = proposals.submissionFor(accountId),
                     onBack = { navController.popBackStack() },
                     onOpenAuth = { navController.navigate(AUTH_ROUTE) },
+                    onViewProposals = { navController.navigate(MY_PROPOSALS_ROUTE) },
+                    onSubmit = { name, sport, point, address ->
+                        accountId?.let { proposals.submit(it, name, sport, point, address) }
+                    },
+                )
+            }
+            composable(MY_PROPOSALS_ROUTE) {
+                LaunchedEffect(accountId) { proposals.load(accountId) }
+                MyProposalsScreen(
+                    signedIn = accountId != null,
+                    restoring = authViewModel.restoring,
+                    state = proposals.listFor(accountId),
+                    onBack = { navController.popBackStack() },
+                    onOpenAuth = { navController.navigate(AUTH_ROUTE) },
+                    onRetry = { proposals.load(accountId) },
                 )
             }
             composable(AUTH_ROUTE) {
@@ -306,15 +333,15 @@ fun SportSpotApp() {
                         (state as? HomeUiState.Content)?.findSpot(route.spotId)?.name
                             ?: favoriteList.firstOrNull { it.spotId == route.spotId }?.spot?.name,
                     state = reviews.stateFor(route.spotId),
-                    owner = reviewOwner,
+                    owner = accountId,
                     busy = reviews.busy,
-                    error = reviews.errorFor(reviewOwner),
+                    error = reviews.errorFor(accountId),
                     onBack = { navController.popBackStack() },
                     onWrite = {
                         reviews.clearError()
                         navController.navigate(ReviewFormRoute(route.source, route.value))
                     },
-                    onDelete = { review -> reviewOwner?.let { reviews.delete(it, review) } },
+                    onDelete = { review -> accountId?.let { reviews.delete(it, review) } },
                     onRetry = { reviews.load(route.spotId, refresh = true) },
                 )
             }
@@ -328,16 +355,16 @@ fun SportSpotApp() {
                         (state as? HomeUiState.Content)?.findSpot(route.spotId)?.name
                             ?: favoriteList.firstOrNull { it.spotId == route.spotId }?.spot?.name,
                     state = reviews.stateFor(route.spotId),
-                    owner = reviewOwner,
+                    owner = accountId,
                     restoring = authViewModel.restoring,
                     busy = reviews.busy,
-                    error = reviews.errorFor(reviewOwner),
+                    error = reviews.errorFor(accountId),
                     onBack = { navController.popBackStack() },
                     onOpenAuth = { navController.navigate(AUTH_ROUTE) },
                     onRetry = { reviews.load(route.spotId, refresh = true) },
                     onSubmit = { existing, rating, text, title ->
-                        if (reviewOwner != null) {
-                            reviews.save(route.spotId, reviewOwner, existing, rating, text, title) {
+                        if (accountId != null) {
+                            reviews.save(route.spotId, accountId, existing, rating, text, title) {
                                 if (navController.currentBackStackEntry == entry) navController.popBackStack()
                             }
                         }

@@ -11,6 +11,12 @@ data class SpotProposal(
     val location: GeoPoint,
     val status: ProposalStatus = ProposalStatus.PENDING,
     val rejectReason: String? = null,
+    val address: String? = null,
+    val surface: String? = null,
+    val lighting: Boolean? = null,
+    val equipment: String? = null,
+    val description: String? = null,
+    val createdAt: String? = null,
 ) {
     init {
         require(id.isNotBlank()) {

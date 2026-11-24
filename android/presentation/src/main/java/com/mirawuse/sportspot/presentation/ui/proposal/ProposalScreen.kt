@@ -13,18 +13,24 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import com.mirawuse.sportspot.domain.model.location.GeoPoint
+import com.mirawuse.sportspot.domain.model.proposal.SpotProposal
 import com.mirawuse.sportspot.domain.model.spot.SportType
+import com.mirawuse.sportspot.domain.result.DomainError
+import com.mirawuse.sportspot.domain.result.DomainResult
 import com.mirawuse.sportspot.domain.validation.FormValidation
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
-import com.mirawuse.sportspot.presentation.ui.components.SportSpotButtonVariant
+import com.mirawuse.sportspot.presentation.ui.components.SpotSearchLoading
 import com.mirawuse.sportspot.presentation.ui.components.labelRes
+import com.mirawuse.sportspot.presentation.ui.forms.ContentErrorText
 import com.mirawuse.sportspot.presentation.ui.forms.FormCard
 import com.mirawuse.sportspot.presentation.ui.forms.FormErrorText
 import com.mirawuse.sportspot.presentation.ui.forms.FormField
@@ -33,8 +39,39 @@ import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
 @Composable
 internal fun ProposalScreen(
+    owner: String?,
+    restoring: Boolean,
+    busy: Boolean,
+    submission: DomainResult<SpotProposal>?,
     onBack: () -> Unit,
     onOpenAuth: () -> Unit,
+    onViewProposals: () -> Unit,
+    onSubmit: (String, SportType, GeoPoint, String) -> Unit,
+) {
+    FormScreen(stringResource(R.string.proposal_title), onBack) {
+        when {
+            restoring -> SpotSearchLoading()
+            owner == null -> {
+                Text(stringResource(R.string.proposals_sign_in))
+                SportSpotButton(stringResource(R.string.auth_open), onOpenAuth, Modifier.fillMaxWidth())
+            }
+            submission is DomainResult.Success -> {
+                FormCard(stringResource(R.string.proposal_sent)) {
+                    ProposalStatusText(submission.value)
+                    Text(stringResource(R.string.proposal_number, submission.value.id))
+                }
+                SportSpotButton(stringResource(R.string.profile_my_proposals), onViewProposals, Modifier.fillMaxWidth())
+            }
+            else -> key(owner) { ProposalFields(busy, (submission as? DomainResult.Failure)?.error, onSubmit) }
+        }
+    }
+}
+
+@Composable
+private fun ProposalFields(
+    busy: Boolean,
+    error: DomainError?,
+    onSubmit: (String, SportType, GeoPoint, String) -> Unit,
 ) {
     var name by rememberSaveable { mutableStateOf("") }
     var sport by rememberSaveable { mutableStateOf<SportType?>(null) }
@@ -49,12 +86,12 @@ internal fun ProposalScreen(
     val latitudeError = FormValidation.latitude(latitude)
     val longitudeError = FormValidation.longitude(longitude)
 
-    FormScreen(stringResource(R.string.proposal_title), onBack) {
+    Column(verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.md)) {
         Text(stringResource(R.string.proposal_heading), style = MaterialTheme.typography.titleLarge)
         FormField(
             label = stringResource(R.string.proposal_name),
             value = name,
-            onValueChange = { name = it },
+            onValueChange = { if (!busy) name = it },
             error = if (attempted) nameError else null,
             hint = stringResource(R.string.proposal_name_hint),
         )
@@ -63,6 +100,7 @@ internal fun ProposalScreen(
             Box {
                 TextButton(
                     onClick = { menuOpen = true },
+                    enabled = !busy,
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.medium,
                     colors =
@@ -90,7 +128,7 @@ internal fun ProposalScreen(
         FormField(
             label = stringResource(R.string.proposal_address),
             value = address,
-            onValueChange = { address = it },
+            onValueChange = { if (!busy) address = it },
             hint = stringResource(R.string.proposal_address_hint),
         )
         FormCard(stringResource(R.string.proposal_coordinates)) {
@@ -98,7 +136,7 @@ internal fun ProposalScreen(
                 FormField(
                     label = stringResource(R.string.proposal_latitude),
                     value = latitude,
-                    onValueChange = { latitude = it },
+                    onValueChange = { if (!busy) latitude = it },
                     modifier = Modifier.weight(1f),
                     error = if (attempted) latitudeError else null,
                     hint = stringResource(R.string.form_coordinate_format),
@@ -106,26 +144,26 @@ internal fun ProposalScreen(
                 FormField(
                     label = stringResource(R.string.proposal_longitude),
                     value = longitude,
-                    onValueChange = { longitude = it },
+                    onValueChange = { if (!busy) longitude = it },
                     modifier = Modifier.weight(1f),
                     error = if (attempted) longitudeError else null,
                     hint = stringResource(R.string.form_coordinate_format),
                 )
             }
         }
+        error?.let { ContentErrorText(it) }
         SportSpotButton(
-            text = stringResource(R.string.proposal_validate),
-            onClick = { attempted = true },
+            text = stringResource(R.string.proposal_submit),
+            onClick = {
+                attempted = true
+                val selectedSport = sport
+                if (nameError == null && selectedSport != null && latitudeError == null && longitudeError == null) {
+                    val point = GeoPoint(latitude.trim().replace(',', '.').toDouble(), longitude.trim().replace(',', '.').toDouble())
+                    onSubmit(name, selectedSport, point, address)
+                }
+            },
             modifier = Modifier.fillMaxWidth(),
-        )
-        if (attempted && nameError == null && sportError == null && latitudeError == null && longitudeError == null) {
-            Text(stringResource(R.string.proposal_send_unavailable), style = MaterialTheme.typography.bodyMedium)
-        }
-        SportSpotButton(
-            text = stringResource(R.string.auth_open),
-            onClick = onOpenAuth,
-            modifier = Modifier.fillMaxWidth(),
-            variant = SportSpotButtonVariant.TEXT,
+            isLoading = busy,
         )
     }
 }

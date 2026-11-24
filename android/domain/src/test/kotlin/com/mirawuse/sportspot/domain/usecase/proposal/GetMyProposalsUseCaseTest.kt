@@ -159,23 +159,29 @@ class GetMyProposalsUseCaseTest {
     ) : SpotProposalRepository {
         var getMyProposalsCalls = 0
 
-        override suspend fun getMyProposals(): List<SpotProposal> {
+        override suspend fun getMyProposals(userId: String): List<SpotProposal> {
             getMyProposalsCalls++
             failure?.let { throw it }
             return proposals
         }
 
-        override suspend fun getPendingProposals(): List<SpotProposal> = error("Метод не используется в тесте")
+        override suspend fun getPendingProposals(userId: String): List<SpotProposal> = error("Метод не используется в тесте")
 
         override suspend fun createProposal(
+            userId: String,
             name: String,
             sportType: SportType,
             location: GeoPoint,
+            address: String?,
         ): SpotProposal = error("Метод не используется в тесте")
 
-        override suspend fun approveProposal(proposalId: String): SpotProposal = error("Метод не используется в тесте")
+        override suspend fun approveProposal(
+            userId: String,
+            proposalId: String,
+        ): SpotProposal = error("Метод не используется в тесте")
 
         override suspend fun rejectProposal(
+            userId: String,
             proposalId: String,
             reason: String,
         ): SpotProposal = error("Метод не используется в тесте")

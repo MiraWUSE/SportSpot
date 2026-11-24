@@ -111,6 +111,7 @@
     <string name="review_publish">Опубликовать отзыв</string>
     <string name="content_save">Сохранить</string>
     <string name="content_cancel">Отмена</string>
+    <string name="content_refresh">Обновить</string>
     <string name="content_sign_in_again">Войдите снова, чтобы продолжить.</string>
     <string name="content_forbidden">У вас нет доступа к этому действию.</string>
     <string name="content_conflict">Данные уже изменились. Проверьте их перед повтором.</string>
@@ -125,6 +126,16 @@
     <string name="review_comment_hint">Что понравилось? Что можно улучшить?</string>
 
     <string name="proposal_title">Предложить площадку</string>
+    <string name="proposal_submit">Отправить на проверку</string>
+    <string name="proposal_sent">Предложение отправлено</string>
+    <string name="proposal_number">Номер заявки: %1$s</string>
+    <string name="proposals_sign_in">Войдите, чтобы отправлять предложения и следить за их статусом.</string>
+    <string name="proposals_open">Открыть мои предложения</string>
+    <string name="proposals_empty">Предложений пока нет</string>
+    <string name="proposals_pending">На рассмотрении</string>
+    <string name="proposals_approved">Одобрено</string>
+    <string name="proposals_rejected">Отклонено</string>
+    <string name="proposals_reason">Причина отказа: %1$s</string>
     <string name="proposal_heading">Новая спортивная площадка</string>
     <string name="proposal_name">Название</string>
     <string name="proposal_name_hint">Введите название</string>
@@ -135,8 +146,6 @@
     <string name="proposal_coordinates">Координаты</string>
     <string name="proposal_latitude">Широта</string>
     <string name="proposal_longitude">Долгота</string>
-    <string name="proposal_validate">Проверить предложение</string>
-    <string name="proposal_send_unavailable">Поля заполнены. Отправка предложений пока недоступна.</string>
 
     <string name="auth_title">Авторизация</string>
     <string name="auth_welcome">Добро пожаловать!</string>
@@ -167,7 +176,6 @@
     <string name="profile_my_reviews">Мои отзывы</string>
     <string name="profile_reviews_guest">Отзывы пока недоступны.</string>
     <string name="profile_my_proposals">Мои предложения</string>
-    <string name="profile_proposals_guest">Список предложений пока недоступен.</string>
 
     <string name="favorites_saved">Сохранённые площадки</string>
     <string name="favorites_guest_header">Быстрый доступ</string>

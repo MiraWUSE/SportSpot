@@ -1,6 +1,7 @@
 
 package com.mirawuse.sportspot.domain.usecase.proposal
 
+import com.mirawuse.sportspot.domain.model.auth.AuthState
 import com.mirawuse.sportspot.domain.model.proposal.SpotProposal
 import com.mirawuse.sportspot.domain.policy.AuthorizationPolicy
 import com.mirawuse.sportspot.domain.repository.AuthRepository
@@ -28,7 +29,7 @@ class ApproveProposalUseCase(
             )
         }
 
-        val proposal = proposalRepository.approveProposal(proposalId.trim())
+        val proposal = proposalRepository.approveProposal((authState as AuthState.Authenticated).profile.id, proposalId.trim())
 
         return DomainResult.Success(proposal)
     }
