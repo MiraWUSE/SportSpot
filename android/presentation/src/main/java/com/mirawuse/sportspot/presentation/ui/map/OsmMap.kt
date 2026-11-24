@@ -89,6 +89,8 @@ internal fun OsmMap(
     onSelect: (SpotId) -> Unit = {},
     networkStatus: MapNetworkStatus = rememberMapNetworkStatus(),
     selectionFocusRequest: Int = 0,
+    onViewportMoveStarted: (() -> Unit)? = null,
+    onViewportIdle: ((MapViewport, MapViewport?) -> Unit)? = null,
     overlay: @Composable BoxScope.() -> Unit = {},
 ) {
     var attempt by remember { mutableIntStateOf(0) }
@@ -122,6 +124,8 @@ internal fun OsmMap(
                         },
                         onSelect = onSelect,
                         onRetry = { attempt++ },
+                        onViewportMoveStarted = onViewportMoveStarted.takeIf { isInteractive },
+                        onViewportIdle = onViewportIdle.takeIf { isInteractive },
                     )
                 }
             } else {
@@ -166,6 +170,8 @@ private fun NativeOsmMap(
     onCameraApplied: () -> Unit,
     onSelect: (SpotId) -> Unit,
     onRetry: () -> Unit,
+    onViewportMoveStarted: (() -> Unit)?,
+    onViewportIdle: ((MapViewport, MapViewport?) -> Unit)?,
 ) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
@@ -179,6 +185,8 @@ private fun NativeOsmMap(
     val currentSelected by rememberUpdatedState(selectedId)
     val select by rememberUpdatedState(onSelect)
     val saveCamera by rememberUpdatedState(onCameraSaved)
+    val viewportMoveStarted by rememberUpdatedState(onViewportMoveStarted)
+    val viewportIdle by rememberUpdatedState(onViewportIdle)
     val mapView =
         remember(context) {
             try {
@@ -204,6 +212,8 @@ private fun NativeOsmMap(
             var disposed = false
             var started = false
             var resumed = false
+            var gesture = false
+            var previousViewport: MapViewport? = null
             val rendered =
                 MapView.OnDidFinishRenderingMapListener { fully ->
                     // A completed frame may contain failed tiles. Keep the failure until retry.
@@ -222,7 +232,27 @@ private fun NativeOsmMap(
                         loadGeneration++
                     }
                 }
-            val idle = MapLibreMap.OnCameraIdleListener { if (!disposed && cameraApplied) nativeMap?.let { saveCamera(it.cameraPosition) } }
+            val moveStarted =
+                MapLibreMap.OnCameraMoveStartedListener { reason ->
+                    if (!disposed && cameraApplied && resumed && viewportIdle != null) {
+                        gesture = reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE
+                        if (gesture) viewportMoveStarted?.invoke()
+                    }
+                }
+            val idle =
+                MapLibreMap.OnCameraIdleListener {
+                    if (disposed || !cameraApplied) return@OnCameraIdleListener
+                    val map = nativeMap ?: return@OnCameraIdleListener
+                    saveCamera(map.cameraPosition)
+                    val afterGesture = gesture
+                    gesture = false
+                    val callback = viewportIdle ?: return@OnCameraIdleListener
+                    if (!resumed || mapView.width == 0 || mapView.height == 0) return@OnCameraIdleListener
+                    val viewport = map.currentViewport() ?: return@OnCameraIdleListener
+                    val before = previousViewport
+                    if (!afterGesture || before == null || !viewport.isSimilarTo(before)) previousViewport = viewport
+                    if (afterGesture) callback(viewport, before)
+                }
             val clicked =
                 MapLibreMap.OnMapClickListener { point ->
                     val map = nativeMap
@@ -264,6 +294,7 @@ private fun NativeOsmMap(
                 disposed = true
                 nativeMap?.removeOnMapClickListener(clicked)
                 nativeMap?.removeOnCameraIdleListener(idle)
+                nativeMap?.removeOnCameraMoveStartedListener(moveStarted)
                 mapView.removeOnDidFinishRenderingMapListener(rendered)
                 mapView.removeOnDidFailLoadingMapListener(failed)
                 mapView.removeOnTileActionListener(tileAction)
@@ -287,6 +318,7 @@ private fun NativeOsmMap(
                             }
                         Lifecycle.Event.ON_PAUSE ->
                             if (resumed) {
+                                gesture = false
                                 mapView.onPause()
                                 resumed = false
                             }
@@ -326,7 +358,10 @@ private fun NativeOsmMap(
                         setAllGesturesEnabled(interactive)
                         isCompassEnabled = interactive
                     }
-                    if (interactive) map.addOnMapClickListener(clicked)
+                    if (interactive) {
+                        map.addOnMapClickListener(clicked)
+                        map.addOnCameraMoveStartedListener(moveStarted)
+                    }
                     map.addOnCameraIdleListener(idle)
                     map.setStyle(Style.Builder().fromJson(OsmMapTiles.styleJson)) { loaded ->
                         if (!disposed) {
@@ -436,4 +471,21 @@ private fun NativeOsmMap(
             }
         }
     }
+}
+
+private fun MapLibreMap.currentViewport(): MapViewport? {
+    val camera = cameraPosition
+    val center = camera.target?.toViewportPoint() ?: return null
+    val region = projection.visibleRegion
+    val corners =
+        listOf(region.nearLeft, region.nearRight, region.farLeft, region.farRight).map {
+            it?.toViewportPoint() ?: return null
+        }
+    return mapViewport(center, corners, camera.zoom)
+}
+
+private fun LatLng.toViewportPoint(): GeoPoint? {
+    val longitude = wrappedMapLongitude(longitude)
+    if (!latitude.isFinite() || latitude !in -90.0..90.0 || !longitude.isFinite()) return null
+    return GeoPoint(latitude, longitude)
 }

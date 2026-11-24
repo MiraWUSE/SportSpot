@@ -3,27 +3,42 @@ package com.mirawuse.sportspot.presentation.ui.map
 import android.graphics.RectF
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
+import android.view.InputDevice
+import android.view.MotionEvent
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.UiController
 import androidx.test.espresso.ViewAction
+import androidx.test.espresso.action.GeneralClickAction
+import androidx.test.espresso.action.Press
+import androidx.test.espresso.action.Tap
 import androidx.test.espresso.action.ViewActions.click
+import androidx.test.espresso.action.ViewActions.swipeLeft
 import androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom
 import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
+import com.mirawuse.sportspot.domain.repository.SpotRepository
+import com.mirawuse.sportspot.domain.usecase.spot.SearchNearbySpotsUseCase
+import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotTheme
 import org.hamcrest.Matcher
 import org.junit.After
@@ -62,6 +77,102 @@ class OsmMapTest {
         compose.runOnIdle { showing.value = false }
         compose.waitForIdle()
         compose.activityRule.scenario.onActivity { MapLibre.setConnected(null) }
+    }
+
+    @Test
+    fun panFromAnEmptyMapLoadsOneAreaAndOpensTheNewCoincidentSpot() {
+        val center = GeoPoint(56.3269, 44.0059)
+        val anchor = MapAnchor(center, null)
+        val calls = AtomicInteger()
+        val opened = AtomicReference<SpotId>()
+        val first = SpotId("osm", "node:123")
+        val second = SpotId("community", "33333333-3333-4333-8333-333333333333")
+        val repository =
+            object : SpotRepository {
+                override suspend fun getSpots(): List<Spot> = error("Unexpected catalog request")
+
+                override suspend fun getSpotById(id: SpotId): Spot? = error("Unexpected spot request")
+
+                override suspend fun searchNearby(
+                    center: GeoPoint,
+                    radiusMeters: Int,
+                    sportType: SportType?,
+                ): List<Spot> {
+                    calls.incrementAndGet()
+                    check(center.longitude > 44.01 && radiusMeters in 100..3000)
+                    return listOf(
+                        Spot(first, "Футбольное поле нового района", SportType.FOOTBALL, center),
+                        Spot(second, "Корт нового района", SportType.TENNIS, center),
+                    )
+                }
+            }
+        val model = MapViewModel(SearchNearbySpotsUseCase(repository))
+        compose.setContent {
+            SportSpotTheme {
+                if (showing.value) {
+                    LifecycleResumeEffect(anchor) {
+                        model.activate(anchor)
+                        onPauseOrDispose { model.deactivate(anchor) }
+                    }
+                    val viewport by model.state.collectAsStateWithLifecycle()
+                    MapScreen(
+                        state = HomeUiState.Empty,
+                        center = center,
+                        locationLabel = "Нижний Новгород",
+                        focus = null,
+                        onRetry = { model.retry() },
+                        onOpenSpot = { opened.set(it) },
+                        viewport = viewport,
+                        onViewportMoveStarted = model::onMoveStarted,
+                        onViewportIdle = model::onViewportIdle,
+                    )
+                }
+            }
+        }
+        val map = nativeMap()
+        waitForCamera(map, center, 13.5)
+        SystemClock.sleep(650)
+        assertEquals(0, calls.get())
+        onView(isAssignableFrom(MapView::class.java)).perform(swipeLeft())
+        compose.waitUntil(10_000) {
+            model.state.value.spots
+                ?.size == 2
+        }
+        assertEquals(1, calls.get())
+        val marker = checkNotNull(model.state.value.spots).first().location
+        compose.waitUntil(10_000) {
+            var rendered = false
+            compose.runOnIdle {
+                val point = map.projection.toScreenLocation(LatLng(marker.latitude, marker.longitude))
+                rendered =
+                    map
+                        .queryRenderedFeatures(
+                            RectF(point.x - 10, point.y - 10, point.x + 10, point.y + 10),
+                            "sportspot-markers",
+                        ).isNotEmpty()
+            }
+            rendered
+        }
+        onView(isAssignableFrom(MapView::class.java)).perform(
+            GeneralClickAction(
+                Tap.SINGLE,
+                { view ->
+                    val origin = IntArray(2)
+                    view.getLocationOnScreen(origin)
+                    val point = map.projection.toScreenLocation(LatLng(marker.latitude, marker.longitude))
+                    floatArrayOf(origin[0] + point.x, origin[1] + point.y)
+                },
+                Press.FINGER,
+                InputDevice.SOURCE_TOUCHSCREEN,
+                MotionEvent.BUTTON_PRIMARY,
+            ),
+        )
+        val courtName = "Корт нового района"
+        compose.waitUntil(5_000) { compose.onAllNodesWithText(courtName, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(courtName, useUnmergedTree = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Подробнее").performScrollTo().performClick()
+        assertEquals(second, opened.get())
+        assertEquals(1, calls.get())
     }
 
     @Test

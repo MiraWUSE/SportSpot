@@ -24,6 +24,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -35,6 +36,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.mirawuse.sportspot.domain.model.auth.AuthState
+import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.policy.AuthorizationPolicy
 import com.mirawuse.sportspot.presentation.R
@@ -52,7 +54,9 @@ import com.mirawuse.sportspot.presentation.ui.details.SpotDetailsScreen
 import com.mirawuse.sportspot.presentation.ui.home.HomeScreen
 import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
 import com.mirawuse.sportspot.presentation.ui.home.HomeViewModel
+import com.mirawuse.sportspot.presentation.ui.map.MapAnchor
 import com.mirawuse.sportspot.presentation.ui.map.MapScreen
+import com.mirawuse.sportspot.presentation.ui.map.MapViewModel
 import com.mirawuse.sportspot.presentation.ui.moderation.ModerationScreen
 import com.mirawuse.sportspot.presentation.ui.moderation.ModerationViewModel
 import com.mirawuse.sportspot.presentation.ui.proposal.MyProposalsScreen
@@ -126,6 +130,8 @@ fun SportSpotApp() {
     val navController = rememberNavController()
     val authViewModel: AuthViewModel = hiltViewModel()
     val favorites: FavoritesViewModel = hiltViewModel()
+    val mapViewModel: MapViewModel = hiltViewModel()
+    val openedMapSpot by mapViewModel.openedSpot.collectAsStateWithLifecycle()
     val authState by authViewModel.authState.collectAsStateWithLifecycle()
     val reviews: ReviewsViewModel = hiltViewModel()
     val proposals: ProposalsViewModel = hiltViewModel()
@@ -220,18 +226,40 @@ fun SportSpotApp() {
                 val viewModel = searchViewModel(navController, entry)
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
                 val location by viewModel.location.collectAsStateWithLifecycle()
-                val savedState =
-                    if (route.favorite) favoriteDestinationState(favoriteState, route.spotId, favoriteError) else null
-                val privateState = savedState?.takeUnless { it == HomeUiState.Empty }
-                val savedSpot = (privateState as? HomeUiState.Content)?.spots?.singleOrNull()
+                val anchor = MapAnchor(location.center, route.spotId)
+                if (!route.favorite) {
+                    LifecycleResumeEffect(anchor) {
+                        mapViewModel.activate(anchor)
+                        onPauseOrDispose { mapViewModel.deactivate(anchor) }
+                    }
+                }
+                val explored by mapViewModel.state.collectAsStateWithLifecycle()
+                val viewport = explored.takeIf { !route.favorite && it.anchor == anchor }
+                val seed =
+                    if (route.favorite) {
+                        favoriteDestinationState(favoriteState, route.spotId, favoriteError)
+                    } else {
+                        state.withOpenedMapSpot(route.spotId, openedMapSpot)
+                    }
+                val savedSpot = if (route.favorite) (seed as? HomeUiState.Content)?.spots?.singleOrNull() else null
+                val refreshMap = mapViewModel::retry
                 MapScreen(
-                    state = privateState ?: state,
+                    state = seed,
                     center = savedSpot?.location ?: location.center,
                     locationLabel = if (savedSpot == null) stringResource(location.labelRes) else savedSpot.address.orEmpty(),
-                    focus = route.spotId.takeIf { !route.favorite || privateState != null },
-                    onRetry = if (privateState == null) viewModel::retry else favorites::retry,
-                    onOpenSpot = { navController.navigate(SpotDetailsRoute(it.source, it.value, favorite = privateState != null)) },
-                    onRefresh = if (privateState == null) viewModel::retry else null,
+                    focus = route.spotId,
+                    onRetry = if (route.favorite) favorites::retry else refreshMap,
+                    onOpenSpot = { id ->
+                        if (!route.favorite) {
+                            val spots = viewport?.spots ?: (seed as? HomeUiState.Content)?.spots.orEmpty()
+                            mapViewModel.openSpot(spots.firstOrNull { it.id == id })
+                        }
+                        navController.navigate(SpotDetailsRoute(id.source, id.value, favorite = route.favorite))
+                    },
+                    onRefresh = refreshMap.takeUnless { route.favorite },
+                    viewport = viewport,
+                    onViewportMoveStarted = if (route.favorite) null else mapViewModel::onMoveStarted,
+                    onViewportIdle = if (route.favorite) null else mapViewModel::onViewportIdle,
                 )
             }
             composable("favorites") {
@@ -320,7 +348,12 @@ fun SportSpotApp() {
                 LaunchedEffect(route.spotId) { reviews.load(route.spotId) }
                 SpotDetailsScreen(
                     spotId = route.spotId,
-                    state = if (route.favorite) favoriteDestinationState(favoriteState, route.spotId, favoriteError) else state,
+                    state =
+                        if (route.favorite) {
+                            favoriteDestinationState(favoriteState, route.spotId, favoriteError)
+                        } else {
+                            state.withOpenedMapSpot(route.spotId, openedMapSpot)
+                        },
                     onRetry = if (route.favorite) favorites::retry else viewModel::retry,
                     onBack = { navController.popBackStack() },
                     onOpenReviews = { navController.navigate(ReviewsRoute(it.source, it.value)) },
@@ -359,6 +392,7 @@ fun SportSpotApp() {
                 ReviewsScreen(
                     spotName =
                         (state as? HomeUiState.Content)?.findSpot(route.spotId)?.name
+                            ?: openedMapSpot?.takeIf { it.id == route.spotId }?.name
                             ?: favoriteList.firstOrNull { it.spotId == route.spotId }?.spot?.name,
                     state = reviews.stateFor(route.spotId),
                     owner = accountId,
@@ -381,6 +415,7 @@ fun SportSpotApp() {
                 ReviewFormScreen(
                     spotName =
                         (state as? HomeUiState.Content)?.findSpot(route.spotId)?.name
+                            ?: openedMapSpot?.takeIf { it.id == route.spotId }?.name
                             ?: favoriteList.firstOrNull { it.spotId == route.spotId }?.spot?.name,
                     state = reviews.stateFor(route.spotId),
                     owner = accountId,
@@ -401,6 +436,15 @@ fun SportSpotApp() {
             }
         }
     }
+}
+
+internal fun HomeUiState.withOpenedMapSpot(
+    spotId: SpotId?,
+    opened: Spot?,
+): HomeUiState {
+    val content = this as? HomeUiState.Content
+    if (opened == null || opened.id != spotId || content?.findSpot(opened.id) != null) return this
+    return HomeUiState.Content(listOf(opened) + content?.spots.orEmpty())
 }
 
 internal fun favoriteDestinationState(
