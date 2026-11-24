@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -137,45 +139,63 @@ internal fun HomeSpotCard(
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = spotCardContainerColor(), contentColor = colors.onSurface),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(SportSpotSpacing.sm),
-        ) {
-            Row(
-                modifier =
+        BoxWithConstraints(Modifier.fillMaxWidth().padding(SportSpotSpacing.sm)) {
+            // Give text the width below the photo when large type would crowd a narrow card.
+            val stackPhoto = maxWidth < 340.dp && LocalDensity.current.fontScale >= 1.3f
+            Row(Modifier.fillMaxWidth()) {
+                val detailsModifier =
                     Modifier
                         .weight(1f)
                         .clip(MaterialTheme.shapes.medium)
-                        .clickable(role = Role.Button, onClick = onClick),
-                horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.md),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.width(104.dp)) {
-                    SpotPhotoImage(
-                        spot = spot,
-                        illustration = R.drawable.home_court,
-                        modifier = Modifier.fillMaxWidth().height(83.dp).clip(MaterialTheme.shapes.medium),
-                    ) { photo ->
-                        if (showPhotoLicense) {
-                            Text(
-                                text = photo.license,
-                                modifier = Modifier.padding(top = SportSpotSpacing.xs),
-                                color = colors.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
+                        .clickable(role = Role.Button, onClick = onClick)
+                if (stackPhoto) {
+                    Column(detailsModifier, verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.sm)) {
+                        HomeSpotThumbnail(spot, showPhotoLicense)
+                        SpotCardSummary(spot, Modifier.padding(bottom = SportSpotSpacing.xs))
+                    }
+                } else {
+                    Row(
+                        modifier = detailsModifier,
+                        horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.md),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        HomeSpotThumbnail(spot, showPhotoLicense)
+                        SpotCardSummary(spot, Modifier.weight(1f).padding(vertical = SportSpotSpacing.xs))
                     }
                 }
-                SpotCardSummary(spot, Modifier.weight(1f).padding(vertical = SportSpotSpacing.xs))
+                IconButton(
+                    onClick = onFavorite,
+                    modifier = Modifier.size(48.dp).semantics { selected = isFavorite },
+                    enabled = favoriteEnabled,
+                ) {
+                    Icon(
+                        painterResource(if (isFavorite) R.drawable.ic_favorite_selected else R.drawable.ic_tab_favorites),
+                        contentDescription = stringResource(if (isFavorite) R.string.favorites_remove else R.string.favorites_add),
+                        tint = colors.onSurfaceVariant,
+                    )
+                }
             }
-            IconButton(
-                onClick = onFavorite,
-                modifier = Modifier.size(48.dp).semantics { selected = isFavorite },
-                enabled = favoriteEnabled,
-            ) {
-                Icon(
-                    painterResource(if (isFavorite) R.drawable.ic_favorite_selected else R.drawable.ic_tab_favorites),
-                    contentDescription = stringResource(if (isFavorite) R.string.favorites_remove else R.string.favorites_add),
-                    tint = colors.onSurfaceVariant,
+        }
+    }
+}
+
+@Composable
+private fun HomeSpotThumbnail(
+    spot: Spot,
+    showPhotoLicense: Boolean,
+) {
+    Column(Modifier.width(104.dp)) {
+        SpotPhotoImage(
+            spot = spot,
+            illustration = R.drawable.home_court,
+            modifier = Modifier.fillMaxWidth().height(83.dp).clip(MaterialTheme.shapes.medium),
+        ) { photo ->
+            if (showPhotoLicense) {
+                Text(
+                    text = photo.license,
+                    modifier = Modifier.padding(top = SportSpotSpacing.xs),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
                 )
             }
         }

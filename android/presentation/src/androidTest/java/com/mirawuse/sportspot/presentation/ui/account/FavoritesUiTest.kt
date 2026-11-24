@@ -23,7 +23,14 @@ class FavoritesUiTest {
     @Test
     fun guestCanOpenAuthAndOwnerCanOpenRemoveOrLocateACachedFavorite() {
         val state = mutableStateOf<FavoritesUiState>(FavoritesUiState.Guest)
-        val spot = Spot(SpotId("osm", "node:42"), "Сохранённая площадка", SportType.FOOTBALL, GeoPoint(56.31, 44.05))
+        val spot =
+            Spot(
+                SpotId("osm", "node:42"),
+                "Сохранённая площадка",
+                SportType.FOOTBALL,
+                GeoPoint(56.31, 44.05),
+                address = "Полевая улица, 7",
+            )
         val actions = mutableListOf<String>()
         compose.setContent {
             SportSpotTheme {
@@ -33,9 +40,9 @@ class FavoritesUiTest {
                     busy = false,
                     onOpenAuth = { actions.add("auth") },
                     onRetry = {},
-                    onOpenSpot = { actions.add("details:${it.value}") },
-                    onOpenMap = { actions.add("map:${it.value}") },
-                    onRemove = { actions.add("remove:${it.value}") },
+                    onOpenSpot = { actions.add("details:${it.source}:${it.value}") },
+                    onOpenMap = { actions.add("map:${it.source}:${it.value}") },
+                    onRemove = { actions.add("remove:${it.source}:${it.value}") },
                 )
             }
         }
@@ -48,9 +55,19 @@ class FavoritesUiTest {
             state.value = FavoritesUiState.Content("owner", FavoriteList(listOf(favorite), fromCache = true))
         }
         compose.onNodeWithText("Показан сохранённый список. Не удалось обновить данные.").assertIsDisplayed()
+        compose.onNodeWithText("Полевая улица, 7").assertIsDisplayed()
         compose.onNodeWithText(spot.name).performClick()
         compose.onNodeWithText("Показать на карте").performClick()
         compose.onNodeWithContentDescription("Удалить из избранного").performClick()
-        compose.runOnIdle { assertEquals(listOf("auth", "details:node:42", "map:node:42", "remove:node:42"), actions) }
+        compose.runOnIdle {
+            assertEquals(listOf("auth", "details:osm:node:42", "map:osm:node:42", "remove:osm:node:42"), actions)
+            val missing = Favorite("owner", SpotId("community", spot.id.value), "2026-11-24", null)
+            state.value = FavoritesUiState.Content("owner", FavoriteList(listOf(missing), fromCache = true))
+        }
+        compose.onNodeWithText("Данные сохранённой площадки недоступны").assertIsDisplayed()
+        compose.onNodeWithText("Показать на карте").assertDoesNotExist()
+        compose.onNodeWithText("Полевая улица, 7").assertDoesNotExist()
+        compose.onNodeWithText("Удалить из избранного").performClick()
+        compose.runOnIdle { assertEquals("remove:community:node:42", actions.last()) }
     }
 }
