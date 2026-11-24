@@ -53,10 +53,17 @@ internal class EncryptedAccountFile(
     }
 
     fun clear() {
-        file.delete()
-        if (file.baseFile.exists()) {
-            keyStore.deleteEntry(keyAlias)
-            if (keyStore.containsAlias(keyAlias)) throw IOException("Could not clear cached account data")
+        try {
+            // Revoke this key first so a leftover file cannot restore the account data.
+            val keys = keyStore
+            keys.deleteEntry(keyAlias)
+            if (keys.containsAlias(keyAlias)) throw IOException("Could not remove the account storage key")
+        } finally {
+            file.delete()
+        }
+        val base = file.baseFile
+        if (base.exists() || File("${base.path}.new").exists() || File("${base.path}.bak").exists()) {
+            throw IOException("Could not delete encrypted account data")
         }
     }
 
