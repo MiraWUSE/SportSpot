@@ -8,13 +8,15 @@
     <string name="home_brand_prefix" translatable="false">Sport</string>
     <string name="home_brand_suffix" translatable="false">Spot</string>
     <string name="home_tagline">Найди место для игры</string>
-    <string name="home_search">Площадка или вид спорта</string>
+    <string name="home_search">Название, вид спорта или адрес</string>
+    <string name="home_search_scope">Поиск по загруженным площадкам</string>
+    <string name="spot_search_reset">Сбросить фильтры</string>
     <string name="home_filters">Выбрать вид спорта</string>
     <string name="home_filter_all">Все</string>
     <string name="home_open_map">Карта →</string>
     <string name="home_spots_heading">Площадки</string>
     <string name="home_all_spots">Все площадки ›</string>
-    <string name="home_no_matches">Площадок по этому запросу нет. Измените поиск или вид спорта.</string>
+    <string name="home_no_matches">По заданным фильтрам ничего не найдено.</string>
     <string name="home_close">Закрыть</string>
     <string name="home_results_count">Найдено %1$d</string>
     <string name="home_demo_location">Нижний Новгород</string>

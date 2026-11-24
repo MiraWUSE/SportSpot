@@ -205,6 +205,7 @@ fun SportSpotApp() {
                 val viewModel = searchViewModel(navController, entry)
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
                 val location by viewModel.location.collectAsStateWithLifecycle()
+                val filter by viewModel.searchFilter.collectAsStateWithLifecycle()
                 HomeScreen(
                     state = state,
                     location = location,
@@ -214,6 +215,10 @@ fun SportSpotApp() {
                     onRetry = viewModel::retry,
                     onOpenSpot = { navController.navigate(SpotDetailsRoute(it.source, it.value)) },
                     onOpenMap = { navController.selectTab(Tab.MAP) },
+                    filter = filter,
+                    onSearchQuery = viewModel::setSearchQuery,
+                    onSearchSport = viewModel::setSearchSport,
+                    onResetSearch = viewModel::resetSearchFilter,
                     signedIn = authState is AuthState.Authenticated,
                     savedSpotIds = savedIds,
                     favoriteEnabled = favoriteEnabled,
