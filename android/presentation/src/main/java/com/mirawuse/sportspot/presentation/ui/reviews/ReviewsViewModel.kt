@@ -33,7 +33,7 @@ internal class ReviewsViewModel
         private val updateReview = UpdateReviewUseCase(auth, repository)
         private val deleteReview = DeleteReviewUseCase(auth, repository)
         private var loadJob: Job? = null
-        private var activeSpot: SpotId? = null
+        private var activeSpot by mutableStateOf<SpotId?>(null)
 
         private var list by mutableStateOf<ReviewsState>(ReviewsState.Loading)
         var busy by mutableStateOf(false)
@@ -76,7 +76,12 @@ internal class ReviewsViewModel
             title: String,
             onSaved: () -> Unit,
         ) {
-            mutate(owner, spotId, onSaved) {
+            mutate(owner, spotId, onSuccess = { saved ->
+                updateContent(spotId) { items ->
+                    if (items.none { it.id == saved.id }) listOf(saved) + items else items.map { if (it.id == saved.id) saved else it }
+                }
+                onSaved()
+            }) {
                 if (existing == null) {
                     createReview(spotId, rating, text, title, owner)
                 } else {
@@ -89,14 +94,25 @@ internal class ReviewsViewModel
             owner: String,
             review: Review,
         ) {
-            mutate(owner, review.spotId, {}) { deleteReview(review.id, owner) }
+            mutate(owner, review.spotId, onSuccess = {
+                updateContent(review.spotId) { items -> items.filterNot { it.id == review.id } }
+            }) { deleteReview(review.id, owner) }
         }
 
-        private fun mutate(
+        private fun updateContent(
+            spotId: SpotId,
+            update: (List<Review>) -> List<Review>,
+        ) {
+            if (activeSpot != spotId) return
+            (list as? ReviewsState.Content)?.let { list = ReviewsState.Content(update(it.items)) }
+            load(spotId, refresh = true)
+        }
+
+        private fun <T> mutate(
             owner: String,
             spotId: SpotId,
-            onSuccess: () -> Unit,
-            operation: suspend () -> DomainResult<*>,
+            onSuccess: (T) -> Unit,
+            operation: suspend () -> DomainResult<T>,
         ) {
             if (busy) return
             busy = true
@@ -104,10 +120,7 @@ internal class ReviewsViewModel
             viewModelScope.launch {
                 try {
                     when (val result = operation()) {
-                        is DomainResult.Success -> {
-                            if (activeSpot == spotId) load(spotId, refresh = true)
-                            onSuccess()
-                        }
+                        is DomainResult.Success -> onSuccess(result.value)
                         is DomainResult.Failure -> {
                             actionError = owner to result.error
                             if (activeSpot == spotId && result.error in setOf(DomainError.Conflict, DomainError.NotFound)) {

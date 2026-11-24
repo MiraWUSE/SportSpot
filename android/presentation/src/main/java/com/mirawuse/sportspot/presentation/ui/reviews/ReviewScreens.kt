@@ -132,7 +132,7 @@ internal fun ReviewFormScreen(
             restoring -> SpotSearchLoading()
             owner == null -> {
                 Text(stringResource(R.string.review_sign_in))
-                SportSpotButton(stringResource(R.string.auth_open), onOpenAuth, Modifier.fillMaxWidth())
+                SportSpotButton(stringResource(R.string.content_open_auth), onOpenAuth, Modifier.fillMaxWidth())
             }
             state is ReviewsState.Loading -> SpotSearchLoading()
             state is ReviewsState.Error -> ReviewLoadError(onRetry)
