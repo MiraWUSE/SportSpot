@@ -74,13 +74,13 @@ internal class ReviewsViewModel
             rating: Int,
             text: String,
             title: String,
-            onSaved: () -> Unit,
+            onSaved: (Review) -> Unit,
         ) {
             mutate(owner, spotId, onSuccess = { saved ->
                 updateContent(spotId) { items ->
                     if (items.none { it.id == saved.id }) listOf(saved) + items else items.map { if (it.id == saved.id) saved else it }
                 }
-                onSaved()
+                onSaved(saved)
             }) {
                 if (existing == null) {
                     createReview(spotId, rating, text, title, owner)

@@ -44,7 +44,11 @@ internal fun ModerationScreen(
     onRetry: () -> Unit,
     onApprove: (String) -> Unit,
     onReject: (String, String) -> Unit,
+    photoQueue: (@Composable () -> Unit)? = null,
+    proposalPhotos: @Composable (SpotProposal) -> Unit = {},
 ) {
+    val account = (auth as? AuthState.Authenticated)?.profile?.id
+    var showPhotos by rememberSaveable(account) { mutableStateOf(false) }
     FormScreen(stringResource(R.string.moderation_title), onBack) {
         when {
             restoring -> SpotSearchLoading()
@@ -52,6 +56,15 @@ internal fun ModerationScreen(
                 FormCard(stringResource(R.string.moderation_access)) { Text(stringResource(R.string.moderation_role_required)) }
             }
             else -> {
+                photoQueue?.let { content ->
+                    TextButton(onClick = { showPhotos = !showPhotos }) {
+                        Text(stringResource(if (showPhotos) R.string.moderation_queue else R.string.photos_queue))
+                    }
+                    if (showPhotos) {
+                        content()
+                        return@FormScreen
+                    }
+                }
                 Text(stringResource(R.string.moderation_queue), style = MaterialTheme.typography.headlineSmall)
                 if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 actionError?.let { ContentErrorText(it) }
@@ -64,8 +77,8 @@ internal fun ModerationScreen(
                     is DomainResult.Success -> {
                         if (pending.value.isEmpty()) Text(stringResource(R.string.moderation_queue_empty))
                         pending.value.forEach { proposal ->
-                            key((auth as AuthState.Authenticated).profile.id, proposal.id) {
-                                ModerationProposal(proposal, busy, onApprove, onReject)
+                            key(account, proposal.id) {
+                                ModerationProposal(proposal, busy, onApprove, onReject, proposalPhotos)
                             }
                         }
                         TextButton(onClick = onRetry, enabled = !busy) { Text(stringResource(R.string.content_refresh)) }
@@ -82,6 +95,7 @@ private fun ModerationProposal(
     busy: Boolean,
     onApprove: (String) -> Unit,
     onReject: (String, String) -> Unit,
+    photoAttachments: @Composable (SpotProposal) -> Unit,
 ) {
     var rejectionOpen by rememberSaveable { mutableStateOf(false) }
     var reason by rememberSaveable { mutableStateOf("") }
@@ -97,6 +111,7 @@ private fun ModerationProposal(
         proposal.surface?.let { Text(stringResource(R.string.details_surface, it)) }
         proposal.equipment?.let { Text(stringResource(R.string.details_equipment, it)) }
         proposal.lighting?.let { Text(stringResource(R.string.details_lighting, stringResource(lightingLabelRes(it)))) }
+        photoAttachments(proposal)
     }
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.sm)) {
         SportSpotButton(
