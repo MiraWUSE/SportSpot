@@ -12,13 +12,22 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -39,6 +48,7 @@ import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.repository.SpotRepository
 import com.mirawuse.sportspot.domain.usecase.spot.SearchNearbySpotsUseCase
 import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
+import com.mirawuse.sportspot.presentation.ui.search.SearchFilterState
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotTheme
 import org.hamcrest.Matcher
 import org.junit.After
@@ -269,6 +279,147 @@ class OsmMapTest {
         onView(isAssignableFrom(MapView::class.java)).perform(click())
         compose.waitUntil(5_000) { selected.value == first.id }
         waitForCamera(map, center, 13.5)
+    }
+
+    @Test
+    fun passiveVisibilityWrapsTheDateLineAndRespondsToResizeAndZoom() {
+        val center = GeoPoint(0.0, 179.999)
+        val home = Spot(SpotId("osm", "node:1"), "Якорь", SportType.FOOTBALL, center)
+        val acrossDateLine = Spot(SpotId("osm", "node:2"), "Корт", SportType.TENNIS, GeoPoint(0.0, -179.995))
+        val mapSize = mutableStateOf(300.dp)
+        val visibility = AtomicReference<MapSpotVisibility>()
+        val gestures = AtomicInteger()
+        compose.setContent {
+            SportSpotTheme {
+                if (showing.value) {
+                    OsmMap(
+                        center,
+                        listOf(home, acrossDateLine),
+                        null,
+                        true,
+                        Modifier.size(mapSize.value),
+                        networkStatus = MapNetworkStatus.NO_NETWORK,
+                        onViewportIdle = { _, _ -> gestures.incrementAndGet() },
+                        onSpotVisibility = visibility::set,
+                    )
+                }
+            }
+        }
+        val map = nativeMap()
+        compose.waitUntil(10_000) { visibility.get() == MapSpotVisibility.Ready(setOf(home.id, acrossDateLine.id)) }
+        compose.runOnIdle { mapSize.value = 120.dp }
+        compose.waitUntil(10_000) { visibility.get() == MapSpotVisibility.Ready(setOf(home.id)) }
+        compose.runOnIdle { mapSize.value = 300.dp }
+        compose.waitUntil(10_000) { visibility.get() == MapSpotVisibility.Ready(setOf(home.id, acrossDateLine.id)) }
+        compose.runOnIdle {
+            map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(center.latitude, center.longitude), 16.0))
+        }
+        compose.waitUntil(10_000) { visibility.get() == MapSpotVisibility.Ready(setOf(home.id)) }
+        assertEquals(0, gestures.get())
+    }
+
+    @Test
+    fun visibleListSharesSelectionAndFiltersAndPickerCanStillRevealAnOffscreenSpot() {
+        val center = GeoPoint(56.3269, 44.0059)
+        val field = Spot(SpotId("osm", "node:1"), "Поле у школы", SportType.FOOTBALL, center, address = "Школьная, 2")
+        val court = field.copy(id = SpotId("community", field.id.value), name = "Корт у школы", sportType = SportType.TENNIS)
+        val far = court.copy(id = SpotId("osm", "node:3"), name = "Дальний корт", location = center.copy(longitude = 44.2))
+        val spots = listOf(field, court, far)
+        val viewport = mutableStateOf(MapViewportState(spots = spots, status = MapSearchStatus.READY))
+        val filter = mutableStateOf(SearchFilterState())
+        val opened = AtomicReference<SpotId>()
+        val gestures = AtomicInteger()
+        val restore = StateRestorationTester(compose)
+        restore.setContent {
+            SportSpotTheme {
+                if (showing.value) {
+                    MapScreen(
+                        state = HomeUiState.Content(spots),
+                        center = center,
+                        locationLabel = "Нижний Новгород",
+                        focus = null,
+                        onRetry = { error("Unexpected retry") },
+                        onOpenSpot = opened::set,
+                        viewport = viewport.value,
+                        onViewportIdle = { _, _ -> gestures.incrementAndGet() },
+                        filter = filter.value,
+                        showVisibleSpots = true,
+                    )
+                }
+            }
+        }
+        val scroll = compose.onNode(hasScrollToIndexAction())
+        val rowRole = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
+        val courtRow = hasText(court.name) and rowRole
+        val fieldRow = hasText(field.name) and rowRole
+        val listTitle = hasText("Площадки на карте")
+        var map = nativeMap()
+        waitForCamera(map, center, 13.5)
+        scroll.performScrollToNode(listTitle)
+        compose.onNodeWithText("Загружено и видно: 2").assertIsDisplayed()
+        compose.onNodeWithText("Свернуть").performClick()
+        compose.onNode(courtRow).assertDoesNotExist()
+        restore.emulateSavedInstanceStateRestore()
+        map = nativeMap()
+        waitForCamera(map, center, 13.5)
+        scroll.performScrollToNode(listTitle)
+        compose.onNodeWithText("Развернуть").performClick()
+        scroll.performScrollToNode(courtRow)
+        compose.onNode(courtRow).performClick().assertIsSelected()
+        compose.onNodeWithContentDescription("Подробнее о площадке «Корт у школы»").performScrollTo().performClick()
+        assertEquals(court.id, opened.get())
+        scroll.performScrollToIndex(0)
+        waitForCamera(map, center, 13.5)
+        compose.waitUntil(10_000) {
+            var ready = false
+            compose.runOnIdle {
+                val point = map.projection.toScreenLocation(LatLng(center.latitude, center.longitude))
+                ready =
+                    map
+                        .queryRenderedFeatures(RectF(point.x - 8, point.y - 8, point.x + 8, point.y + 8), "sportspot-markers")
+                        .any { it.getBooleanProperty("selected") }
+            }
+            ready
+        }
+        onView(isAssignableFrom(MapView::class.java)).perform(click())
+        scroll.performScrollToNode(fieldRow)
+        compose.onNode(fieldRow).assertIsSelected()
+
+        compose.runOnIdle { filter.value = SearchFilterState("у школы", SportType.TENNIS) }
+        scroll.performScrollToNode(listTitle)
+        compose.onNodeWithText("Загружено и видно: 1").assertIsDisplayed()
+        compose.onNode(fieldRow).assertDoesNotExist()
+        compose.runOnIdle { viewport.value = viewport.value.copy(status = MapSearchStatus.RATE_LIMITED) }
+        val cached = "Сервер временно ограничил поиск площадок. Показаны ранее загруженные площадки."
+        scroll.performScrollToNode(hasText(cached))
+        compose.onNodeWithText(cached).assertIsDisplayed()
+        scroll.performScrollToNode(courtRow)
+        compose.onNode(courtRow).assertIsSelected()
+
+        compose.runOnIdle {
+            filter.value = SearchFilterState(sport = SportType.VOLLEYBALL)
+            viewport.value = viewport.value.copy(status = MapSearchStatus.READY)
+        }
+        scroll.performScrollToNode(listTitle)
+        compose.onNodeWithText("Загружено и видно: 0").assertIsDisplayed()
+        compose.onAllNodesWithText("Нет совпадений среди загруженных площадок.")[0].assertExists()
+        compose.runOnIdle { viewport.value = MapViewportState(spots = emptyList(), status = MapSearchStatus.READY) }
+        compose.onAllNodesWithText("В этой области площадки не найдены.")[0].assertExists()
+        compose.onNodeWithText("Нет совпадений среди загруженных площадок.").assertDoesNotExist()
+
+        compose.runOnIdle {
+            filter.value = SearchFilterState()
+            viewport.value = MapViewportState(spots = spots, status = MapSearchStatus.READY)
+        }
+        scroll.performScrollToIndex(0)
+        compose.onNodeWithText("Выбрать площадку").performClick()
+        compose.onNodeWithText("3. Дальний корт").performClick()
+        waitForCamera(map, far.location, 15.5)
+        scroll.performScrollToNode(listTitle)
+        compose.onNodeWithText("Загружено и видно: 1").assertIsDisplayed()
+        scroll.performScrollToNode(hasText(far.name) and rowRole)
+        compose.onNode(hasText(far.name) and rowRole).assertIsSelected()
+        assertEquals(0, gestures.get())
     }
 
     @Test
