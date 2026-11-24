@@ -229,15 +229,19 @@ class UpdateReviewUseCaseTest {
         override suspend fun getReviewsBySpot(spotId: SpotId): List<Review> = error("Метод не используется в тесте")
 
         override suspend fun createReview(
+            userId: String,
             spotId: SpotId,
             rating: Int,
             text: String,
+            title: String?,
         ): Review = error("Метод не используется в тесте")
 
         override suspend fun updateReview(
+            userId: String,
             reviewId: String,
             rating: Int,
             text: String,
+            title: String?,
         ): Review {
             updateCalls++
             lastReviewId = reviewId
@@ -259,7 +263,10 @@ class UpdateReviewUseCaseTest {
             return review
         }
 
-        override suspend fun deleteReview(reviewId: String) {
+        override suspend fun deleteReview(
+            userId: String,
+            reviewId: String,
+        ) {
             error("Метод не используется в тесте")
         }
     }

@@ -36,6 +36,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.mirawuse.sportspot.domain.model.auth.AuthState
 import com.mirawuse.sportspot.domain.model.spot.SpotId
+import com.mirawuse.sportspot.domain.policy.AuthorizationPolicy
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.account.AuthScreen
 import com.mirawuse.sportspot.presentation.ui.account.AuthViewModel
@@ -52,14 +53,23 @@ import com.mirawuse.sportspot.presentation.ui.home.HomeScreen
 import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
 import com.mirawuse.sportspot.presentation.ui.home.HomeViewModel
 import com.mirawuse.sportspot.presentation.ui.map.MapScreen
+import com.mirawuse.sportspot.presentation.ui.moderation.ModerationScreen
+import com.mirawuse.sportspot.presentation.ui.moderation.ModerationViewModel
+import com.mirawuse.sportspot.presentation.ui.proposal.MyProposalsScreen
 import com.mirawuse.sportspot.presentation.ui.proposal.ProposalScreen
+import com.mirawuse.sportspot.presentation.ui.proposal.ProposalsViewModel
 import com.mirawuse.sportspot.presentation.ui.reviews.ReviewFormScreen
+import com.mirawuse.sportspot.presentation.ui.reviews.ReviewScore
 import com.mirawuse.sportspot.presentation.ui.reviews.ReviewsScreen
+import com.mirawuse.sportspot.presentation.ui.reviews.ReviewsState
+import com.mirawuse.sportspot.presentation.ui.reviews.ReviewsViewModel
 import kotlinx.serialization.Serializable
 
 private const val APP_GRAPH = "sportspot"
 private const val HOME_ROUTE = "home"
 private const val PROPOSAL_ROUTE = "proposal"
+private const val MY_PROPOSALS_ROUTE = "my-proposals"
+private const val MODERATION_ROUTE = "moderation"
 private const val AUTH_ROUTE = "auth"
 
 @Serializable
@@ -117,6 +127,10 @@ fun SportSpotApp() {
     val authViewModel: AuthViewModel = hiltViewModel()
     val favorites: FavoritesViewModel = hiltViewModel()
     val authState by authViewModel.authState.collectAsStateWithLifecycle()
+    val reviews: ReviewsViewModel = hiltViewModel()
+    val proposals: ProposalsViewModel = hiltViewModel()
+    val accountId = (authState as? AuthState.Authenticated)?.profile?.id
+    val moderatorId = accountId.takeIf { AuthorizationPolicy.moderatorError(authState) == null && !authViewModel.restoring }
     val favoriteState = favorites.state.visibleFor(authState)
     val favoriteList = (favoriteState as? FavoritesUiState.Content)?.list?.items.orEmpty()
     val savedIds = favoriteList.mapTo(mutableSetOf()) { it.spotId }
@@ -217,6 +231,7 @@ fun SportSpotApp() {
                     focus = route.spotId.takeIf { !route.favorite || privateState != null },
                     onRetry = if (privateState == null) viewModel::retry else favorites::retry,
                     onOpenSpot = { navController.navigate(SpotDetailsRoute(it.source, it.value, favorite = privateState != null)) },
+                    onRefresh = if (privateState == null) viewModel::retry else null,
                 )
             }
             composable("favorites") {
@@ -236,13 +251,58 @@ fun SportSpotApp() {
                     state = authState,
                     viewModel = authViewModel,
                     onOpenAuth = { navController.navigate(AUTH_ROUTE) },
-                    onPropose = { navController.navigate(PROPOSAL_ROUTE) },
+                    onPropose = {
+                        proposals.clearSubmission()
+                        navController.navigate(PROPOSAL_ROUTE)
+                    },
+                    onMyProposals = { navController.navigate(MY_PROPOSALS_ROUTE) },
+                    onModeration = moderatorId?.let { { navController.navigate(MODERATION_ROUTE) } },
                 )
             }
             composable(PROPOSAL_ROUTE) {
                 ProposalScreen(
+                    owner = accountId,
+                    restoring = authViewModel.restoring,
+                    busy = proposals.submitting,
+                    submission = proposals.submissionFor(accountId),
                     onBack = { navController.popBackStack() },
                     onOpenAuth = { navController.navigate(AUTH_ROUTE) },
+                    onViewProposals = { navController.navigate(MY_PROPOSALS_ROUTE) },
+                    onSubmit = { name, sport, point, address ->
+                        accountId?.let { proposals.submit(it, name, sport, point, address) }
+                    },
+                )
+            }
+            composable(MY_PROPOSALS_ROUTE) {
+                LaunchedEffect(accountId) { proposals.load(accountId) }
+                LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { proposals.load(accountId) }
+                MyProposalsScreen(
+                    signedIn = accountId != null,
+                    restoring = authViewModel.restoring,
+                    state = proposals.listFor(accountId),
+                    onBack = { navController.popBackStack() },
+                    onOpenAuth = { navController.navigate(AUTH_ROUTE) },
+                    onRetry = { proposals.load(accountId) },
+                )
+            }
+            composable(MODERATION_ROUTE) { entry ->
+                val moderation: ModerationViewModel = hiltViewModel(entry)
+                val search = searchViewModel(navController, entry)
+                LaunchedEffect(moderatorId) { moderation.load(moderatorId) }
+                ModerationScreen(
+                    auth = authState,
+                    restoring = authViewModel.restoring,
+                    pending = moderation.pendingFor(moderatorId),
+                    busy = moderation.busy,
+                    actionError = moderation.errorFor(moderatorId),
+                    onBack = { navController.popBackStack() },
+                    onRetry = { moderation.load(moderatorId) },
+                    onApprove = { proposalId ->
+                        moderatorId?.let { moderation.decide(it, proposalId, onPublished = search::refresh) }
+                    },
+                    onReject = { proposalId, reason ->
+                        moderatorId?.let { moderation.decide(it, proposalId, reason) }
+                    },
                 )
             }
             composable(AUTH_ROUTE) {
@@ -257,6 +317,7 @@ fun SportSpotApp() {
                 val route = entry.toRoute<SpotDetailsRoute>()
                 val viewModel = searchViewModel(navController, entry)
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(route.spotId) { reviews.load(route.spotId) }
                 SpotDetailsScreen(
                     spotId = route.spotId,
                     state = if (route.favorite) favoriteDestinationState(favoriteState, route.spotId, favoriteError) else state,
@@ -285,26 +346,57 @@ fun SportSpotApp() {
                             enabled = favoriteEnabled,
                         )
                     },
+                    reviewSummary = {
+                        (reviews.stateFor(route.spotId) as? ReviewsState.Content)?.let { ReviewScore(it.items) }
+                    },
                 )
             }
             composable<ReviewsRoute> { entry ->
                 val route = entry.toRoute<ReviewsRoute>()
                 val viewModel = searchViewModel(navController, entry)
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(route.spotId) { reviews.load(route.spotId) }
                 ReviewsScreen(
-                    spotName = (state as? HomeUiState.Content)?.findSpot(route.spotId)?.name,
+                    spotName =
+                        (state as? HomeUiState.Content)?.findSpot(route.spotId)?.name
+                            ?: favoriteList.firstOrNull { it.spotId == route.spotId }?.spot?.name,
+                    state = reviews.stateFor(route.spotId),
+                    owner = accountId,
+                    busy = reviews.busy,
+                    error = reviews.errorFor(accountId),
                     onBack = { navController.popBackStack() },
-                    onWrite = { navController.navigate(ReviewFormRoute(route.source, route.value)) },
+                    onWrite = {
+                        reviews.clearError()
+                        navController.navigate(ReviewFormRoute(route.source, route.value))
+                    },
+                    onDelete = { review -> accountId?.let { reviews.delete(it, review) } },
+                    onRetry = { reviews.load(route.spotId, refresh = true) },
                 )
             }
             composable<ReviewFormRoute> { entry ->
                 val route = entry.toRoute<ReviewFormRoute>()
                 val viewModel = searchViewModel(navController, entry)
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(route.spotId) { reviews.load(route.spotId) }
                 ReviewFormScreen(
-                    spotName = (state as? HomeUiState.Content)?.findSpot(route.spotId)?.name,
+                    spotName =
+                        (state as? HomeUiState.Content)?.findSpot(route.spotId)?.name
+                            ?: favoriteList.firstOrNull { it.spotId == route.spotId }?.spot?.name,
+                    state = reviews.stateFor(route.spotId),
+                    owner = accountId,
+                    restoring = authViewModel.restoring,
+                    busy = reviews.busy,
+                    error = reviews.errorFor(accountId),
                     onBack = { navController.popBackStack() },
                     onOpenAuth = { navController.navigate(AUTH_ROUTE) },
+                    onRetry = { reviews.load(route.spotId, refresh = true) },
+                    onSubmit = { existing, rating, text, title ->
+                        if (accountId != null) {
+                            reviews.save(route.spotId, accountId, existing, rating, text, title) {
+                                if (navController.currentBackStackEntry == entry) navController.popBackStack()
+                            }
+                        }
+                    },
                 )
             }
         }

@@ -1,12 +1,14 @@
 
 package com.mirawuse.sportspot.domain.usecase.proposal
 
+import com.mirawuse.sportspot.domain.model.auth.AuthState
 import com.mirawuse.sportspot.domain.model.proposal.SpotProposal
 import com.mirawuse.sportspot.domain.policy.AuthorizationPolicy
 import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.SpotProposalRepository
 import com.mirawuse.sportspot.domain.result.DomainError
 import com.mirawuse.sportspot.domain.result.DomainResult
+import com.mirawuse.sportspot.domain.result.contentResult
 
 class RejectProposalUseCase(
     private val authRepository: AuthRepository,
@@ -15,6 +17,7 @@ class RejectProposalUseCase(
     suspend operator fun invoke(
         proposalId: String,
         reason: String,
+        expectedUserId: String? = null,
     ): DomainResult<SpotProposal> {
         val authState = authRepository.getAuthState()
         val accessError = AuthorizationPolicy.moderatorError(authState)
@@ -39,12 +42,15 @@ class RejectProposalUseCase(
             )
         }
 
-        val proposal =
+        val userId = (authState as AuthState.Authenticated).profile.id
+        if (expectedUserId != null && expectedUserId != userId) return DomainResult.Failure(DomainError.Unauthorized)
+        if (reason.trim().length > 1000) return DomainResult.Failure(DomainError.Validation("Причина должна содержать до 1000 символов"))
+        return contentResult {
             proposalRepository.rejectProposal(
+                userId = userId,
                 proposalId = proposalId.trim(),
                 reason = reason.trim(),
             )
-
-        return DomainResult.Success(proposal)
+        }
     }
 }

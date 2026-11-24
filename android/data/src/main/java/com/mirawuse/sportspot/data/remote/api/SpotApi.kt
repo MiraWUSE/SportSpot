@@ -23,4 +23,13 @@ interface SpotApi {
         @Query("order") order: String = "id.asc",
         @Query("id") id: String? = null,
     ): Response<List<SpotDto?>>
+
+    @GET("rest/v1/spots?source=eq.community&order=id.asc")
+    suspend fun getCommunitySpots(
+        @Query("and") bounds: String,
+        @Query("or") wrappedLongitudes: String?,
+        @Query("sport_type") sport: String?,
+        @Query("limit") limit: Int,
+        @Query("offset") offset: Int,
+    ): Response<List<SpotDto?>>
 }

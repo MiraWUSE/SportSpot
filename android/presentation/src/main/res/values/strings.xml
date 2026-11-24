@@ -17,7 +17,6 @@
     <string name="home_no_matches">Площадок по этому запросу нет. Измените поиск или вид спорта.</string>
     <string name="home_close">Закрыть</string>
     <string name="home_results_count">Найдено %1$d</string>
-    <string name="home_ratings_unavailable">Оценки недоступны</string>
     <string name="home_demo_location">Нижний Новгород</string>
     <string name="location_current">Моё местоположение</string>
     <string name="location_approximate">Примерное местоположение</string>
@@ -100,18 +99,44 @@
 
     <string name="reviews_title">Отзывы</string>
     <string name="reviews_write">Написать отзыв</string>
-    <string name="reviews_unavailable">Отзывы пока недоступны</string>
-    <string name="reviews_read_unavailable">Можно заполнить форму, публикация пока недоступна.</string>
+    <string name="reviews_none">Нет отзывов</string>
+    <string name="review_score_empty">Пока нет оценок</string>
+    <string name="review_score">★ %1$.1f из 5 · Отзывов: %2$d</string>
+    <string name="review_anonymous_author">Пользователь</string>
+    <string name="review_own_author">Вы</string>
+    <string name="review_sign_in">Войдите, чтобы оставить отзыв.</string>
+    <string name="review_edit">Редактировать отзыв</string>
+    <string name="review_delete">Удалить отзыв</string>
+    <string name="review_delete_question">Удалить ваш отзыв об этой площадке?</string>
+    <string name="review_publish">Опубликовать отзыв</string>
+    <string name="content_save">Сохранить</string>
+    <string name="content_cancel">Отмена</string>
+    <string name="content_refresh">Обновить</string>
+    <string name="content_open_auth">Войти или зарегистрироваться</string>
+    <string name="content_sign_in_again">Войдите снова, чтобы продолжить.</string>
+    <string name="content_forbidden">У вас нет доступа к этому действию.</string>
+    <string name="content_conflict">Данные уже изменились. Проверьте их перед повтором.</string>
+    <string name="content_not_found">Запись больше недоступна.</string>
+    <string name="content_unavailable">Не удалось связаться с сервером. Попробуйте ещё раз.</string>
+    <string name="content_unexpected">Не удалось обработать ответ сервера.</string>
     <string name="review_rating">Ваша оценка</string>
     <string name="review_rating_choice">Оценка %1$d из 5</string>
     <string name="review_title_optional">Заголовок (необязательно)</string>
     <string name="review_title_hint">Кратко о площадке</string>
     <string name="review_comment">Комментарий</string>
     <string name="review_comment_hint">Что понравилось? Что можно улучшить?</string>
-    <string name="review_validate">Проверить отзыв</string>
-    <string name="review_send_unavailable">Поля заполнены. Публикация отзывов пока недоступна.</string>
 
     <string name="proposal_title">Предложить площадку</string>
+    <string name="proposal_submit">Отправить на проверку</string>
+    <string name="proposal_sent">Предложение отправлено</string>
+    <string name="proposal_number">Номер заявки: %1$s</string>
+    <string name="proposals_sign_in">Войдите, чтобы отправлять предложения и следить за их статусом.</string>
+    <string name="proposals_open">Открыть мои предложения</string>
+    <string name="proposals_empty">Предложений пока нет</string>
+    <string name="proposals_pending">На рассмотрении</string>
+    <string name="proposals_approved">Одобрено</string>
+    <string name="proposals_rejected">Отклонено</string>
+    <string name="proposals_reason">Причина отказа: %1$s</string>
     <string name="proposal_heading">Новая спортивная площадка</string>
     <string name="proposal_name">Название</string>
     <string name="proposal_name_hint">Введите название</string>
@@ -122,8 +147,6 @@
     <string name="proposal_coordinates">Координаты</string>
     <string name="proposal_latitude">Широта</string>
     <string name="proposal_longitude">Долгота</string>
-    <string name="proposal_validate">Проверить предложение</string>
-    <string name="proposal_send_unavailable">Поля заполнены. Отправка предложений пока недоступна.</string>
 
     <string name="auth_title">Авторизация</string>
     <string name="auth_welcome">Добро пожаловать!</string>
@@ -154,7 +177,6 @@
     <string name="profile_my_reviews">Мои отзывы</string>
     <string name="profile_reviews_guest">Отзывы пока недоступны.</string>
     <string name="profile_my_proposals">Мои предложения</string>
-    <string name="profile_proposals_guest">Список предложений пока недоступен.</string>
 
     <string name="favorites_saved">Сохранённые площадки</string>
     <string name="favorites_guest_header">Быстрый доступ</string>
@@ -167,17 +189,16 @@
     <string name="favorites_offline_error">Нет связи с сервером. Попробуйте, когда появится сеть.</string>
     <string name="favorites_spot_unavailable">Данные сохранённой площадки недоступны</string>
     <string name="moderation_title">Модерация</string>
+    <string name="moderation_coordinates">Координаты: %1$.6f, %2$.6f</string>
+    <string name="moderation_confirm_rejection">Подтвердить отклонение</string>
+    <string name="moderation_reason_length">Причина должна содержать до 1000 символов.</string>
     <string name="moderation_access">Доступ по роли</string>
     <string name="moderation_role_required">Раздел открыт только модератору.</string>
     <string name="moderation_queue">Заявки на модерацию</string>
-    <string name="moderation_unavailable">Заявки пока недоступны.</string>
     <string name="moderation_queue_empty">Нет заявок на проверку.</string>
-    <string name="moderation_pending">Ожидает решения модератора</string>
     <string name="moderation_approve">Одобрить</string>
     <string name="moderation_reject">Отклонить</string>
     <string name="moderation_reason">Причина отклонения</string>
-    <string name="moderation_validate">Проверить причину</string>
-    <string name="moderation_send_unavailable">Отправка решения пока недоступна.</string>
     <string name="profile_settings">Настройки</string>
     <string name="profile_theme_setting">Тема приложения следует настройкам устройства.</string>
 </resources>

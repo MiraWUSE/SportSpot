@@ -3,6 +3,7 @@ package com.mirawuse.sportspot.presentation.ui.map
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -13,6 +14,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -20,6 +22,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onSizeChanged
@@ -44,6 +47,7 @@ internal fun MapScreen(
     focus: SpotId?,
     onRetry: () -> Unit,
     onOpenSpot: (SpotId) -> Unit,
+    onRefresh: (() -> Unit)? = null,
 ) {
     var selectedSource by rememberSaveable(focus, center) { mutableStateOf(focus?.source) }
     var selectedValue by rememberSaveable(focus, center) { mutableStateOf(focus?.value) }
@@ -67,7 +71,16 @@ internal fun MapScreen(
             verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.md),
         ) {
             Column(Modifier.onSizeChanged { headingHeight = it.height }, verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.md)) {
-                Text(text = stringResource(R.string.tab_map), style = MaterialTheme.typography.headlineLarge)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = stringResource(R.string.tab_map),
+                        style = MaterialTheme.typography.headlineLarge,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (onRefresh != null && state is HomeUiState.Content) {
+                        TextButton(onClick = onRefresh) { Text(stringResource(R.string.content_refresh)) }
+                    }
+                }
                 Text(locationLabel, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                 if (focus != null && selectedId == focus && state is HomeUiState.Content && state.findSpot(focus) == null) {
                     Text(stringResource(R.string.map_focus_unavailable))

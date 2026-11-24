@@ -39,6 +39,50 @@ class RemoteSpotDataSourceTest {
     private val osmId = SpotId("osm", "node:12345")
     private val communityId = SpotId("community", "33333333-3333-4333-8333-333333333333")
 
+    @Test
+    fun searchMergesBoundedCommunityRowsWithOsmAndRejectsRectangleCorners() =
+        runBlocking {
+            val community = savedRows()[1].asJsonObject.apply { addProperty("sport_type", "basketball") }
+            val outside =
+                community.deepCopy().apply {
+                    addProperty("id", "community:22222222-2222-4222-8222-222222222222")
+                    addProperty("latitude", 56.3349)
+                    addProperty("longitude", 44.0199)
+                }
+            server.enqueue(json(fixture("search-spots.json")))
+            val page =
+                JsonArray().apply {
+                    add(community)
+                    add(outside)
+                }
+            server.enqueue(json(page.toString()))
+            val repo = repository(stubCommunity = false)
+            assertEquals(listOf(osmId, communityId), repo.searchNearby(center, 1000, SportType.BASKETBALL).map(Spot::id))
+            assertEquals("/functions/v1/search-sports-spots-v1", takeRequest().requestUrl?.encodedPath)
+            val request = checkNotNull(takeRequest().requestUrl)
+            assertEquals("/rest/v1/spots", request.encodedPath)
+            assertEquals("eq.community", request.queryParameter("source"))
+            assertEquals("eq.basketball", request.queryParameter("sport_type"))
+            assertEquals("100", request.queryParameter("limit"))
+            assertEquals("0", request.queryParameter("offset"))
+            assertTrue(request.queryParameter("and").orEmpty().contains("longitude.gte."))
+
+            server.enqueue(json(singleSavedRow(1)))
+            assertEquals(communityId, repo.getSpotById(communityId)?.id)
+        }
+
+    @Test
+    fun communityBoundsWrapAtTheAntimeridianAndIncludeThePole() {
+        val dateLine = CommunitySearchArea(SpotSearchRequest("0", "179.999", 1000, "all"))
+        assertTrue(dateLine.wrappedLongitudes.orEmpty().contains("longitude.lte.-179"))
+        assertTrue(dateLine.contains(GeoPoint(0.0, -179.999)))
+        assertTrue(!dateLine.contains(GeoPoint(0.0, 179.98)))
+        val pole = CommunitySearchArea(SpotSearchRequest("89.999", "20", 1000, "all"))
+        assertNull(pole.wrappedLongitudes)
+        assertTrue(!pole.bounds.contains("longitude"))
+        assertTrue(pole.contains(GeoPoint(89.999, -160.0)))
+    }
+
     @After
     fun closeClients() {
         clients.forEach {
@@ -413,6 +457,7 @@ class RemoteSpotDataSourceTest {
         online: Boolean = true,
         readTimeoutMillis: Long = 2000,
         callTimeoutMillis: Long = 5000,
+        stubCommunity: Boolean = true,
     ): SpotRepository {
         val config =
             NetworkConfig(
@@ -423,7 +468,13 @@ class RemoteSpotDataSourceTest {
                 writeTimeoutMillis = 1000,
                 callTimeoutMillis = callTimeoutMillis,
             )
-        val client = NetworkClient.createOkHttp(config, AccessTokenProvider { null }).also { clients += it }
+        val client =
+            NetworkClient
+                .createOkHttp(config, AccessTokenProvider { null })
+                .newBuilder()
+                .addInterceptor(emptyCommunityCatalog { stubCommunity })
+                .build()
+                .also { clients += it }
         val api = NetworkClient.createRetrofit(config, client, gson).create(SpotApi::class.java)
         val remote = RemoteSpotDataSource(api, NetworkCall(NetworkMonitor { online }, gson))
         return object : SpotRepository {

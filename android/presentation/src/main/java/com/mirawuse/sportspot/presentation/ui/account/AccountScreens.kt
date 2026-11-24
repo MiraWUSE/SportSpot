@@ -162,6 +162,8 @@ internal fun ProfileScreen(
     viewModel: AuthViewModel,
     onOpenAuth: () -> Unit,
     onPropose: () -> Unit,
+    onMyProposals: () -> Unit,
+    onModeration: (() -> Unit)? = null,
 ) {
     val colors = MaterialTheme.colorScheme
     val profile = (state as? AuthState.Authenticated)?.profile
@@ -188,12 +190,22 @@ internal fun ProfileScreen(
             Text(stringResource(R.string.profile_reviews_guest), style = MaterialTheme.typography.bodyMedium)
         }
         FormCard(stringResource(R.string.profile_my_proposals)) {
-            Text(stringResource(R.string.profile_proposals_guest), style = MaterialTheme.typography.bodyMedium)
+            if (profile == null) Text(stringResource(R.string.proposals_sign_in), style = MaterialTheme.typography.bodyMedium)
+            if (profile != null) {
+                SportSpotButton(
+                    text = stringResource(R.string.proposals_open),
+                    onClick = onMyProposals,
+                    variant = SportSpotButtonVariant.OUTLINED,
+                )
+            }
             SportSpotButton(
                 text = stringResource(R.string.proposal_title),
                 onClick = onPropose,
                 variant = SportSpotButtonVariant.OUTLINED,
             )
+        }
+        if (onModeration != null) {
+            SportSpotButton(stringResource(R.string.moderation_title), onModeration, variant = SportSpotButtonVariant.OUTLINED)
         }
         FormCard(stringResource(R.string.profile_settings)) {
             Text(stringResource(R.string.profile_theme_setting), style = MaterialTheme.typography.bodyMedium)

@@ -175,18 +175,25 @@ class DeleteReviewUseCaseTest {
         override suspend fun getReviewsBySpot(spotId: SpotId): List<Review> = emptyList()
 
         override suspend fun createReview(
+            userId: String,
             spotId: SpotId,
             rating: Int,
             text: String,
+            title: String?,
         ): Review = error("Метод не используется в тесте")
 
         override suspend fun updateReview(
+            userId: String,
             reviewId: String,
             rating: Int,
             text: String,
+            title: String?,
         ): Review = error("Метод не используется в тесте")
 
-        override suspend fun deleteReview(reviewId: String) {
+        override suspend fun deleteReview(
+            userId: String,
+            reviewId: String,
+        ) {
             deleteCalls++
             failure?.let { throw it }
             deletedIds.add(reviewId)
