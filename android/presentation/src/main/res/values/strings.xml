@@ -43,8 +43,8 @@
     <string name="details_title">Карточка площадки</string>
     <string name="details_not_found">Площадка не найдена</string>
     <string name="details_not_found_message">В текущих результатах поиска этой площадки нет.</string>
-    <string name="details_about">О площадке</string>
     <string name="details_traits">Характеристики</string>
+    <string name="details_traits_missing">Характеристики не указаны</string>
     <string name="details_no_address">Адрес не указан</string>
     <string name="details_surface">Покрытие: %1$s</string>
     <string name="details_surface_asphalt">асфальт</string>

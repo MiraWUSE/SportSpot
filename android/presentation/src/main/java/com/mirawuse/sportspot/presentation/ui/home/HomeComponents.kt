@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -28,18 +30,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.presentation.R
+import com.mirawuse.sportspot.presentation.ui.components.SpotCardSummary
 import com.mirawuse.sportspot.presentation.ui.components.SpotPhotoImage
-import com.mirawuse.sportspot.presentation.ui.components.sportLabel
+import com.mirawuse.sportspot.presentation.ui.components.spotCardContainerColor
 import com.mirawuse.sportspot.presentation.ui.map.OsmMap
 import com.mirawuse.sportspot.presentation.ui.map.previewMapSpots
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotPillShape
@@ -130,49 +134,68 @@ internal fun HomeSpotCard(
     showPhotoLicense: Boolean = false,
 ) {
     val colors = MaterialTheme.colorScheme
-    val cardColor = if (colors.background.luminance() < 0.5f) colors.surfaceVariant else colors.surface
     Card(
-        onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = cardColor, contentColor = colors.onSurface),
+        colors = CardDefaults.cardColors(containerColor = spotCardContainerColor(), contentColor = colors.onSurface),
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = SportSpotSpacing.sm, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.md),
-        ) {
-            SpotPhotoImage(
-                spot = spot,
-                illustration = R.drawable.home_court,
-                modifier = Modifier.size(width = 104.dp, height = 83.dp).clip(MaterialTheme.shapes.medium),
-            ) { photo ->
-                if (showPhotoLicense) {
-                    Text(photo.license, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        BoxWithConstraints(Modifier.fillMaxWidth().padding(SportSpotSpacing.sm)) {
+            // Give text the width below the photo when large type would crowd a narrow card.
+            val stackPhoto = maxWidth < 340.dp && LocalDensity.current.fontScale >= 1.3f
+            Row(Modifier.fillMaxWidth()) {
+                val detailsModifier =
+                    Modifier
+                        .weight(1f)
+                        .clip(MaterialTheme.shapes.medium)
+                        .clickable(role = Role.Button, onClick = onClick)
+                if (stackPhoto) {
+                    Column(detailsModifier, verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.sm)) {
+                        HomeSpotThumbnail(spot, showPhotoLicense)
+                        SpotCardSummary(spot, Modifier.padding(bottom = SportSpotSpacing.xs))
+                    }
+                } else {
+                    Row(
+                        modifier = detailsModifier,
+                        horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.md),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        HomeSpotThumbnail(spot, showPhotoLicense)
+                        SpotCardSummary(spot, Modifier.weight(1f).padding(vertical = SportSpotSpacing.xs))
+                    }
+                }
+                IconButton(
+                    onClick = onFavorite,
+                    modifier = Modifier.size(48.dp).semantics { selected = isFavorite },
+                    enabled = favoriteEnabled,
+                ) {
+                    Icon(
+                        painterResource(if (isFavorite) R.drawable.ic_favorite_selected else R.drawable.ic_tab_favorites),
+                        contentDescription = stringResource(if (isFavorite) R.string.favorites_remove else R.string.favorites_add),
+                        tint = colors.onSurfaceVariant,
+                    )
                 }
             }
-            Column(
-                modifier = Modifier.weight(1f).padding(vertical = SportSpotSpacing.xs),
-                verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs),
-            ) {
+        }
+    }
+}
+
+@Composable
+private fun HomeSpotThumbnail(
+    spot: Spot,
+    showPhotoLicense: Boolean,
+) {
+    Column(Modifier.width(104.dp)) {
+        SpotPhotoImage(
+            spot = spot,
+            illustration = R.drawable.home_court,
+            modifier = Modifier.fillMaxWidth().height(83.dp).clip(MaterialTheme.shapes.medium),
+        ) { photo ->
+            if (showPhotoLicense) {
                 Text(
-                    spot.name,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    spot.sportLabel(),
-                    color = colors.onSurfaceVariant,
+                    text = photo.license,
+                    modifier = Modifier.padding(top = SportSpotSpacing.xs),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            IconButton(onClick = onFavorite, modifier = Modifier.size(32.dp), enabled = favoriteEnabled) {
-                Icon(
-                    painterResource(if (isFavorite) R.drawable.ic_favorite_selected else R.drawable.ic_tab_favorites),
-                    contentDescription = stringResource(if (isFavorite) R.string.favorites_remove else R.string.favorites_add),
-                    tint = colors.onSurfaceVariant,
                 )
             }
         }

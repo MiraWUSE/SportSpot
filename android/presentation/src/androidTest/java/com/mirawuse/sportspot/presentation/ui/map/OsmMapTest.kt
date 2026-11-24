@@ -16,7 +16,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.StateRestorationTester
@@ -28,6 +30,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -373,9 +376,15 @@ class OsmMapTest {
         scroll.performScrollToNode(listTitle)
         compose.onNodeWithText("Развернуть").performClick()
         scroll.performScrollToNode(courtRow)
-        compose.onNode(courtRow).performClick().assertIsSelected()
-        compose.onNodeWithContentDescription("Подробнее о площадке «Корт у школы»").performScrollTo().performClick()
+        compose.onNode(courtRow and hasText("Школьная, 2")).assertIsNotSelected()
+        compose
+            .onNodeWithContentDescription("Подробнее о площадке «Корт у школы»")
+            .performScrollTo()
+            .performTouchInput { click() }
         assertEquals(court.id, opened.get())
+        compose.onNode(courtRow).assertIsNotSelected()
+        compose.onNode(courtRow).performScrollTo().performTouchInput { click() }
+        compose.onNode(courtRow).assertIsSelected()
         scroll.performScrollToIndex(0)
         waitForCamera(map, center, 13.5)
         compose.waitUntil(10_000) {
