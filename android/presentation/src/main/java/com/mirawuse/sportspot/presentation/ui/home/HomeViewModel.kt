@@ -41,7 +41,11 @@ class HomeViewModel
 
         fun retry() {
             if (_uiState.value == HomeUiState.Loading) return
-            loadSpots()
+            refresh()
+        }
+
+        fun refresh() {
+            loadSpots(refresh = true)
         }
 
         fun useDeviceLocation(approximate: Boolean) {
@@ -83,6 +87,7 @@ class HomeViewModel
         private fun loadSpots(
             center: GeoPoint = _location.value.center,
             source: LocationSource = _location.value.source,
+            refresh: Boolean = false,
         ) {
             searchJob?.cancel()
             _location.value = _location.value.copy(center = center, source = source)
@@ -90,7 +95,7 @@ class HomeViewModel
             searchJob =
                 viewModelScope.launch {
                     try {
-                        val spots = searchNearbySpots(center = center, radiusMeters = SPOT_SEARCH_RADIUS_METERS, sportType = null)
+                        val spots = searchNearbySpots(center = center, radiusMeters = SPOT_SEARCH_RADIUS_METERS, refresh = refresh)
                         currentCoroutineContext().ensureActive()
                         _uiState.value = if (spots.isEmpty()) HomeUiState.Empty else HomeUiState.Content(spots)
                     } catch (cancelled: CancellationException) {

@@ -13,6 +13,7 @@ import com.mirawuse.sportspot.data.remote.NetworkConfig
 import com.mirawuse.sportspot.data.remote.RemoteSpotDataSource
 import com.mirawuse.sportspot.data.remote.api.SpotApi
 import com.mirawuse.sportspot.data.remote.connectivity.NetworkMonitor
+import com.mirawuse.sportspot.data.remote.emptyCommunityCatalog
 import com.mirawuse.sportspot.data.remote.error.NetworkCall
 import com.mirawuse.sportspot.data.remote.error.NetworkError
 import com.mirawuse.sportspot.data.remote.error.NetworkException
@@ -67,6 +68,9 @@ class OfflineSpotRepositoryTest {
     @Volatile
     private var dnsUnavailable = false
 
+    @Volatile
+    private var stubCommunity = true
+
     private var timeMillis = 10_000_000L
     private val monitor = NetworkMonitor { online }
     private val clock = CacheClock { timeMillis }
@@ -107,6 +111,7 @@ class OfflineSpotRepositoryTest {
             NetworkClient
                 .createOkHttp(config, AccessTokenProvider { null })
                 .newBuilder()
+                .addInterceptor(emptyCommunityCatalog { stubCommunity })
                 .dns(
                     object : Dns {
                         override fun lookup(hostname: String): List<InetAddress> {
@@ -130,6 +135,26 @@ class OfflineSpotRepositoryTest {
         }
         if (::database.isInitialized) database.close()
     }
+
+    @Test
+    fun `refresh sees an approved community spot immediately and persists it for offline use`() =
+        runBlocking {
+            stubCommunity = false
+            server.enqueue(json(fixture("search-spots.json")))
+            server.enqueue(json("[]"))
+            assertEquals(searchSpots, repository.searchNearby(center, 1000))
+
+            server.enqueue(json(fixture("search-spots.json")))
+            server.enqueue(json(JsonArray().apply { add(savedRows()[1]) }.toString()))
+            val published = savedSpots[1]
+            assertEquals(searchSpots + published, repository.refreshNearby(center, 1000, null))
+            assertEquals(4, server.requestCount)
+
+            online = false
+            reopenDatabase()
+            assertEquals(searchSpots + published, repository.refreshNearby(center, 1000, null))
+            assertEquals(4, server.requestCount)
+        }
 
     @Test
     fun `saved HTTP rows become Domain spots and survive offline database reopening`() =

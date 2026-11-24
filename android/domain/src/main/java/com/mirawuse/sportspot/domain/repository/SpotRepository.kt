@@ -15,4 +15,10 @@ interface SpotRepository {
         radiusMeters: Int,
         sportType: SportType? = null,
     ): List<Spot>
+
+    suspend fun refreshNearby(
+        center: GeoPoint,
+        radiusMeters: Int,
+        sportType: SportType?,
+    ): List<Spot> = searchNearby(center, radiusMeters, sportType)
 }

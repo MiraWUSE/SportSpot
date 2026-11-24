@@ -137,6 +137,9 @@ internal fun HomeScreen(
                                 style = MaterialTheme.typography.labelSmall,
                             )
                         }
+                        TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = SportSpotSpacing.xs)) {
+                            Text(stringResource(R.string.content_refresh), style = MaterialTheme.typography.labelSmall)
+                        }
                     }
                 }
                 if (filtered.isEmpty()) {

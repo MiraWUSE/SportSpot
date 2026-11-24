@@ -12,15 +12,16 @@ class SearchNearbySpotsUseCase(
         center: GeoPoint,
         radiusMeters: Int = 1000,
         sportType: SportType? = null,
+        refresh: Boolean = false,
     ): List<Spot> {
         require(radiusMeters in 100..3000) {
             "Радиус поиска должен быть от 100 до 3000 метров"
         }
 
-        return repository.searchNearby(
-            center = center,
-            radiusMeters = radiusMeters,
-            sportType = sportType,
-        )
+        return if (refresh) {
+            repository.refreshNearby(center, radiusMeters, sportType)
+        } else {
+            repository.searchNearby(center, radiusMeters, sportType)
+        }
     }
 }

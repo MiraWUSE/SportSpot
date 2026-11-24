@@ -58,12 +58,25 @@ class SpotRepositoryImpl
             center: GeoPoint,
             radiusMeters: Int,
             sportType: SportType?,
+        ): List<Spot> = searchNearby(center, radiusMeters, sportType, refresh = false)
+
+        override suspend fun refreshNearby(
+            center: GeoPoint,
+            radiusMeters: Int,
+            sportType: SportType?,
+        ): List<Spot> = searchNearby(center, radiusMeters, sportType, refresh = true)
+
+        private suspend fun searchNearby(
+            center: GeoPoint,
+            radiusMeters: Int,
+            sportType: SportType?,
+            refresh: Boolean,
         ): List<Spot> {
             val request = validatedSearchRequest(center, radiusMeters, sportType)
             val key = request.cacheKey
             return searchMutex.withLock {
                 readOrRefresh(
-                    ttlMillis = SEARCH_TTL_MILLIS,
+                    ttlMillis = if (refresh) 0L else SEARCH_TTL_MILLIS,
                     readCache = { cache.readSearch(key) },
                     fetchRemote = { remote.searchNearby(request) },
                     writeCache = { spots, time -> cache.replaceSearch(key, spots, time) },
