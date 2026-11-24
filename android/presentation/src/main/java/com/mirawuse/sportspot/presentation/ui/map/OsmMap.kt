@@ -92,6 +92,7 @@ internal fun OsmMap(
     onSelect: (SpotId) -> Unit = {},
     networkStatus: MapNetworkStatus = rememberMapNetworkStatus(),
     selectionFocusRequest: Int = 0,
+    selectionFocusId: SpotId? = selectedId,
     onViewportMoveStarted: (() -> Unit)? = null,
     onViewportIdle: ((MapViewport, MapViewport?) -> Unit)? = null,
     onSpotVisibility: ((MapSpotVisibility) -> Unit)? = null,
@@ -120,6 +121,7 @@ internal fun OsmMap(
                         previousFocus.value,
                         selectionFocusRequest,
                         appliedSelectionFocus.intValue,
+                        selectionFocusId,
                         onSelectionFocusApplied = { appliedSelectionFocus.intValue = selectionFocusRequest },
                         onCameraSaved = { camera.value = it },
                         onCameraApplied = {
@@ -171,6 +173,7 @@ private fun NativeOsmMap(
     previousFocus: String?,
     selectionFocusRequest: Int,
     appliedSelectionFocus: Int,
+    selectionFocusId: SpotId?,
     onSelectionFocusApplied: () -> Unit,
     onCameraSaved: (CameraPosition) -> Unit,
     onCameraApplied: () -> Unit,
@@ -446,7 +449,7 @@ private fun NativeOsmMap(
         LaunchedEffect(style, selectionFocusRequest) {
             if (style == null || selectionFocusRequest == 0 || selectionFocusRequest == appliedSelectionFocus) return@LaunchedEffect
             val map = nativeMap ?: return@LaunchedEffect
-            val chosen = spots.firstOrNull { it.id == selectedId }
+            val chosen = spots.firstOrNull { it.id == selectionFocusId }
             if (chosen != null && isMapCoordinate(chosen.location.latitude, chosen.location.longitude)) {
                 val target = LatLng(chosen.location.latitude, chosen.location.longitude)
                 val screen = map.projection.toScreenLocation(target)
