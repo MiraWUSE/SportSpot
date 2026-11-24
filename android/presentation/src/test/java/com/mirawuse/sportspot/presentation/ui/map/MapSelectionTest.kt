@@ -4,6 +4,8 @@ import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
+import com.mirawuse.sportspot.presentation.ui.search.SearchFilterState
+import com.mirawuse.sportspot.presentation.ui.search.filterSpots
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -40,6 +42,18 @@ class MapSelectionTest {
         assertEquals(first, selectedMapSpot(spots, null))
         assertEquals(first, selectedMapSpot(spots, SpotId("osm", "missing")))
         assertNull(selectedMapSpot(emptyList(), first.id))
+    }
+
+    @Test
+    fun `filter leaves only visible full IDs available to markers and selection`() {
+        val tennis = otherSource.copy(sportType = SportType.TENNIS)
+        val matches = filterSpots(listOf(first, tennis), SearchFilterState(sport = SportType.TENNIS)) { "" }
+        assertEquals(listOf(tennis), matches)
+        assertEquals(tennis, selectedMapSpot(matches, first.id))
+        assertEquals(listOf(tennis), mapMarkerGroups(matches).getValue(center))
+        assertNull(nextMapSpot(matches, first.id, tennis.id))
+        val noMatches = filterSpots(matches, SearchFilterState("missing")) { "" }
+        assertNull(selectedMapSpot(noMatches, tennis.id))
     }
 
     @Test

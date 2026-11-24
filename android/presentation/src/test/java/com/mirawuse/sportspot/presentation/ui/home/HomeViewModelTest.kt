@@ -91,6 +91,24 @@ class HomeViewModelTest {
         }
 
     @Test
+    fun `explicit map focus clears only a conflicting filter without another search`() =
+        runTest(dispatcher) {
+            val repository = FakeSpotRepository { _, _, _ -> listOf(spot) }
+            val viewModel = HomeViewModel(SearchNearbySpotsUseCase(repository), FakeDeviceLocationProvider())
+            advanceUntilIdle()
+            viewModel.setSearchQuery("БАСКЕТ")
+            viewModel.setSearchSport(SportType.BASKETBALL)
+            viewModel.clearConflictingSearchFilter(spot) { "Баскетбол" }
+            assertEquals(SearchFilterState("БАСКЕТ", SportType.BASKETBALL), viewModel.searchFilter.value)
+
+            viewModel.setSearchSport(SportType.VOLLEYBALL)
+            viewModel.clearConflictingSearchFilter(spot) { "Баскетбол" }
+            advanceUntilIdle()
+            assertEquals(SearchFilterState(), viewModel.searchFilter.value)
+            assertEquals(1, repository.searchCalls)
+        }
+
+    @Test
     fun `successful empty result shows Empty`() =
         runTest(dispatcher) {
             val repository = FakeSpotRepository { _, _, _ -> emptyList() }

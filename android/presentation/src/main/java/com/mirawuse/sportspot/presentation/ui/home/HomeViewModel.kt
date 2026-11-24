@@ -5,10 +5,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.SportType
+import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.repository.DeviceLocationProvider
 import com.mirawuse.sportspot.domain.usecase.spot.SearchNearbySpotsUseCase
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.search.SearchFilterState
+import com.mirawuse.sportspot.presentation.ui.search.filterSpots
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -63,6 +65,13 @@ class HomeViewModel
 
         internal fun resetSearchFilter() {
             updateSearchFilter(SearchFilterState())
+        }
+
+        internal fun clearConflictingSearchFilter(
+            spot: Spot,
+            sportLabel: (Spot) -> String,
+        ) {
+            if (filterSpots(listOf(spot), searchFilter.value, sportLabel).isEmpty()) resetSearchFilter()
         }
 
         private fun updateSearchFilter(filter: SearchFilterState) {

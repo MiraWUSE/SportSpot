@@ -79,6 +79,8 @@
     <string name="map_search_rate_limited">Сервер временно ограничил поиск площадок.</string>
     <string name="map_search_error">Не удалось загрузить площадки в этой области.</string>
     <string name="map_search_empty">В этой области площадки не найдены.</string>
+    <string name="map_search_scope">Поиск в загруженной области</string>
+    <string name="map_no_matches">Нет совпадений среди загруженных площадок.</string>
     <string name="map_search_retry">Повторить поиск в этой области</string>
     <string name="map_search_zoom_in">Приблизьте карту, чтобы увидеть больше площадок.</string>
     <string name="map_focus_unavailable">Площадка отсутствует в текущих результатах. Можно выбрать другую.</string>
