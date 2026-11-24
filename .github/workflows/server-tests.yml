@@ -42,6 +42,31 @@ jobs:
       - name: Run unit tests
         run: deno test server/tests/
 
+      - name: Check SQL integration test formatting
+        run: deno fmt --check backend/sql/tests/reviews-osm-title.ts backend/sql/tests/proposals-moderation.ts
+
+      - name: Check SQL integration test types
+        env:
+          DENO_DIR: ${{ runner.temp }}/sportspot-deno
+        run: deno check --no-config --no-lock backend/sql/tests/reviews-osm-title.ts backend/sql/tests/proposals-moderation.ts
+
+      - name: Run reviews migration SQL integration test
+        env:
+          DENO_DIR: ${{ runner.temp }}/sportspot-deno
+        run: >-
+          deno run --no-config --no-lock --no-prompt
+          "--allow-read=backend/setup.sql,backend/sql/SportSpotReviewsOsmTitle.sql,$DENO_DIR/npm/registry.npmjs.org/@electric-sql/pglite"
+          backend/sql/tests/reviews-osm-title.ts
+
+      - name: Run proposals and moderation SQL integration test
+        env:
+          DENO_DIR: ${{ runner.temp }}/sportspot-deno
+        run: >-
+          deno run --no-config --no-lock --no-prompt
+          "--allow-read=backend/setup.sql,backend/sql/SportSpotReviewsOsmTitle.sql,$DENO_DIR/npm/registry.npmjs.org/@electric-sql/pglite"
+          --allow-env=SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY
+          backend/sql/tests/proposals-moderation.ts
+
       - name: Validate Postman collection JSON
         run: python3 -m json.tool backend/postman/SportSpot.postman_collection.json > /dev/null
 
