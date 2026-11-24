@@ -22,6 +22,7 @@ import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.model.spot.SpotSport
+import com.mirawuse.sportspot.domain.repository.ViewportSearchResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -135,6 +136,27 @@ class OfflineSpotRepositoryTest {
         }
         if (::database.isInitialized) database.close()
     }
+
+    @Test
+    fun `viewport uses Room before checking cooldown and reports Retry-After with its stale snapshot`() =
+        runBlocking {
+            server.enqueue(json(fixture("search-spots.json")))
+            assertEquals(searchSpots, repository.searchNearby(center, 1000))
+            val saved = ViewportSearchResult.Available(searchSpots)
+            assertEquals(saved, repository.searchViewport(center, 1000, false) { error("Fresh Room hit") })
+            assertEquals(1, server.requestCount)
+
+            timeMillis += SEARCH_TTL
+            assertEquals(ViewportSearchResult.Deferred, repository.searchViewport(center, 1000, false) { false })
+            assertEquals(1, server.requestCount)
+            server.enqueue(json("{}").setResponseCode(429).addHeader("Retry-After", "3600"))
+            assertEquals(ViewportSearchResult.RateLimited(3600, searchSpots), repository.searchViewport(center, 1000, false) { true })
+            assertEquals(2, server.requestCount)
+
+            online = false
+            assertEquals(saved, repository.searchViewport(center, 1000, false) { error("Offline Room hit") })
+            assertEquals(2, server.requestCount)
+        }
 
     @Test
     fun `refresh sees an approved community spot immediately and persists it for offline use`() =

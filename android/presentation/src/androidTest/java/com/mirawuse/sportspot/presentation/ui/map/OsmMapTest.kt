@@ -4,6 +4,8 @@ import android.graphics.RectF
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.view.InputDevice
+import android.view.MotionEvent
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.size
@@ -24,6 +26,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.UiController
 import androidx.test.espresso.ViewAction
+import androidx.test.espresso.action.GeneralClickAction
+import androidx.test.espresso.action.Press
+import androidx.test.espresso.action.Tap
 import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.action.ViewActions.swipeLeft
 import androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom
@@ -148,8 +153,23 @@ class OsmMapTest {
             }
             rendered
         }
-        onView(isAssignableFrom(MapView::class.java)).perform(click())
-        compose.onNodeWithText("Корт нового района", useUnmergedTree = true).performScrollTo().assertIsDisplayed()
+        onView(isAssignableFrom(MapView::class.java)).perform(
+            GeneralClickAction(
+                Tap.SINGLE,
+                { view ->
+                    val origin = IntArray(2)
+                    view.getLocationOnScreen(origin)
+                    val point = map.projection.toScreenLocation(LatLng(marker.latitude, marker.longitude))
+                    floatArrayOf(origin[0] + point.x, origin[1] + point.y)
+                },
+                Press.FINGER,
+                InputDevice.SOURCE_TOUCHSCREEN,
+                MotionEvent.BUTTON_PRIMARY,
+            ),
+        )
+        val courtName = "Корт нового района"
+        compose.waitUntil(5_000) { compose.onAllNodesWithText(courtName, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(courtName, useUnmergedTree = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Подробнее").performScrollTo().performClick()
         assertEquals(second, opened.get())
         assertEquals(1, calls.get())

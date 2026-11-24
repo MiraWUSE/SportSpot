@@ -122,6 +122,8 @@ internal fun MapScreen(
                 val message =
                     when {
                         error != null -> error
+                        status == MapSearchStatus.RATE_LIMITED -> stringResource(R.string.map_search_rate_limited)
+                        status == MapSearchStatus.WAITING -> stringResource(R.string.map_search_waiting)
                         loading -> stringResource(R.string.map_search_loading)
                         viewport?.limited == true -> stringResource(R.string.map_search_zoom_in)
                         empty -> stringResource(R.string.map_search_empty)
@@ -143,7 +145,7 @@ internal fun MapScreen(
                     }
                 }
             }
-            if (error != null) {
+            if (error != null || status == MapSearchStatus.RATE_LIMITED) {
                 TextButton(onClick = onRetry) { Text(stringResource(R.string.map_search_retry)) }
             }
             if (focus != null && selectedId == focus && spots.isNotEmpty() && spots.none { it.id == focus }) {

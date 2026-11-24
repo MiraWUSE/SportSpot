@@ -73,6 +73,8 @@
     <string name="map_retry">Повторить</string>
     <string name="map_area_unavailable">Эту область нельзя показать на карте.</string>
     <string name="map_search_loading">Загружаем площадки…</string>
+    <string name="map_search_waiting">Поиск в этой области продолжится после паузы.</string>
+    <string name="map_search_rate_limited">Сервер временно ограничил поиск площадок.</string>
     <string name="map_search_error">Не удалось загрузить площадки в этой области.</string>
     <string name="map_search_empty">В этой области площадки не найдены.</string>
     <string name="map_search_retry">Повторить поиск в этой области</string>

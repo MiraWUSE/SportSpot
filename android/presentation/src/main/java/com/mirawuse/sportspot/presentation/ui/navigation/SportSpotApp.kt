@@ -242,7 +242,7 @@ fun SportSpotApp() {
                         state.withOpenedMapSpot(route.spotId, openedMapSpot)
                     }
                 val savedSpot = if (route.favorite) (seed as? HomeUiState.Content)?.spots?.singleOrNull() else null
-                val refreshMap: () -> Unit = { if (!mapViewModel.retry()) viewModel.retry() }
+                val refreshMap = mapViewModel::retry
                 MapScreen(
                     state = seed,
                     center = savedSpot?.location ?: location.center,

@@ -5,6 +5,7 @@ import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.repository.SpotRepository
+import com.mirawuse.sportspot.domain.repository.ViewportSearchResult
 import com.mirawuse.sportspot.domain.usecase.spot.SearchNearbySpotsUseCase
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -77,12 +78,12 @@ class MapViewModelTest {
                 advanceUntilIdle()
                 assertEquals(listOf(first, coincident), model.state.value.spots)
                 model.onViewportIdle(areaB, areaA)
-                advanceTimeBy(550)
+                advanceTimeBy(20_000)
                 runCurrent()
                 assertEquals(areaB.request, repository.calls.last().request)
                 model.onMoveStarted()
                 model.onViewportIdle(areaC, areaB)
-                assertEquals(MapSearchStatus.LOADING, model.state.value.status)
+                assertEquals(MapSearchStatus.WAITING, model.state.value.status)
                 assertEquals(listOf(first, coincident), model.state.value.spots)
                 advanceUntilIdle()
                 late.complete(listOf(spot("osm", areaB)))
@@ -130,7 +131,7 @@ class MapViewModelTest {
                 advanceUntilIdle()
                 assertEquals(2, repository.calls.size)
 
-                assertTrue(model.retry())
+                model.retry()
                 advanceUntilIdle()
                 assertEquals(Call(areaB.request!!, true), repository.calls.last())
                 assertEquals(MapSearchStatus.READY, model.state.value.status)
@@ -141,10 +142,145 @@ class MapViewModelTest {
             }
         }
 
+    @Test
+    fun separateGesturesWithinOneMinuteOnlySearchTheLastAreaOfEachWindow() =
+        runTest {
+            withMap { model, repository ->
+                val areas = List(8) { area(56.3 + it * 0.02) }
+                repository.result = { center, _ -> listOf(Spot(SpotId("osm", "latest"), "Площадка", SportType.TENNIS, center)) }
+                model.onViewportIdle(areas.first(), null)
+                advanceTo(550)
+                for ((index, viewport) in areas.drop(1).withIndex()) {
+                    advanceTo((index + 1) * 1500L)
+                    model.onMoveStarted()
+                    model.onViewportIdle(viewport, areas[index])
+                }
+                advanceTo(20_549)
+                assertEquals(listOf(areas.first().request), repository.calls.map(Call::request))
+                assertEquals(
+                    areas.first().center,
+                    model.state.value.spots
+                        ?.single()
+                        ?.location,
+                )
+                advanceTo(20_550)
+                assertEquals(listOf(areas.first().request, areas.last().request), repository.calls.map(Call::request))
+                assertEquals(
+                    areas.last().center,
+                    model.state.value.spots
+                        ?.single()
+                        ?.location,
+                )
+
+                model.onViewportIdle(areaB, areas.last())
+                advanceTo(40_550)
+                model.onViewportIdle(areaC, areaB)
+                advanceTo(60_000)
+                assertEquals(listOf(areas.first().request, areas.last().request, areaB.request), repository.calls.map(Call::request))
+                assertEquals(
+                    areaB.center,
+                    model.state.value.spots
+                        ?.single()
+                        ?.location,
+                )
+            }
+        }
+
+    @Test
+    fun rateLimitHonorsAnHourAndManualRetriesCannotBypassIt() =
+        runTest {
+            withMap { model, repository ->
+                val saved = listOf(spot("osm", areaA))
+                repository.nextRateLimit = ViewportSearchResult.RateLimited(3600, saved)
+                repository.result = { center, _ -> listOf(Spot(SpotId("osm", "new"), "Площадка", SportType.TENNIS, center)) }
+                model.retry()
+                runCurrent()
+                assertEquals(listOf(Call(areaA.request!!, true)), repository.calls)
+                assertEquals(MapSearchStatus.RATE_LIMITED, model.state.value.status)
+                assertEquals(saved, model.state.value.spots)
+                advanceTo(500)
+                assertEquals(1, repository.calls.size)
+                repeat(4) { model.retry() }
+                model.onMoveStarted()
+                model.onViewportIdle(areaB, areaA)
+                advanceTo(2_000)
+                model.onMoveStarted()
+                model.onViewportIdle(areaC, areaB)
+                repeat(4) { model.retry() }
+                advanceTo(3_599_999)
+                assertEquals(1, repository.calls.size)
+                assertEquals(MapSearchStatus.RATE_LIMITED, model.state.value.status)
+                assertEquals(saved, model.state.value.spots)
+
+                advanceTo(3_600_000)
+                assertEquals(listOf(Call(areaA.request!!, true), Call(areaC.request!!, false)), repository.calls)
+                assertEquals(
+                    areaC.center,
+                    model.state.value.spots
+                        ?.single()
+                        ?.location,
+                )
+                advanceTo(3_640_000)
+                assertEquals(2, repository.calls.size)
+            }
+        }
+
+    @Test
+    fun revisitingFreshRoomAreaDoesNotWaitForTheNetworkWindow() =
+        runTest {
+            withMap { model, repository ->
+                val first = listOf(spot("osm", areaA))
+                val second = listOf(spot("community", areaB))
+                repository.result = { center, _ -> if (center == areaA.center) first else second }
+                model.onViewportIdle(areaA, null)
+                advanceTo(550)
+                repository.cached[areaA.request!!] = first
+                model.onViewportIdle(areaB, areaA)
+                advanceTo(20_550)
+                assertEquals(second, model.state.value.spots)
+
+                model.onViewportIdle(areaA, areaB)
+                advanceTo(21_100)
+                assertEquals(listOf(areaA.request, areaB.request), repository.calls.map(Call::request))
+                assertEquals(first, model.state.value.spots)
+                assertEquals(MapSearchStatus.READY, model.state.value.status)
+            }
+        }
+
+    @Test
+    fun leavingDuringAnotherGesturePreservesTheLatestSettledArea() =
+        runTest {
+            withMap { model, repository ->
+                model.onViewportIdle(areaA, null)
+                advanceTo(550)
+                model.onViewportIdle(areaB, areaA)
+                advanceTo(2_000)
+                model.onViewportIdle(areaC, areaB)
+                advanceTo(3_000)
+                assertEquals(MapSearchStatus.WAITING, model.state.value.status)
+                model.onMoveStarted()
+                model.deactivate(anchor)
+                model.onViewportIdle(area(56.5), areaC)
+                advanceTo(25_000)
+                assertEquals(listOf(areaA.request), repository.calls.map(Call::request))
+                model.activate(anchor)
+                advanceTo(25_550)
+                model.deactivate(anchor)
+                model.activate(anchor)
+                advanceTo(60_000)
+                assertEquals(listOf(areaA.request, areaC.request), repository.calls.map(Call::request))
+            }
+        }
+
+    private fun TestScope.advanceTo(timeMillis: Long) {
+        advanceTimeBy(timeMillis - testScheduler.currentTime)
+        runCurrent()
+    }
+
     private suspend fun TestScope.withMap(block: suspend (MapViewModel, TestRepository) -> Unit) {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val repository = TestRepository()
-        val model = MapViewModel(SearchNearbySpotsUseCase(repository))
+        val model = MapViewModel(SearchNearbySpotsUseCase(repository)) { testScheduler.currentTime }
         try {
             model.activate(anchor)
             block(model, repository)
@@ -161,11 +297,28 @@ class MapViewModelTest {
 
     private class TestRepository : SpotRepository {
         val calls = mutableListOf<Call>()
+        val cached = mutableMapOf<MapSearchRequest, List<Spot>>()
+        var nextRateLimit: ViewportSearchResult.RateLimited? = null
         var result: suspend (GeoPoint, Boolean) -> List<Spot> = { _, _ -> emptyList() }
 
         override suspend fun getSpots(): List<Spot> = error("Unexpected full catalog")
 
         override suspend fun getSpotById(id: SpotId): Spot? = error("Unexpected spot lookup")
+
+        override suspend fun searchViewport(
+            center: GeoPoint,
+            radiusMeters: Int,
+            refresh: Boolean,
+            permitNetwork: () -> Boolean,
+        ): ViewportSearchResult {
+            val request = MapSearchRequest(center, radiusMeters)
+            if (!refresh) cached[request]?.let { return ViewportSearchResult.Available(it) }
+            val limit = nextRateLimit ?: return super.searchViewport(center, radiusMeters, refresh, permitNetwork)
+            if (!permitNetwork()) return ViewportSearchResult.Deferred
+            nextRateLimit = null
+            calls += Call(request, refresh)
+            return limit
+        }
 
         override suspend fun searchNearby(
             center: GeoPoint,

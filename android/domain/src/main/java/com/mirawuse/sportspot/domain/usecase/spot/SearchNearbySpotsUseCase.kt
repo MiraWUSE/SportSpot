@@ -4,6 +4,7 @@ import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.repository.SpotRepository
+import com.mirawuse.sportspot.domain.repository.ViewportSearchResult
 
 class SearchNearbySpotsUseCase(
     private val repository: SpotRepository,
@@ -14,14 +15,28 @@ class SearchNearbySpotsUseCase(
         sportType: SportType? = null,
         refresh: Boolean = false,
     ): List<Spot> {
-        require(radiusMeters in 100..3000) {
-            "Радиус поиска должен быть от 100 до 3000 метров"
-        }
+        validateRadius(radiusMeters)
 
         return if (refresh) {
             repository.refreshNearby(center, radiusMeters, sportType)
         } else {
             repository.searchNearby(center, radiusMeters, sportType)
+        }
+    }
+
+    suspend fun forViewport(
+        center: GeoPoint,
+        radiusMeters: Int,
+        refresh: Boolean,
+        permitNetwork: () -> Boolean,
+    ): ViewportSearchResult {
+        validateRadius(radiusMeters)
+        return repository.searchViewport(center, radiusMeters, refresh, permitNetwork)
+    }
+
+    private fun validateRadius(radiusMeters: Int) {
+        require(radiusMeters in 100..3000) {
+            "Радиус поиска должен быть от 100 до 3000 метров"
         }
     }
 }

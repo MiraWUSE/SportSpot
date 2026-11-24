@@ -21,4 +21,16 @@ interface SpotRepository {
         radiusMeters: Int,
         sportType: SportType?,
     ): List<Spot> = searchNearby(center, radiusMeters, sportType)
+
+    /** The callback is consulted before a network attempt, after checking local data. */
+    suspend fun searchViewport(
+        center: GeoPoint,
+        radiusMeters: Int,
+        refresh: Boolean,
+        permitNetwork: () -> Boolean,
+    ): ViewportSearchResult {
+        if (!permitNetwork()) return ViewportSearchResult.Deferred
+        val spots = if (refresh) refreshNearby(center, radiusMeters, null) else searchNearby(center, radiusMeters)
+        return ViewportSearchResult.Available(spots)
+    }
 }

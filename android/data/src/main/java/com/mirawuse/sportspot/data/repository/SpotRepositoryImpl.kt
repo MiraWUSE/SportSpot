@@ -14,6 +14,7 @@ import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.repository.SpotRepository
+import com.mirawuse.sportspot.domain.repository.ViewportSearchResult
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
@@ -37,7 +38,7 @@ class SpotRepositoryImpl
                 readOrRefresh(
                     ttlMillis = SAVED_TTL_MILLIS,
                     readCache = cache::readSaved,
-                    fetchRemote = remote::getSpots,
+                    fetchRemote = { remote.getSpots() },
                     writeCache = cache::replaceSaved,
                 )
             }
@@ -66,11 +67,26 @@ class SpotRepositoryImpl
             sportType: SportType?,
         ): List<Spot> = searchNearby(center, radiusMeters, sportType, refresh = true)
 
+        override suspend fun searchViewport(
+            center: GeoPoint,
+            radiusMeters: Int,
+            refresh: Boolean,
+            permitNetwork: () -> Boolean,
+        ): ViewportSearchResult =
+            try {
+                ViewportSearchResult.Available(searchNearby(center, radiusMeters, null, refresh, permitNetwork))
+            } catch (_: ViewportDeferred) {
+                ViewportSearchResult.Deferred
+            } catch (failure: ViewportRateLimited) {
+                failure.result
+            }
+
         private suspend fun searchNearby(
             center: GeoPoint,
             radiusMeters: Int,
             sportType: SportType?,
             refresh: Boolean,
+            permitNetwork: (() -> Boolean)? = null,
         ): List<Spot> {
             val request = validatedSearchRequest(center, radiusMeters, sportType)
             val key = request.cacheKey
@@ -78,7 +94,18 @@ class SpotRepositoryImpl
                 readOrRefresh(
                     ttlMillis = if (refresh) 0L else SEARCH_TTL_MILLIS,
                     readCache = { cache.readSearch(key) },
-                    fetchRemote = { remote.searchNearby(request) },
+                    fetchRemote = { cached ->
+                        if (permitNetwork != null && !permitNetwork()) throw ViewportDeferred()
+                        try {
+                            remote.searchNearby(request)
+                        } catch (failure: NetworkException) {
+                            val http = failure.error as? NetworkError.Http
+                            if (permitNetwork != null && http?.status == 429) {
+                                throw ViewportRateLimited(ViewportSearchResult.RateLimited(http.retryAfterSeconds, cached))
+                            }
+                            throw failure
+                        }
+                    },
                     writeCache = { spots, time -> cache.replaceSearch(key, spots, time) },
                 )
             }
@@ -87,7 +114,7 @@ class SpotRepositoryImpl
         private suspend fun <T> readOrRefresh(
             ttlMillis: Long,
             readCache: suspend () -> CacheSnapshot<T>?,
-            fetchRemote: suspend () -> T,
+            fetchRemote: suspend (T?) -> T,
             writeCache: suspend (T, Long) -> T,
         ): T {
             val context = currentCoroutineContext()
@@ -104,7 +131,7 @@ class SpotRepositoryImpl
 
             val remoteValue =
                 try {
-                    fetchRemote()
+                    fetchRemote(snapshot?.value)
                 } catch (failure: NetworkException) {
                     context.ensureActive()
                     if (snapshot != null && failure.error.permitsCacheFallback()) return snapshot.value
@@ -132,6 +159,12 @@ class SpotRepositoryImpl
                 is NetworkError.Http -> status == 429 || status in 500..599
                 NetworkError.Parsing, NetworkError.InvalidRequest, NetworkError.Unexpected -> false
             }
+
+        private class ViewportDeferred : RuntimeException()
+
+        private class ViewportRateLimited(
+            val result: ViewportSearchResult.RateLimited,
+        ) : RuntimeException()
 
         companion object {
             private const val SAVED_TTL_MILLIS = 15 * 60_000L
