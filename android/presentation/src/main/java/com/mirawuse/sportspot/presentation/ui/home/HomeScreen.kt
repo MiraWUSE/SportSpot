@@ -139,7 +139,7 @@ internal fun HomeScreen(
                         SpotFilterEmpty(stringResource(R.string.home_no_matches), onResetSearch)
                     }
                 }
-                items(filtered, key = { "${it.id.source}:${it.id.value}" }) { spot ->
+                items(filtered, key = { "${it.id.source.length}:${it.id.source}${it.id.value}" }) { spot ->
                     HomeSpotCard(
                         spot,
                         onClick = { onOpenSpot(spot.id) },
