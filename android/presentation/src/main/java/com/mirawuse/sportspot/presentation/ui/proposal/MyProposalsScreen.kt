@@ -25,6 +25,7 @@ internal fun MyProposalsScreen(
     onBack: () -> Unit,
     onOpenAuth: () -> Unit,
     onRetry: () -> Unit,
+    photoHistory: @Composable (SpotProposal) -> Unit = {},
 ) {
     FormScreen(stringResource(R.string.profile_my_proposals), onBack) {
         when {
@@ -47,6 +48,7 @@ internal fun MyProposalsScreen(
                         proposal.rejectReason?.takeIf { proposal.status == ProposalStatus.REJECTED }?.let {
                             Text(stringResource(R.string.proposals_reason, it))
                         }
+                        photoHistory(proposal)
                     }
                 }
                 TextButton(onClick = onRetry) { Text(stringResource(R.string.content_refresh)) }

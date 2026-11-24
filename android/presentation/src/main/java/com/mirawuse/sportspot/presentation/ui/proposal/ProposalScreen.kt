@@ -47,6 +47,7 @@ internal fun ProposalScreen(
     onOpenAuth: () -> Unit,
     onViewProposals: () -> Unit,
     onSubmit: (String, SportType, GeoPoint, String) -> Unit,
+    photoAttachments: @Composable (SpotProposal?) -> Unit = {},
 ) {
     FormScreen(stringResource(R.string.proposal_title), onBack) {
         when {
@@ -60,9 +61,10 @@ internal fun ProposalScreen(
                     ProposalStatusText(submission.value)
                     Text(stringResource(R.string.proposal_number, submission.value.id))
                 }
-                SportSpotButton(stringResource(R.string.profile_my_proposals), onViewProposals, Modifier.fillMaxWidth())
+                photoAttachments(submission.value)
+                SportSpotButton(stringResource(R.string.profile_my_proposals), onViewProposals, Modifier.fillMaxWidth(), enabled = !busy)
             }
-            else -> key(owner) { ProposalFields(busy, (submission as? DomainResult.Failure)?.error, onSubmit) }
+            else -> key(owner) { ProposalFields(busy, (submission as? DomainResult.Failure)?.error, onSubmit) { photoAttachments(null) } }
         }
     }
 }
@@ -72,6 +74,7 @@ private fun ProposalFields(
     busy: Boolean,
     error: DomainError?,
     onSubmit: (String, SportType, GeoPoint, String) -> Unit,
+    photoAttachments: @Composable () -> Unit,
 ) {
     var name by rememberSaveable { mutableStateOf("") }
     var sport by rememberSaveable { mutableStateOf<SportType?>(null) }
@@ -152,6 +155,7 @@ private fun ProposalFields(
             }
         }
         error?.let { ContentErrorText(it) }
+        photoAttachments()
         SportSpotButton(
             text = stringResource(R.string.proposal_submit),
             onClick = {
