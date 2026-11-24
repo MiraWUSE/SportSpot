@@ -15,6 +15,7 @@ import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
 import com.mirawuse.sportspot.presentation.ui.navigation.MapRoute
 import com.mirawuse.sportspot.presentation.ui.navigation.SpotDetailsRoute
 import com.mirawuse.sportspot.presentation.ui.navigation.favoriteDestinationState
+import com.mirawuse.sportspot.presentation.ui.navigation.withOpenedMapSpot
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -36,6 +37,15 @@ class FavoriteDestinationTest {
     fun privateSnapshotIsHiddenIfTheGuestOrAnotherAccountRestoresTheRoute() {
         assertEquals(HomeUiState.Empty, favoriteDestinationState(saved.visibleFor(AuthState.Guest), spot.id, "Ошибка"))
         assertEquals(HomeUiState.Loading, favoriteDestinationState(saved.visibleFor(auth("other")), spot.id, "Ошибка"))
+    }
+
+    @Test
+    fun mapDetailsUseTheOpenedSpotWithoutReplacingHomeOrMatchingOnlyTheValue() {
+        val explored = spot.copy(id = SpotId("community", spot.id.value), location = GeoPoint(56.5, 44.2))
+        val home = HomeUiState.Content(listOf(spot))
+        assertEquals(HomeUiState.Content(listOf(explored, spot)), home.withOpenedMapSpot(explored.id, explored))
+        assertEquals(home, home.withOpenedMapSpot(spot.id, explored))
+        assertEquals(HomeUiState.Content(listOf(spot)), home)
     }
 
     private fun auth(owner: String): AuthState = AuthState.Authenticated(UserProfile(owner, "Имя", "fixture@example.test", UserRole.USER))
