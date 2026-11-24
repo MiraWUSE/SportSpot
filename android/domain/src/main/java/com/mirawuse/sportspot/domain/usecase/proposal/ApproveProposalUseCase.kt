@@ -8,12 +8,16 @@ import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.SpotProposalRepository
 import com.mirawuse.sportspot.domain.result.DomainError
 import com.mirawuse.sportspot.domain.result.DomainResult
+import com.mirawuse.sportspot.domain.result.contentResult
 
 class ApproveProposalUseCase(
     private val authRepository: AuthRepository,
     private val proposalRepository: SpotProposalRepository,
 ) {
-    suspend operator fun invoke(proposalId: String): DomainResult<SpotProposal> {
+    suspend operator fun invoke(
+        proposalId: String,
+        expectedUserId: String? = null,
+    ): DomainResult<SpotProposal> {
         val authState = authRepository.getAuthState()
         val accessError = AuthorizationPolicy.moderatorError(authState)
 
@@ -29,8 +33,8 @@ class ApproveProposalUseCase(
             )
         }
 
-        val proposal = proposalRepository.approveProposal((authState as AuthState.Authenticated).profile.id, proposalId.trim())
-
-        return DomainResult.Success(proposal)
+        val userId = (authState as AuthState.Authenticated).profile.id
+        if (expectedUserId != null && expectedUserId != userId) return DomainResult.Failure(DomainError.Unauthorized)
+        return contentResult { proposalRepository.approveProposal(userId, proposalId.trim()) }
     }
 }

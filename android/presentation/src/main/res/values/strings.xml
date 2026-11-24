@@ -112,6 +112,7 @@
     <string name="content_save">Сохранить</string>
     <string name="content_cancel">Отмена</string>
     <string name="content_refresh">Обновить</string>
+    <string name="content_open_auth">Войти или зарегистрироваться</string>
     <string name="content_sign_in_again">Войдите снова, чтобы продолжить.</string>
     <string name="content_forbidden">У вас нет доступа к этому действию.</string>
     <string name="content_conflict">Данные уже изменились. Проверьте их перед повтором.</string>
@@ -188,17 +189,16 @@
     <string name="favorites_offline_error">Нет связи с сервером. Попробуйте, когда появится сеть.</string>
     <string name="favorites_spot_unavailable">Данные сохранённой площадки недоступны</string>
     <string name="moderation_title">Модерация</string>
+    <string name="moderation_coordinates">Координаты: %1$.6f, %2$.6f</string>
+    <string name="moderation_confirm_rejection">Подтвердить отклонение</string>
+    <string name="moderation_reason_length">Причина должна содержать до 1000 символов.</string>
     <string name="moderation_access">Доступ по роли</string>
     <string name="moderation_role_required">Раздел открыт только модератору.</string>
     <string name="moderation_queue">Заявки на модерацию</string>
-    <string name="moderation_unavailable">Заявки пока недоступны.</string>
     <string name="moderation_queue_empty">Нет заявок на проверку.</string>
-    <string name="moderation_pending">Ожидает решения модератора</string>
     <string name="moderation_approve">Одобрить</string>
     <string name="moderation_reject">Отклонить</string>
     <string name="moderation_reason">Причина отклонения</string>
-    <string name="moderation_validate">Проверить причину</string>
-    <string name="moderation_send_unavailable">Отправка решения пока недоступна.</string>
     <string name="profile_settings">Настройки</string>
     <string name="profile_theme_setting">Тема приложения следует настройкам устройства.</string>
 </resources>

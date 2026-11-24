@@ -31,7 +31,7 @@ internal fun MyProposalsScreen(
             restoring -> SpotSearchLoading()
             !signedIn -> {
                 Text(stringResource(R.string.proposals_sign_in))
-                SportSpotButton(stringResource(R.string.auth_open), onOpenAuth, Modifier.fillMaxWidth())
+                SportSpotButton(stringResource(R.string.content_open_auth), onOpenAuth, Modifier.fillMaxWidth())
             }
             state == null -> SpotSearchLoading()
             state is DomainResult.Failure -> {

@@ -36,6 +36,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.mirawuse.sportspot.domain.model.auth.AuthState
 import com.mirawuse.sportspot.domain.model.spot.SpotId
+import com.mirawuse.sportspot.domain.policy.AuthorizationPolicy
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.account.AuthScreen
 import com.mirawuse.sportspot.presentation.ui.account.AuthViewModel
@@ -52,6 +53,8 @@ import com.mirawuse.sportspot.presentation.ui.home.HomeScreen
 import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
 import com.mirawuse.sportspot.presentation.ui.home.HomeViewModel
 import com.mirawuse.sportspot.presentation.ui.map.MapScreen
+import com.mirawuse.sportspot.presentation.ui.moderation.ModerationScreen
+import com.mirawuse.sportspot.presentation.ui.moderation.ModerationViewModel
 import com.mirawuse.sportspot.presentation.ui.proposal.MyProposalsScreen
 import com.mirawuse.sportspot.presentation.ui.proposal.ProposalScreen
 import com.mirawuse.sportspot.presentation.ui.proposal.ProposalsViewModel
@@ -66,6 +69,7 @@ private const val APP_GRAPH = "sportspot"
 private const val HOME_ROUTE = "home"
 private const val PROPOSAL_ROUTE = "proposal"
 private const val MY_PROPOSALS_ROUTE = "my-proposals"
+private const val MODERATION_ROUTE = "moderation"
 private const val AUTH_ROUTE = "auth"
 
 @Serializable
@@ -126,6 +130,7 @@ fun SportSpotApp() {
     val reviews: ReviewsViewModel = hiltViewModel()
     val proposals: ProposalsViewModel = hiltViewModel()
     val accountId = (authState as? AuthState.Authenticated)?.profile?.id
+    val moderatorId = accountId.takeIf { AuthorizationPolicy.moderatorError(authState) == null && !authViewModel.restoring }
     val favoriteState = favorites.state.visibleFor(authState)
     val favoriteList = (favoriteState as? FavoritesUiState.Content)?.list?.items.orEmpty()
     val savedIds = favoriteList.mapTo(mutableSetOf()) { it.spotId }
@@ -226,6 +231,7 @@ fun SportSpotApp() {
                     focus = route.spotId.takeIf { !route.favorite || privateState != null },
                     onRetry = if (privateState == null) viewModel::retry else favorites::retry,
                     onOpenSpot = { navController.navigate(SpotDetailsRoute(it.source, it.value, favorite = privateState != null)) },
+                    onRefresh = if (privateState == null) viewModel::retry else null,
                 )
             }
             composable("favorites") {
@@ -250,6 +256,7 @@ fun SportSpotApp() {
                         navController.navigate(PROPOSAL_ROUTE)
                     },
                     onMyProposals = { navController.navigate(MY_PROPOSALS_ROUTE) },
+                    onModeration = moderatorId?.let { { navController.navigate(MODERATION_ROUTE) } },
                 )
             }
             composable(PROPOSAL_ROUTE) {
@@ -268,6 +275,7 @@ fun SportSpotApp() {
             }
             composable(MY_PROPOSALS_ROUTE) {
                 LaunchedEffect(accountId) { proposals.load(accountId) }
+                LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { proposals.load(accountId) }
                 MyProposalsScreen(
                     signedIn = accountId != null,
                     restoring = authViewModel.restoring,
@@ -275,6 +283,26 @@ fun SportSpotApp() {
                     onBack = { navController.popBackStack() },
                     onOpenAuth = { navController.navigate(AUTH_ROUTE) },
                     onRetry = { proposals.load(accountId) },
+                )
+            }
+            composable(MODERATION_ROUTE) { entry ->
+                val moderation: ModerationViewModel = hiltViewModel(entry)
+                val search = searchViewModel(navController, entry)
+                LaunchedEffect(moderatorId) { moderation.load(moderatorId) }
+                ModerationScreen(
+                    auth = authState,
+                    restoring = authViewModel.restoring,
+                    pending = moderation.pendingFor(moderatorId),
+                    busy = moderation.busy,
+                    actionError = moderation.errorFor(moderatorId),
+                    onBack = { navController.popBackStack() },
+                    onRetry = { moderation.load(moderatorId) },
+                    onApprove = { proposalId ->
+                        moderatorId?.let { moderation.decide(it, proposalId, onPublished = search::refresh) }
+                    },
+                    onReject = { proposalId, reason ->
+                        moderatorId?.let { moderation.decide(it, proposalId, reason) }
+                    },
                 )
             }
             composable(AUTH_ROUTE) {

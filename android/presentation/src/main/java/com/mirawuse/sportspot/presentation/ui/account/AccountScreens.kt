@@ -163,6 +163,7 @@ internal fun ProfileScreen(
     onOpenAuth: () -> Unit,
     onPropose: () -> Unit,
     onMyProposals: () -> Unit,
+    onModeration: (() -> Unit)? = null,
 ) {
     val colors = MaterialTheme.colorScheme
     val profile = (state as? AuthState.Authenticated)?.profile
@@ -202,6 +203,9 @@ internal fun ProfileScreen(
                 onClick = onPropose,
                 variant = SportSpotButtonVariant.OUTLINED,
             )
+        }
+        if (onModeration != null) {
+            SportSpotButton(stringResource(R.string.moderation_title), onModeration, variant = SportSpotButtonVariant.OUTLINED)
         }
         FormCard(stringResource(R.string.profile_settings)) {
             Text(stringResource(R.string.profile_theme_setting), style = MaterialTheme.typography.bodyMedium)

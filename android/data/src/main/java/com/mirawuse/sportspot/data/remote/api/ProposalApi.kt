@@ -19,6 +19,7 @@ internal interface ProposalApi {
     suspend fun list(
         @Query("user_id") owner: String?,
         @Query("status") status: String?,
+        @Query("id") id: String?,
         @Query("limit") limit: Int,
         @Query("offset") offset: Int,
         @Tag session: RequestSession,
@@ -30,7 +31,25 @@ internal interface ProposalApi {
         @Body proposal: NewProposal,
         @Tag session: RequestSession,
     ): Response<List<ProposalRow?>>
+
+    @POST("functions/v1/moderate-spot-proposal-v1")
+    suspend fun moderate(
+        @Body decision: ProposalDecision,
+        @Tag session: RequestSession,
+    ): Response<ModerationResult>
 }
+
+internal data class ProposalDecision(
+    @SerializedName("proposal_id") val proposalId: String,
+    val decision: String,
+    val reason: String?,
+)
+
+internal class ModerationResult(
+    @SerializedName("proposal_id") val proposalId: String? = null,
+    val status: String? = null,
+    @SerializedName("spot_id") val spotId: String? = null,
+)
 
 internal data class NewProposal(
     val name: String,

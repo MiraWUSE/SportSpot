@@ -53,7 +53,7 @@ internal fun ProposalScreen(
             restoring -> SpotSearchLoading()
             owner == null -> {
                 Text(stringResource(R.string.proposals_sign_in))
-                SportSpotButton(stringResource(R.string.auth_open), onOpenAuth, Modifier.fillMaxWidth())
+                SportSpotButton(stringResource(R.string.content_open_auth), onOpenAuth, Modifier.fillMaxWidth())
             }
             submission is DomainResult.Success -> {
                 FormCard(stringResource(R.string.proposal_sent)) {

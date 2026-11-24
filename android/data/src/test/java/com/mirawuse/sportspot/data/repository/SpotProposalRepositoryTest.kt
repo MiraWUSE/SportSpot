@@ -1,6 +1,7 @@
 package com.mirawuse.sportspot.data.repository
 
 import com.google.gson.JsonParser
+import com.mirawuse.sportspot.data.remote.api.AuthApi
 import com.mirawuse.sportspot.data.remote.api.ProposalApi
 import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.proposal.ProposalStatus
@@ -71,7 +72,67 @@ class SpotProposalRepositoryTest {
         }
 
     private fun repo(fixture: ContentHttpFixture) =
-        SpotProposalRepositoryImpl(fixture.retrofit.create(ProposalApi::class.java), fixture.call, fixture.network)
+        SpotProposalRepositoryImpl(
+            fixture.retrofit.create(ProposalApi::class.java),
+            fixture.call,
+            fixture.network,
+            fixture.retrofit.create(AuthApi::class.java),
+        )
+
+    @Test
+    fun pendingQueueRequiresAConfirmedModeratorRole() =
+        runBlocking {
+            http.enqueue("""[{"id":"$ALICE_ID","role":"user"}]""")
+            assertEquals(DomainError.Forbidden, contentFailure { repo(http).getPendingProposals(ALICE_ID) })
+            assertEquals("/rest/v1/profiles", http.next().requestUrl?.encodedPath)
+            assertEquals(1, server.requestCount)
+            http.enqueue("""[{"id":"$ALICE_ID","role":"moderator"}]""")
+            http.enqueue(proposal())
+            assertEquals(ITEM_ID, repo(http).getPendingProposals(ALICE_ID).single().id)
+            http.next()
+            val queue = http.next()
+            assertEquals("eq.pending", queue.requestUrl?.queryParameter("status"))
+            assertNull(queue.requestUrl?.queryParameter("user_id"))
+            assertEquals("Bearer access-$ALICE_ID", queue.getHeader("Authorization"))
+        }
+
+    @Test
+    fun decisionsUseTheEdgeFunctionAndReadTheFullProposalAfterItsAcknowledgment() =
+        runBlocking {
+            http.enqueue("""{"proposal_id":"$ITEM_ID","status":"approved","spot_id":"community:$ITEM_ID"}""")
+            http.enqueue(proposal(status = "approved"))
+            assertEquals(ProposalStatus.APPROVED, repo(http).approveProposal(ALICE_ID, ITEM_ID).status)
+            val approve = http.next()
+            assertEquals("/functions/v1/moderate-spot-proposal-v1", approve.requestUrl?.encodedPath)
+            assertEquals("Bearer access-$ALICE_ID", approve.getHeader("Authorization"))
+            assertEquals(setOf("proposal_id", "decision"), JsonParser.parseString(approve.body.readUtf8()).asJsonObject.keySet())
+            assertEquals("eq.$ITEM_ID", http.next().requestUrl?.queryParameter("id"))
+
+            http.enqueue("""{"proposal_id":"$ITEM_ID","status":"rejected"}""")
+            http.enqueue(proposal(status = "rejected", reason = "Не хватает адреса"))
+            val result = repo(http).rejectProposal(ALICE_ID, ITEM_ID, "Не хватает адреса")
+            assertEquals("Не хватает адреса", result.rejectReason)
+            val reject = http.next()
+            assertEquals("Не хватает адреса", JsonParser.parseString(reject.body.readUtf8()).asJsonObject["reason"].asString)
+        }
+
+    @Test
+    fun moderationFailuresNeverReadOrPublishAProposalFromTheClient() =
+        runBlocking {
+            val failureCases =
+                mapOf(
+                    403 to DomainError.Forbidden,
+                    404 to DomainError.NotFound,
+                    409 to DomainError.Conflict,
+                    503 to DomainError.Unavailable,
+                )
+            for ((status, failure) in failureCases) {
+                http.enqueue("{}", status)
+                assertEquals(failure, contentFailure { repo(http).approveProposal(ALICE_ID, ITEM_ID) })
+                assertEquals("/functions/v1/moderate-spot-proposal-v1", http.next().requestUrl?.encodedPath)
+            }
+            assertEquals(failureCases.size, server.requestCount)
+        }
 
     private fun proposal(
         status: String = "pending",
