@@ -135,12 +135,17 @@ class OsmMapTest {
                         viewport = viewport,
                         onViewportMoveStarted = model::onMoveStarted,
                         onViewportIdle = model::onViewportIdle,
+                        showVisibleSpots = true,
                     )
                 }
             }
         }
         val map = nativeMap()
         waitForCamera(map, center, 13.5)
+        val scroll = compose.onNode(hasScrollToIndexAction())
+        scroll.performScrollToNode(hasText("Площадки на карте"))
+        compose.onNodeWithText("Загружено и видно: 0").assertIsDisplayed()
+        scroll.performScrollToIndex(0)
         SystemClock.sleep(650)
         assertEquals(0, calls.get())
         onView(isAssignableFrom(MapView::class.java)).perform(swipeLeft())
@@ -178,9 +183,12 @@ class OsmMapTest {
             ),
         )
         val courtName = "Корт нового района"
-        compose.waitUntil(5_000) { compose.onAllNodesWithText(courtName, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText(courtName, useUnmergedTree = true).performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Подробнее").performScrollTo().performClick()
+        scroll.performScrollToNode(hasText("Площадки на карте"))
+        compose.onNodeWithText("Загружено и видно: 2").assertIsDisplayed()
+        val courtRow = hasText(courtName) and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
+        scroll.performScrollToNode(courtRow)
+        compose.onNode(courtRow).assertIsSelected()
+        compose.onNodeWithContentDescription("Подробнее о площадке «$courtName»").performScrollTo().performClick()
         assertEquals(second, opened.get())
         assertEquals(1, calls.get())
     }
@@ -417,6 +425,19 @@ class OsmMapTest {
         waitForCamera(map, far.location, 15.5)
         scroll.performScrollToNode(listTitle)
         compose.onNodeWithText("Загружено и видно: 1").assertIsDisplayed()
+        scroll.performScrollToNode(hasText(far.name) and rowRole)
+        compose.onNode(hasText(far.name) and rowRole).assertIsSelected()
+
+        val moreSpots = List(15) { index -> far.copy(id = SpotId("osm", "way:$index"), name = "Корт № ${index + 1}") }
+        compose.runOnIdle { viewport.value = viewport.value.copy(spots = listOf(far) + moreSpots) }
+        val lastRow = hasText(moreSpots.last().name) and rowRole
+        scroll.performScrollToNode(lastRow)
+        compose.onNode(lastRow).assertIsDisplayed()
+        restore.emulateSavedInstanceStateRestore()
+        map = nativeMap()
+        waitForCamera(map, far.location, 15.5)
+        scroll.performScrollToNode(listTitle)
+        compose.onNodeWithText("Загружено и видно: 16").assertIsDisplayed()
         scroll.performScrollToNode(hasText(far.name) and rowRole)
         compose.onNode(hasText(far.name) and rowRole).assertIsSelected()
         assertEquals(0, gestures.get())
