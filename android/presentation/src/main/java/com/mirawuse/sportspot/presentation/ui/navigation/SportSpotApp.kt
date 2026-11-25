@@ -76,6 +76,7 @@ import com.mirawuse.sportspot.presentation.ui.photos.PhotoHistory
 import com.mirawuse.sportspot.presentation.ui.photos.PhotoModeration
 import com.mirawuse.sportspot.presentation.ui.photos.PhotosViewModel
 import com.mirawuse.sportspot.presentation.ui.photos.ProposalPhotoEvidence
+import com.mirawuse.sportspot.presentation.ui.photos.SpotUserPhotos
 import com.mirawuse.sportspot.presentation.ui.proposal.MyProposalsScreen
 import com.mirawuse.sportspot.presentation.ui.proposal.ProposalScreen
 import com.mirawuse.sportspot.presentation.ui.proposal.ProposalsViewModel
@@ -466,12 +467,7 @@ fun SportSpotApp() {
                     },
                     userPhotos = { spot ->
                         runCatching { PhotoTarget.spot(spot.id) }.getOrNull()?.let { target ->
-                            PhotoGallery(target, photos)
-                            if (accountId != null) {
-                                PhotoEditor(accountId, target.type.limit, photos, target)
-                            } else {
-                                SportSpotButton(stringResource(R.string.photos_add), { navController.navigate(AUTH_ROUTE) })
-                            }
+                            SpotUserPhotos(accountId, target, photos, onOpenAuth = { navController.navigate(AUTH_ROUTE) })
                         }
                     },
                 )

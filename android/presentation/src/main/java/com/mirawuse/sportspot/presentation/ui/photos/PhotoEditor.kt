@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -56,6 +57,7 @@ internal fun PhotoEditor(
     target: PhotoTarget? = null,
     allowUpload: Boolean = true,
     enabled: Boolean = true,
+    insideSpotDetails: Boolean = false,
 ) {
     val state = model.draftFor(owner)
     val editable = enabled && model.readyFor(owner)
@@ -67,9 +69,25 @@ internal fun PhotoEditor(
             }
         } ?: 0
     val picker = rememberLauncherForActivityResult(contract) { images -> model.select(owner, images, limit - attachmentsUsed) }
+    val canChoose = editable && !state.busy && state.attachments.size + attachmentsUsed < limit
+    val choose: @Composable () -> Unit = {
+        PhotoActionButton(
+            label = R.string.photos_choose,
+            enabled = canChoose,
+            modifier = if (insideSpotDetails) Modifier.fillMaxWidth() else Modifier,
+            icon = if (insideSpotDetails) R.drawable.ic_photo_add else null,
+        ) {
+            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+        }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.sm)) {
-        Text(stringResource(R.string.photos_add), style = MaterialTheme.typography.titleMedium)
-        Text(stringResource(R.string.photos_limits, limit), style = MaterialTheme.typography.bodySmall)
+        if (insideSpotDetails) {
+            SpotPhotoUploadHeading(limit)
+            choose()
+        } else {
+            Text(stringResource(R.string.photos_add), style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.photos_limits, limit), style = MaterialTheme.typography.bodySmall)
+        }
         for (attachment in state.attachments) {
             key(attachment.id) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -87,10 +105,7 @@ internal fun PhotoEditor(
             PhotoActionButton(R.string.content_cancel) { model.cancel(owner) }
         }
         state.error?.let { PhotoErrorText(it) }
-        val canChoose = editable && !state.busy && state.attachments.size + attachmentsUsed < limit
-        PhotoActionButton(R.string.photos_choose, enabled = canChoose) {
-            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-        }
+        if (!insideSpotDetails) choose()
         if (target != null && allowUpload && state.attachments.isNotEmpty()) {
             SportSpotButton(
                 text = stringResource(if (state.error == null) R.string.photos_send else R.string.home_retry),
@@ -98,7 +113,7 @@ internal fun PhotoEditor(
                 enabled = editable && !state.busy,
             )
         }
-        if (target != null) PhotoHistory(owner, target, model)
+        if (target != null && !insideSpotDetails) PhotoHistory(owner, target, model)
     }
 }
 
@@ -107,19 +122,21 @@ internal fun PhotoHistory(
     owner: String,
     target: PhotoTarget,
     model: PhotosViewModel,
+    insideSpotDetails: Boolean = false,
 ) {
     val ready = model.readyFor(owner)
     LaunchedEffect(owner, target, ready) { if (ready) model.load(owner, target) }
     val history = model.historyFor(owner, target)
     val busy = model.draftFor(owner).busy
     if (history.items.isNotEmpty() || history.loading || history.error != null) {
-        Text(stringResource(R.string.photos_mine), style = MaterialTheme.typography.titleMedium)
+        if (!insideSpotDetails) Text(stringResource(R.string.photos_mine), style = MaterialTheme.typography.titleMedium)
         if (history.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
         history.error?.let { PhotoErrorText(it) }
         for ((index, item) in history.items.withIndex()) {
             key(owner, item.id) {
                 var preview by remember { mutableStateOf(false) }
-                FormCard(stringResource(R.string.moderation_photo_number, index + 1)) {
+                val title = stringResource(R.string.moderation_photo_number, index + 1)
+                val actions: @Composable () -> Unit = {
                     PhotoStatusBadge(item.status)
                     item.rejectionReason?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                     if (item.status == PhotoStatus.PENDING || item.status == PhotoStatus.APPROVED) {
@@ -128,9 +145,20 @@ internal fun PhotoHistory(
                     }
                     PhotoActionButton(R.string.photos_remove, enabled = !busy, danger = true) { model.remove(owner, target, item) }
                 }
+                if (insideSpotDetails) {
+                    if (index > 0) HorizontalDivider()
+                    Column(verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs)) {
+                        Text(title, style = MaterialTheme.typography.titleSmall)
+                        actions()
+                    }
+                } else {
+                    FormCard(title) { actions() }
+                }
             }
         }
-        PhotoActionButton(R.string.photos_refresh, enabled = !history.loading) { model.load(owner, target) }
+        if (!insideSpotDetails) {
+            PhotoActionButton(R.string.photos_refresh, enabled = !history.loading) { model.load(owner, target) }
+        }
     }
 }
 
@@ -193,12 +221,14 @@ internal fun PhotoActionButton(
     enabled: Boolean = true,
     danger: Boolean = false,
     icon: Int? = if (label == R.string.photos_refresh) R.drawable.ic_action_refresh else null,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     SportSpotButton(
         text = stringResource(label),
         onClick = onClick,
         enabled = enabled,
+        modifier = modifier,
         icon = icon,
         variant = if (danger) SportSpotButtonVariant.DANGER else SportSpotButtonVariant.SECONDARY,
     )

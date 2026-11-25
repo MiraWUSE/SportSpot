@@ -248,11 +248,13 @@
     <string name="photos_send">Отправить на проверку</string>
     <string name="photos_progress">Отправлено %1$d из %2$d</string>
     <string name="photos_mine">Мои фотографии</string>
+    <string name="photos_my_uploads">Мои фото</string>
     <string name="photos_preview">Предпросмотр фото</string>
     <string name="photos_hide_preview">Скрыть фото</string>
     <string name="photos_show_preview">Показать фото</string>
     <string name="photos_remove">Удалить фото</string>
     <string name="photos_refresh">Обновить статус</string>
+    <string name="photos_refresh_gallery">Обновить галерею</string>
     <string name="photos_pending">На проверке</string>
     <string name="photos_approved">Одобрено</string>
     <string name="photos_rejected">Отклонено</string>
