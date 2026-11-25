@@ -25,6 +25,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.presentation.R
@@ -36,6 +37,7 @@ import com.mirawuse.sportspot.presentation.ui.components.SpotSearchMessage
 import com.mirawuse.sportspot.presentation.ui.components.SpotSportTag
 import com.mirawuse.sportspot.presentation.ui.components.spotCardContainerColor
 import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
+import com.mirawuse.sportspot.presentation.ui.navigation.WalkingRouteButton
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
 @Composable
@@ -49,6 +51,7 @@ internal fun SpotDetailsScreen(
     favoriteAction: (@Composable (Spot) -> Unit)? = null,
     reviewSummary: (@Composable () -> Unit)? = null,
     userPhotos: @Composable (Spot) -> Unit = {},
+    onBuildRoute: ((GeoPoint) -> Unit)? = null,
 ) {
     val backLabel = stringResource(R.string.details_back)
     Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -78,7 +81,7 @@ internal fun SpotDetailsScreen(
                 state is HomeUiState.Loading -> SpotSearchLoading()
                 state is HomeUiState.Error ->
                     SpotSearchMessage(stringResource(R.string.home_error_title), state.message, onRetry)
-                spot != null -> DetailsContent(spot, onShowMap, onOpenReviews, favoriteAction, reviewSummary, userPhotos)
+                spot != null -> DetailsContent(spot, onShowMap, onOpenReviews, favoriteAction, reviewSummary, userPhotos, onBuildRoute)
                 else ->
                     SpotSearchMessage(
                         title = stringResource(R.string.details_not_found),
@@ -98,6 +101,7 @@ private fun DetailsContent(
     favoriteAction: (@Composable (Spot) -> Unit)?,
     reviewSummary: (@Composable () -> Unit)?,
     userPhotos: @Composable (Spot) -> Unit,
+    onBuildRoute: ((GeoPoint) -> Unit)?,
 ) {
     val uriHandler = LocalUriHandler.current
     SpotPhotoImage(
@@ -134,6 +138,7 @@ private fun DetailsContent(
             onClick = { onShowMap(spot.id) },
             modifier = Modifier.fillMaxWidth(),
         )
+        if (onBuildRoute != null) WalkingRouteButton { onBuildRoute(spot.location) }
         SportSpotButton(
             text = stringResource(R.string.reviews_title),
             onClick = { onOpenReviews(spot.id) },

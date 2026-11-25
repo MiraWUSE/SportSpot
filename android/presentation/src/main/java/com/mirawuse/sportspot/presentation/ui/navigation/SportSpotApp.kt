@@ -19,9 +19,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -85,6 +87,7 @@ import com.mirawuse.sportspot.presentation.ui.reviews.ReviewScore
 import com.mirawuse.sportspot.presentation.ui.reviews.ReviewsScreen
 import com.mirawuse.sportspot.presentation.ui.reviews.ReviewsState
 import com.mirawuse.sportspot.presentation.ui.reviews.ReviewsViewModel
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 
 private const val APP_GRAPH = "sportspot"
@@ -161,6 +164,16 @@ fun SportSpotApp() {
     val favoriteEnabled = !authViewModel.restoring && favoriteState !is FavoritesUiState.Loading && favorites.busySpot == null
     val favoriteError = stringResource(R.string.favorites_load_error)
     val snackbar = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    val routeScope = rememberCoroutineScope()
+    val routeError = stringResource(R.string.spot_route_unavailable)
+    val routeLauncher =
+        remember(context, snackbar, routeScope, routeError) {
+            WalkingRouteLauncher(
+                startActivity = context::startActivity,
+                onUnavailable = { routeScope.launch { snackbar.showSnackbar(routeError) } },
+            )
+        }
     val failureMessage = favorites.actionError?.takeIf { favoriteState.owner != null }?.let { stringResource(it.labelRes()) }
     LaunchedEffect(failureMessage, favoriteState.owner) {
         if (failureMessage != null) {
@@ -289,6 +302,7 @@ fun SportSpotApp() {
                     onSearchSport = viewModel::setSearchSport,
                     onResetSearch = viewModel::resetSearchFilter,
                     showVisibleSpots = !route.favorite,
+                    onBuildRoute = routeLauncher::open,
                 )
             }
             composable("favorites") {
@@ -470,6 +484,7 @@ fun SportSpotApp() {
                             SpotUserPhotos(accountId, target, photos, onOpenAuth = { navController.navigate(AUTH_ROUTE) })
                         }
                     },
+                    onBuildRoute = routeLauncher::open,
                 )
             }
             composable<ReviewsRoute> { entry ->

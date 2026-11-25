@@ -62,6 +62,8 @@
     <string name="details_equipment_wall_bars">шведская стенка</string>
     <string name="details_unknown">не указано</string>
     <string name="details_show_map">Показать на карте</string>
+    <string name="spot_build_route">Построить маршрут</string>
+    <string name="spot_route_unavailable">Не удалось открыть маршрут. Проверьте, что доступно приложение карт или браузер.</string>
     <string name="spot_photo_description">Фото площадки «%1$s»</string>
     <string name="spot_photo_credit">Фото: %1$s · %2$s</string>
     <string name="spot_photo_crop_notice">Кадрировано для отображения</string>

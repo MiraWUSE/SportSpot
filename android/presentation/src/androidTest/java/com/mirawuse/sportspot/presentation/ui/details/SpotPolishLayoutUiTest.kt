@@ -29,6 +29,8 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
+import com.mirawuse.sportspot.domain.model.favorite.Favorite
+import com.mirawuse.sportspot.domain.model.favorite.FavoriteList
 import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.review.Review
 import com.mirawuse.sportspot.domain.model.spot.SportType
@@ -36,10 +38,12 @@ import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.model.spot.SpotSport
 import com.mirawuse.sportspot.presentation.R
+import com.mirawuse.sportspot.presentation.ui.account.FavoritesUiState
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
 import com.mirawuse.sportspot.presentation.ui.home.HomeSpotCard
 import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
 import com.mirawuse.sportspot.presentation.ui.map.VisibleMapSpotRow
+import com.mirawuse.sportspot.presentation.ui.navigation.favoriteDestinationState
 import com.mirawuse.sportspot.presentation.ui.reviews.ReviewScore
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotTheme
@@ -71,6 +75,7 @@ class SpotPolishLayoutUiTest {
         val showingDetails = mutableStateOf(false)
         val detailsState = mutableStateOf<HomeUiState>(HomeUiState.Content(listOf(mapSpot, spot)))
         val actions = mutableListOf<Pair<String, SpotId>>()
+        val routeDestinations = mutableListOf<GeoPoint>()
         var backCount = 0
         var retries = 0
 
@@ -102,6 +107,7 @@ class SpotPolishLayoutUiTest {
                                     )
                                 },
                                 reviewSummary = { ReviewScore(listOf(review)) },
+                                onBuildRoute = { routeDestinations.add(it) },
                             )
                         } else {
                             Column(
@@ -144,12 +150,14 @@ class SpotPolishLayoutUiTest {
             capture("details-$themeLabel.png")
             compose.onNodeWithText("из 5", substring = true).performScrollTo().assertIsDisplayed()
             compose.onNodeWithText("Показать на карте").performScrollTo().performClick()
+            compose.onNodeWithText("Построить маршрут").performScrollTo().performClick()
             compose.onNodeWithText("Отзывы").performScrollTo().performClick()
             compose.onNodeWithText("Добавить в избранное").performScrollTo().performClick()
             compose.onNodeWithContentDescription("Назад").performClick()
         }
         compose.runOnIdle {
             assertEquals(List(2) { listOf("map" to spot.id, "reviews" to spot.id, "favorite" to spot.id) }.flatten(), actions)
+            assertEquals(listOf(spot.location, spot.location), routeDestinations)
             assertEquals(2, backCount)
             wide.value = true
             detailsState.value = HomeUiState.Loading
@@ -168,6 +176,29 @@ class SpotPolishLayoutUiTest {
         }
         compose.onNodeWithText(checkNotNull(spot.address)).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Показать на карте").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun buildsTheRouteFromTheSavedCommunitySpotCoordinates() {
+        val owner = "owner"
+        val spot =
+            Spot(
+                id = SpotId("community", "99ffb368-7b27-4a0d-bd15-3e91375426d1"),
+                name = "Корт сообщества",
+                sportType = SportType.TENNIS,
+                location = GeoPoint(56.39, 44.15),
+            )
+        val favorites = FavoritesUiState.Content(owner, FavoriteList(listOf(Favorite(owner, spot.id, "2026-11-25", spot))))
+        val state = favoriteDestinationState(favorites, spot.id, "Ошибка")
+        var opened: GeoPoint? = null
+        compose.setContent {
+            SportSpotTheme {
+                SpotDetailsScreen(spot.id, state, {}, {}, {}, {}, onBuildRoute = { opened = it })
+            }
+        }
+
+        compose.onNodeWithText("Построить маршрут").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(spot.location, opened) }
     }
 
     private fun capture(fileName: String) {
