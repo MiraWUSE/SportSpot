@@ -78,7 +78,7 @@ internal fun HomeScreen(
     var favoritesInfo by rememberSaveable { mutableStateOf(false) }
     val resources = LocalResources.current
     val filtered =
-        remember(state, filter.query, filter.sport, resources) {
+        remember(state, filter.query, filter.sport, filter.lighting, filter.surface, resources) {
             filterSpots((state as? HomeUiState.Content)?.spots.orEmpty(), filter) { it.sportLabel(resources::getString) }
         }
     val sorted = remember(filtered, filter.sort, location.center) { sortSpots(filtered, filter.sort, location.center) }

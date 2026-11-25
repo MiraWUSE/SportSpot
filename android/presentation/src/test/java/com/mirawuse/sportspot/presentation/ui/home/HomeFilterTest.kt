@@ -7,8 +7,10 @@ import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.model.spot.SpotSport
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.sportLabel
+import com.mirawuse.sportspot.presentation.ui.search.LightingFilter
 import com.mirawuse.sportspot.presentation.ui.search.SearchFilterState
 import com.mirawuse.sportspot.presentation.ui.search.SpotSort
+import com.mirawuse.sportspot.presentation.ui.search.SurfaceFilter
 import com.mirawuse.sportspot.presentation.ui.search.filterSpots
 import com.mirawuse.sportspot.presentation.ui.search.sortSpots
 import org.junit.Assert.assertEquals
@@ -62,6 +64,67 @@ class HomeFilterTest {
         val west = football.copy(location = GeoPoint(0.0, -179.999))
         val east = basketball.copy(location = GeoPoint(0.0, 179.98))
         assertEquals(listOf(west, east), sortSpots(listOf(east, west), SpotSort.NEAREST, center))
+    }
+
+    @Test
+    fun `lighting distinguishes known positive negative and missing values`() {
+        val lit = football.copy(lighting = true)
+        val unlit = basketball.copy(lighting = false)
+        val candidates = listOf(lit, unlit, other)
+        val expected =
+            mapOf(
+                LightingFilter.ALL to candidates,
+                LightingFilter.LIT to listOf(lit),
+                LightingFilter.UNLIT to listOf(unlit),
+                LightingFilter.UNKNOWN to listOf(other),
+            )
+        for ((filter, matching) in expected) {
+            assertEquals(matching, filterSpots(candidates, SearchFilterState(lighting = filter), ::sportLabel))
+        }
+    }
+
+    @Test
+    fun `surfaces recognize real tokens and keep unclassified values separate`() {
+        val cases =
+            mapOf(
+                " Rubber " to setOf(SurfaceFilter.RUBBER),
+                "asphalt" to setOf(SurfaceFilter.HARD),
+                "paved; Concrete:Plates" to setOf(SurfaceFilter.HARD),
+                "sand ; ARTIFICIAL_TURF ; " to setOf(SurfaceFilter.SAND, SurfaceFilter.GRASS),
+                "grass; asphalt" to setOf(SurfaceFilter.GRASS, SurfaceFilter.HARD),
+                "clay; unknown" to setOf(SurfaceFilter.OTHER),
+                "unknown;asphalt" to setOf(SurfaceFilter.HARD),
+                " " to setOf(SurfaceFilter.UNKNOWN),
+                null to setOf(SurfaceFilter.UNKNOWN),
+            )
+        for ((surface, expected) in cases) {
+            val candidates = listOf(football.copy(surface = surface))
+            val groups =
+                SurfaceFilter.entries
+                    .filter { group ->
+                        filterSpots(candidates, SearchFilterState(surface = group), ::sportLabel).isNotEmpty()
+                    }.toSet()
+            assertEquals(surface, expected + SurfaceFilter.ALL, groups)
+        }
+    }
+
+    @Test
+    fun `all filters combine before sorting and reset restores the source list`() {
+        val z = basketball.copy(name = "Яркая площадка", lighting = true, surface = "rubber")
+        val a = z.copy(id = SpotId("community", z.id.value), name = "Арена", address = "Улица Площадка", surface = "grass;rubber")
+        val candidates =
+            listOf(
+                z,
+                z.copy(id = other.id, lighting = null),
+                z.copy(id = SpotId("osm", "way:5"), surface = "concrete"),
+                z.copy(id = SpotId("osm", "way:6"), name = "Стадион"),
+                a,
+                football.copy(name = "Площадка", lighting = true, surface = "rubber"),
+            )
+        val filter = SearchFilterState("площадка", SportType.BASKETBALL, SpotSort.NAME_ASC, LightingFilter.LIT, SurfaceFilter.RUBBER)
+        val matching = filterSpots(candidates, filter, ::sportLabel)
+        assertEquals(listOf(a, z), sortSpots(matching, filter.sort, football.location))
+        assertEquals(candidates, filterSpots(candidates, SearchFilterState(), ::sportLabel))
     }
 
     @Test

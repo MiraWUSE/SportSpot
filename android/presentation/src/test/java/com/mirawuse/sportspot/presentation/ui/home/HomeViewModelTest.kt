@@ -8,7 +8,10 @@ import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.repository.SpotRepository
 import com.mirawuse.sportspot.domain.usecase.spot.SearchNearbySpotsUseCase
 import com.mirawuse.sportspot.presentation.R
+import com.mirawuse.sportspot.presentation.ui.search.LightingFilter
 import com.mirawuse.sportspot.presentation.ui.search.SearchFilterState
+import com.mirawuse.sportspot.presentation.ui.search.SpotSort
+import com.mirawuse.sportspot.presentation.ui.search.SurfaceFilter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -104,8 +107,34 @@ class HomeViewModelTest {
             viewModel.setSearchSport(SportType.VOLLEYBALL)
             viewModel.clearConflictingSearchFilter(spot) { "Баскетбол" }
             advanceUntilIdle()
-            assertEquals(SearchFilterState(), viewModel.searchFilter.value)
+            assertEquals(SearchFilterState("БАСКЕТ"), viewModel.searchFilter.value)
             assertEquals(1, repository.searchCalls)
+        }
+
+    @Test
+    fun `local advanced filters persist without starting another search`() =
+        runTest(dispatcher) {
+            val repository = FakeSpotRepository { _, _, _ -> listOf(spot) }
+            val search = SearchNearbySpotsUseCase(repository)
+            val saved = SavedStateHandle()
+            val viewModel = HomeViewModel(search, FakeDeviceLocationProvider(), saved)
+            advanceUntilIdle()
+            val requested = SearchFilterState(sort = SpotSort.NAME_ASC, lighting = LightingFilter.UNLIT, surface = SurfaceFilter.HARD)
+            viewModel.applySearchFilter(requested)
+            advanceUntilIdle()
+            assertEquals(requested, viewModel.searchFilter.value)
+            assertEquals(1, repository.searchCalls)
+            val handle = SavedStateHandle(saved.keys().associateWith { saved.get<Any?>(it) })
+            val restored = HomeViewModel(search, FakeDeviceLocationProvider(), handle)
+            advanceUntilIdle()
+            assertEquals(requested, restored.searchFilter.value)
+            assertEquals(2, repository.searchCalls)
+            restored.clearConflictingSearchFilter(spot.copy(surface = "asphalt")) { "" }
+            assertEquals(requested.copy(lighting = LightingFilter.ALL), restored.searchFilter.value)
+            restored.resetSearchFilter()
+            advanceUntilIdle()
+            assertEquals(SearchFilterState(), restored.searchFilter.value)
+            assertEquals(2, repository.searchCalls)
         }
 
     @Test
