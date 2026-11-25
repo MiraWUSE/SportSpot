@@ -12,13 +12,19 @@ internal enum class LightingFilter { ALL, LIT, UNLIT, UNKNOWN }
 
 internal enum class SurfaceFilter { ALL, RUBBER, HARD, GRASS, SAND, OTHER, UNKNOWN }
 
+internal const val DEFAULT_SEARCH_RADIUS_METERS = 1000
+internal val searchRadiusOptions = listOf(500, DEFAULT_SEARCH_RADIUS_METERS, 2000, 3000)
+
 internal data class SearchFilterState(
     val query: String = "",
     val sport: SportType? = null,
     val sort: SpotSort = SpotSort.DEFAULT,
     val lighting: LightingFilter = LightingFilter.ALL,
     val surface: SurfaceFilter = SurfaceFilter.ALL,
+    val radiusMeters: Int = DEFAULT_SEARCH_RADIUS_METERS,
 )
+
+internal fun validSearchRadius(radius: Int?): Int = radius?.takeIf { it in searchRadiusOptions } ?: DEFAULT_SEARCH_RADIUS_METERS
 
 internal fun filterSpots(
     spots: List<Spot>,

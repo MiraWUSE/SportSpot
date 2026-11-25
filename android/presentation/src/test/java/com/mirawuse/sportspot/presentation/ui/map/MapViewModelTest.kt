@@ -28,6 +28,23 @@ import java.io.IOException
 @OptIn(ExperimentalCoroutinesApi::class)
 class MapViewModelTest {
     @Test
+    fun mapKeepsItsInitialRadiusWhenHomeHasNoDefaultSnapshot() =
+        runTest {
+            withMap { model, repository ->
+                model.activate(anchor, loadInitial = true)
+                advanceUntilIdle()
+                assertEquals(listOf(Call(MapSearchRequest(anchor.center, 1000), false)), repository.calls)
+                model.onViewportIdle(areaB, null)
+                advanceUntilIdle()
+                assertEquals(areaB.request, repository.calls.last().request)
+                model.deactivate(anchor)
+                model.activate(anchor, loadInitial = true)
+                advanceUntilIdle()
+                assertEquals(2, repository.calls.size)
+            }
+        }
+
+    @Test
     fun onlyTheFinalDistinctIdleLoadsAndRegionalZoomDoesNotSearch() =
         runTest {
             withMap { model, repository ->

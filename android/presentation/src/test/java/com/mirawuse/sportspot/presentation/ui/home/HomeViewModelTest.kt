@@ -138,6 +138,99 @@ class HomeViewModelTest {
         }
 
     @Test
+    fun `radius changes and full reset run the existing search while local edits and focus do not`() =
+        runTest(dispatcher) {
+            val radii = mutableListOf<Int>()
+            val repository =
+                FakeSpotRepository { _, radius, sport ->
+                    radii.add(radius)
+                    assertNull(sport)
+                    listOf(spot)
+                }
+            val search = SearchNearbySpotsUseCase(repository)
+            val saved = SavedStateHandle()
+            val viewModel = HomeViewModel(search, FakeDeviceLocationProvider(), saved)
+            advanceUntilIdle()
+            for (radius in listOf(500, 2000, 3000)) {
+                viewModel.applySearchFilter(viewModel.searchFilter.value.copy(radiusMeters = radius))
+                advanceUntilIdle()
+                assertEquals(radius, viewModel.searchFilter.value.radiusMeters)
+            }
+            viewModel.applySearchFilter(
+                viewModel.searchFilter.value.copy(query = "нет", sort = SpotSort.NAME_ASC, lighting = LightingFilter.LIT),
+            )
+            viewModel.clearConflictingSearchFilter(spot) { "" }
+            advanceUntilIdle()
+            assertEquals(SearchFilterState(sort = SpotSort.NAME_ASC, radiusMeters = 3000), viewModel.searchFilter.value)
+            assertEquals(listOf(1000, 500, 2000, 3000), radii)
+
+            val handle = SavedStateHandle(saved.keys().associateWith { saved.get<Any?>(it) })
+            val restored = HomeViewModel(search, FakeDeviceLocationProvider(), handle)
+            advanceUntilIdle()
+            assertEquals(viewModel.searchFilter.value, restored.searchFilter.value)
+            restored.resetSearchFilter()
+            advanceUntilIdle()
+            assertEquals(SearchFilterState(), restored.searchFilter.value)
+            assertEquals(listOf(1000, 500, 2000, 3000, 3000, 1000), radii)
+        }
+
+    @Test
+    fun `malformed saved search settings fall back to defaults`() =
+        runTest(dispatcher) {
+            val handle =
+                SavedStateHandle(
+                    mapOf(
+                        "spotSearchQuery" to 17,
+                        "spotSearchSport" to "missing",
+                        "spotSearchSort" to 8,
+                        "spotSearchLighting" to "invalid",
+                        "spotSearchSurface" to false,
+                        "spotSearchRadius" to 999,
+                    ),
+                )
+            val repository =
+                FakeSpotRepository { _, radius, _ ->
+                    assertEquals(1000, radius)
+                    listOf(spot)
+                }
+            val viewModel = HomeViewModel(SearchNearbySpotsUseCase(repository), FakeDeviceLocationProvider(), handle)
+            advanceUntilIdle()
+            assertEquals(SearchFilterState(), viewModel.searchFilter.value)
+            assertEquals(1, repository.searchCalls)
+        }
+
+    @Test
+    fun `a late result for an older radius cannot replace GPS results for the latest radius`() =
+        runTest(dispatcher) {
+            val late = CompletableDeferred<List<Spot>>()
+            val point = GeoPoint(55.75, 37.61)
+            val chosen = spot.copy(id = SpotId("community", "current"), location = point)
+            val requests = mutableListOf<Pair<GeoPoint, Int>>()
+            val repository =
+                FakeSpotRepository { center, radius, _ ->
+                    requests.add(center to radius)
+                    when {
+                        radius == 500 -> withContext(NonCancellable) { late.await() }
+                        center == point -> listOf(chosen)
+                        else -> listOf(spot)
+                    }
+                }
+            val viewModel = HomeViewModel(SearchNearbySpotsUseCase(repository), FakeDeviceLocationProvider { point })
+            advanceUntilIdle()
+            viewModel.applySearchFilter(SearchFilterState(radiusMeters = 500))
+            runCurrent()
+            viewModel.applySearchFilter(SearchFilterState(radiusMeters = 3000))
+            runCurrent()
+            viewModel.useDeviceLocation(approximate = false)
+            advanceUntilIdle()
+            assertEquals(HomeUiState.Content(listOf(chosen)), viewModel.uiState.value)
+            late.complete(listOf(spot))
+            advanceUntilIdle()
+            assertEquals(HomeUiState.Content(listOf(chosen)), viewModel.uiState.value)
+            assertEquals(listOf(demoCenter to 1000, demoCenter to 500, demoCenter to 3000, point to 3000), requests)
+        }
+
+    @Test
     fun `successful empty result shows Empty`() =
         runTest(dispatcher) {
             val repository = FakeSpotRepository { _, _, _ -> emptyList() }
