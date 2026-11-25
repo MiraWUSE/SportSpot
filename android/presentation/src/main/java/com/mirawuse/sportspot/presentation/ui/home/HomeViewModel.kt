@@ -10,6 +10,7 @@ import com.mirawuse.sportspot.domain.repository.DeviceLocationProvider
 import com.mirawuse.sportspot.domain.usecase.spot.SearchNearbySpotsUseCase
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.search.SearchFilterState
+import com.mirawuse.sportspot.presentation.ui.search.SpotSort
 import com.mirawuse.sportspot.presentation.ui.search.filterSpots
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -26,6 +27,7 @@ internal val spotSearchCenter = GeoPoint(latitude = 56.3269, longitude = 44.0059
 internal const val SPOT_SEARCH_RADIUS_METERS = 1000
 private const val SEARCH_QUERY_KEY = "spotSearchQuery"
 private const val SEARCH_SPORT_KEY = "spotSearchSport"
+private const val SEARCH_SORT_KEY = "spotSearchSort"
 
 @HiltViewModel
 class HomeViewModel
@@ -44,6 +46,7 @@ class HomeViewModel
                 SearchFilterState(
                     query = savedState.get<String>(SEARCH_QUERY_KEY).orEmpty(),
                     sport = savedState.get<String>(SEARCH_SPORT_KEY)?.let { name -> SportType.entries.find { it.name == name } },
+                    sort = SpotSort.entries.firstOrNull { it.name == savedState.get<Any>(SEARCH_SORT_KEY) } ?: SpotSort.DEFAULT,
                 ),
             )
         internal val searchFilter = mutableSearchFilter.asStateFlow()
@@ -77,6 +80,7 @@ class HomeViewModel
         private fun updateSearchFilter(filter: SearchFilterState) {
             savedState[SEARCH_QUERY_KEY] = filter.query
             savedState[SEARCH_SPORT_KEY] = filter.sport?.name
+            savedState[SEARCH_SORT_KEY] = filter.sort.name
             mutableSearchFilter.value = filter
         }
 

@@ -531,6 +531,7 @@ private fun NativeOsmMap(
                                 val screen = projection.toScreenLocation(LatLng(point.latitude, point.longitude))
                                 Offset(screen.x, screen.y)
                             },
+                            center = map.cameraPosition.target?.toViewportPoint() ?: center,
                         )
                     }
                 }

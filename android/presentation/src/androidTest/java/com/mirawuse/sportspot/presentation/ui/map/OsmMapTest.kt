@@ -365,15 +365,15 @@ class OsmMapTest {
             }
         }
         val map = nativeMap()
-        compose.waitUntil(10_000) { visibility.get() == MapSpotVisibility.Ready(setOf(home.id, acrossDateLine.id)) }
+        compose.waitUntil(10_000) { (visibility.get() as? MapSpotVisibility.Ready)?.ids == setOf(home.id, acrossDateLine.id) }
         compose.runOnIdle { mapSize.value = 120.dp }
-        compose.waitUntil(10_000) { visibility.get() == MapSpotVisibility.Ready(setOf(home.id)) }
+        compose.waitUntil(10_000) { (visibility.get() as? MapSpotVisibility.Ready)?.ids == setOf(home.id) }
         compose.runOnIdle { mapSize.value = 300.dp }
-        compose.waitUntil(10_000) { visibility.get() == MapSpotVisibility.Ready(setOf(home.id, acrossDateLine.id)) }
+        compose.waitUntil(10_000) { (visibility.get() as? MapSpotVisibility.Ready)?.ids == setOf(home.id, acrossDateLine.id) }
         compose.runOnIdle {
             map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(center.latitude, center.longitude), 16.0))
         }
-        compose.waitUntil(10_000) { visibility.get() == MapSpotVisibility.Ready(setOf(home.id)) }
+        compose.waitUntil(10_000) { (visibility.get() as? MapSpotVisibility.Ready)?.ids == setOf(home.id) }
         assertEquals(0, gestures.get())
     }
 

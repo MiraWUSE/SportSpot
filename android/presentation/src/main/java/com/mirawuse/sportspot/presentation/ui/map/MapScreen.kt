@@ -51,7 +51,9 @@ import com.mirawuse.sportspot.presentation.ui.navigation.WalkingRouteButton
 import com.mirawuse.sportspot.presentation.ui.search.SearchFilterState
 import com.mirawuse.sportspot.presentation.ui.search.SpotFilterEmpty
 import com.mirawuse.sportspot.presentation.ui.search.SpotSearchBar
+import com.mirawuse.sportspot.presentation.ui.search.SpotSort
 import com.mirawuse.sportspot.presentation.ui.search.filterSpots
+import com.mirawuse.sportspot.presentation.ui.search.sortSpots
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
 @Composable
@@ -85,8 +87,13 @@ internal fun MapScreen(
     val availableSpots = viewport?.spots ?: initial?.spots.orEmpty()
     val resources = LocalResources.current
     val spots = if (filter == null) availableSpots else filterSpots(availableSpots, filter) { it.sportLabel(resources::getString) }
-    val visibleIds = (visibility as? MapSpotVisibility.Ready)?.ids
+    val visible = visibility as? MapSpotVisibility.Ready
+    val visibleIds = visible?.ids
     val visibleSpots = visibleIds?.let { ids -> spots.filter { it.id in ids }.distinctBy(Spot::id) }
+    val sortingCenter = visible?.center ?: center
+    val sort = filter?.sort ?: SpotSort.DEFAULT
+    val sortedSpots = remember(spots, sort, sortingCenter) { sortSpots(spots, sort, sortingCenter) }
+    val sortedVisibleSpots = remember(visibleSpots, sort, sortingCenter) { sortSpots(visibleSpots.orEmpty(), sort, sortingCenter) }
     val selectedSpot = selectedMapSpot(if (focus == null) visibleSpots ?: spots else spots, selectedId)
     if (selectedId != null && spots.none { it.id == selectedId } && availableSpots.any { it.id == selectedId }) {
         LaunchedEffect(selectedId, selectedSpot?.id) {
@@ -201,7 +208,7 @@ internal fun MapScreen(
                             horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.sm),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            SpotPickerButton(spots, selectedSpot?.id) { id ->
+                            SpotPickerButton(sortedSpots, selectedSpot?.id) { id ->
                                 selectSpot(id)
                                 selectionFocusRequest++
                             }
@@ -282,7 +289,7 @@ internal fun MapScreen(
                             Text(listMessage, style = MaterialTheme.typography.bodyMedium)
                         }
                     }
-                    items(visibleSpots.orEmpty(), key = { "${it.id.source.length}:${it.id.source}${it.id.value}" }) { spot ->
+                    items(sortedVisibleSpots, key = { "${it.id.source.length}:${it.id.source}${it.id.value}" }) { spot ->
                         VisibleMapSpotRow(
                             spot = spot,
                             selected = selectedSpot?.id == spot.id,

@@ -20,6 +20,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -50,6 +51,7 @@ import com.mirawuse.sportspot.presentation.ui.search.SpotFilterEmpty
 import com.mirawuse.sportspot.presentation.ui.search.SpotSearchBar
 import com.mirawuse.sportspot.presentation.ui.search.SpotSearchCategories
 import com.mirawuse.sportspot.presentation.ui.search.filterSpots
+import com.mirawuse.sportspot.presentation.ui.search.sortSpots
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotPillShape
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
@@ -75,6 +77,11 @@ internal fun HomeScreen(
 ) {
     var favoritesInfo by rememberSaveable { mutableStateOf(false) }
     val resources = LocalResources.current
+    val filtered =
+        remember(state, filter.query, filter.sport, resources) {
+            filterSpots((state as? HomeUiState.Content)?.spots.orEmpty(), filter) { it.sportLabel(resources::getString) }
+        }
+    val sorted = remember(filtered, filter.sort, location.center) { sortSpots(filtered, filter.sort, location.center) }
     // Keep permission callbacks and cancellation alive when the header scrolls off screen.
     val requestLocation = rememberDeviceLocationRequest(onLocate, onPermissionDenied, onCancelLocation)
 
@@ -109,7 +116,6 @@ internal fun HomeScreen(
                     SpotSearchMessage(stringResource(R.string.home_error_title), state.message, onRetry)
                 }
             is HomeUiState.Content -> {
-                val filtered = filterSpots(state.spots, filter) { it.sportLabel(resources::getString) }
                 item { HomeMapPreview(filtered, location.center, onOpenMap) }
                 item {
                     Row(
@@ -139,7 +145,7 @@ internal fun HomeScreen(
                         SpotFilterEmpty(stringResource(R.string.home_no_matches), onResetSearch)
                     }
                 }
-                items(filtered, key = { "${it.id.source.length}:${it.id.source}${it.id.value}" }) { spot ->
+                items(sorted, key = { "${it.id.source.length}:${it.id.source}${it.id.value}" }) { spot ->
                     HomeSpotCard(
                         spot,
                         onClick = { onOpenSpot(spot.id) },

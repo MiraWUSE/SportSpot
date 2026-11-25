@@ -8,7 +8,9 @@ import com.mirawuse.sportspot.domain.model.spot.SpotSport
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.sportLabel
 import com.mirawuse.sportspot.presentation.ui.search.SearchFilterState
+import com.mirawuse.sportspot.presentation.ui.search.SpotSort
 import com.mirawuse.sportspot.presentation.ui.search.filterSpots
+import com.mirawuse.sportspot.presentation.ui.search.sortSpots
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -30,6 +32,37 @@ class HomeFilterTest {
         )
 
     private fun sportLabel(spot: Spot): String = spot.sportLabel(labels::getValue)
+
+    @Test
+    fun `default preserves source order and Russian names sort without case`() {
+        val lower = football.copy(name = "арена")
+        val upper = football.copy(id = SpotId("community", football.id.value), name = "АРЕНА")
+        val beta = basketball.copy(name = "База")
+        val last = other.copy(name = "Яхт-клуб")
+        val candidates = listOf(last, lower, beta, upper)
+        assertEquals(candidates, sortSpots(candidates, SpotSort.DEFAULT, football.location))
+        assertEquals(listOf(upper, lower, beta, last), sortSpots(candidates, SpotSort.NAME_ASC, football.location))
+    }
+
+    @Test
+    fun `nearest uses both coordinates finds the closest center and breaks ties by id`() {
+        val center = GeoPoint(56.0, 44.0)
+        val east = football.copy(location = GeoPoint(56.0, 44.003))
+        val samePoint = basketball.copy(id = SpotId("community", east.id.value), location = east.location)
+        val north = other.copy(location = GeoPoint(56.002, 44.0))
+        val atCenter = football.copy(id = SpotId("osm", "way:0"), location = center)
+        val candidates = listOf(north, east, atCenter, samePoint)
+        assertEquals(listOf(atCenter, samePoint, east, north), sortSpots(candidates, SpotSort.NEAREST, center))
+        assertEquals(north, sortSpots(candidates, SpotSort.NEAREST, north.location).first())
+    }
+
+    @Test
+    fun `nearest finds a point across the antimeridian first`() {
+        val center = GeoPoint(0.0, 179.999)
+        val west = football.copy(location = GeoPoint(0.0, -179.999))
+        val east = basketball.copy(location = GeoPoint(0.0, 179.98))
+        assertEquals(listOf(west, east), sortSpots(listOf(east, west), SpotSort.NEAREST, center))
+    }
 
     @Test
     fun `text matches the name or localized sport regardless of case`() {
