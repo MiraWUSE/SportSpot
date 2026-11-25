@@ -121,6 +121,20 @@ class RoomSpotCacheTest {
         }
 
     @Test
+    fun reviewSpotNamesIncludeSavedAndSearchResultsAndPreferNewerSnapshots() =
+        runBlocking {
+            cache.replaceSaved(listOf(community, node), initialFetch)
+            cache.replaceSearch("first-area", listOf(relation, node.copy(name = "New name")), updatedFetch)
+            cache.replaceSearch("second-area", listOf(node.copy(name = "Older name")), initialFetch)
+            reopenDatabase()
+
+            assertEquals(
+                mapOf("osm:node:12345" to "New name", "community:${community.id.value}" to community.name),
+                cache.readSpotNames(setOf("osm:node:12345", "community:${community.id.value}", "osm:way:999")),
+            )
+        }
+
+    @Test
     fun `search snapshots preserve order and replacement affects only their own key`() =
         runBlocking {
             val first = "56.3269:44.0059:1000:all"

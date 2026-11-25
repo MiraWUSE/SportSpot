@@ -6,6 +6,7 @@ import com.mirawuse.sportspot.data.remote.AccessTokenProvider
 import com.mirawuse.sportspot.data.remote.api.AuthApi
 import com.mirawuse.sportspot.data.repository.AuthRepositoryImpl
 import com.mirawuse.sportspot.domain.repository.AuthRepository
+import com.mirawuse.sportspot.domain.repository.UserRepository
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -20,6 +21,9 @@ import javax.inject.Singleton
 internal abstract class AuthModule {
     @Binds
     abstract fun bindAuthRepository(implementation: AuthRepositoryImpl): AuthRepository
+
+    @Binds
+    abstract fun bindUserRepository(implementation: AuthRepositoryImpl): UserRepository
 
     @Binds
     @Singleton

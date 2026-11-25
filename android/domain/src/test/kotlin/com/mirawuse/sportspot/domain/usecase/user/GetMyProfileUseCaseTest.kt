@@ -124,6 +124,9 @@ class GetMyProfileUseCaseTest {
             return profile
         }
 
-        override suspend fun updateMyProfile(name: String): UserProfile = error("Метод не используется в тесте")
+        override suspend fun updateMyProfile(
+            userId: String,
+            name: String,
+        ): UserProfile = error("Метод не используется в тесте")
     }
 }

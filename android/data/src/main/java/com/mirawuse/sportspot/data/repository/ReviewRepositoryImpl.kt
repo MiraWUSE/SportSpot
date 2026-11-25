@@ -28,20 +28,13 @@ internal class ReviewRepositoryImpl
         override suspend fun getReviewsBySpot(spotId: SpotId): List<Review> =
             call.execute { session ->
                 val filter = "eq.${spotId.toCanonicalId()}"
-                val reviews = linkedMapOf<String, Review>()
-                var offset = 0
-                do {
-                    val page = network.body(api.list(filter, CONTENT_PAGE_SIZE, offset, session))
-                    val previousSize = reviews.size
-                    page.forEach { row ->
-                        val review = row?.toReview() ?: invalidContent()
-                        if (review.spotId != spotId) invalidContent()
-                        reviews[review.id] = review
-                    }
-                    if (page.size == CONTENT_PAGE_SIZE && reviews.size == previousSize) invalidContent()
-                    offset += page.size
-                } while (page.size == CONTENT_PAGE_SIZE)
-                reviews.values.toList()
+                readPages({ it.spotId == spotId }) { offset -> network.body(api.listBySpot(filter, CONTENT_PAGE_SIZE, offset, session)) }
+            }
+
+        override suspend fun getReviewsByUser(userId: String): List<Review> =
+            call.execute(userId) { session ->
+                val filter = uuidFilter(userId)
+                readPages({ it.authorId == userId }) { offset -> network.body(api.listByUser(filter, CONTENT_PAGE_SIZE, offset, session)) }
             }
 
         override suspend fun createReview(
@@ -82,6 +75,27 @@ internal class ReviewRepositoryImpl
                 if (rows.isEmpty()) throw NetworkException(NetworkError.Http(404))
                 if (rows.singleOrNull()?.id != reviewId) invalidContent()
             }
+        }
+
+        private suspend fun readPages(
+            matches: (Review) -> Boolean,
+            fetch: suspend (Int) -> List<ReviewRow?>,
+        ): List<Review> {
+            val reviews = linkedMapOf<String, Review>()
+            var offset = 0
+            do {
+                val page = fetch(offset)
+                if (page.size > CONTENT_PAGE_SIZE) invalidContent()
+                val previousSize = reviews.size
+                page.forEach { row ->
+                    val review = row?.toReview() ?: invalidContent()
+                    if (!matches(review)) invalidContent()
+                    reviews[review.id] = review
+                }
+                if (page.size == CONTENT_PAGE_SIZE && reviews.size == previousSize) invalidContent()
+                offset += page.size
+            } while (page.size == CONTENT_PAGE_SIZE)
+            return reviews.values.toList()
         }
 
         private fun ReviewRow.toReview(): Review =

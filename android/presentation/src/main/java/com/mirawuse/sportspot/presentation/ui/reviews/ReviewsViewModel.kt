@@ -1,6 +1,7 @@
 package com.mirawuse.sportspot.presentation.ui.reviews
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
@@ -37,6 +38,8 @@ internal class ReviewsViewModel
 
         private var list by mutableStateOf<ReviewsState>(ReviewsState.Loading)
         var busy by mutableStateOf(false)
+            private set
+        var revision by mutableIntStateOf(0)
             private set
         private var actionError by mutableStateOf<Pair<String, DomainError>?>(null)
 
@@ -120,7 +123,10 @@ internal class ReviewsViewModel
             viewModelScope.launch {
                 try {
                     when (val result = operation()) {
-                        is DomainResult.Success -> onSuccess(result.value)
+                        is DomainResult.Success -> {
+                            revision++
+                            onSuccess(result.value)
+                        }
                         is DomainResult.Failure -> {
                             actionError = owner to result.error
                             if (activeSpot == spotId && result.error in setOf(DomainError.Conflict, DomainError.NotFound)) {

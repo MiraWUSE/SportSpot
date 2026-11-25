@@ -1,5 +1,6 @@
 package com.mirawuse.sportspot.data.local.dao
 
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
@@ -19,6 +20,21 @@ interface SpotCacheDao {
 
     @Query("SELECT * FROM saved_spots WHERE canonical_id = :canonicalId")
     suspend fun savedSpot(canonicalId: String): CachedSavedSpotEntity?
+
+    @Query(
+        """
+        SELECT canonical_id, name FROM (
+            SELECT canonical_id, name, fetched_at_epoch_millis, 1 AS saved
+            FROM saved_spots WHERE canonical_id IN (:canonicalIds)
+            UNION ALL
+            SELECT spot.canonical_id, spot.name, snapshot.fetched_at_epoch_millis, 0 AS saved
+            FROM search_spots AS spot
+            JOIN search_snapshots AS snapshot ON snapshot.query_key = spot.query_key
+            WHERE spot.canonical_id IN (:canonicalIds)
+        ) ORDER BY fetched_at_epoch_millis, saved
+        """,
+    )
+    suspend fun spotNames(canonicalIds: List<String>): List<CachedSpotName>
 
     @Query("DELETE FROM saved_spots")
     suspend fun clearSavedSpots()
@@ -50,3 +66,8 @@ interface SpotCacheDao {
     @Insert
     suspend fun insertSearchSpots(rows: List<CachedSearchSpotEntity>)
 }
+
+data class CachedSpotName(
+    @ColumnInfo(name = "canonical_id") val canonicalId: String,
+    val name: String,
+)

@@ -6,6 +6,8 @@ import com.mirawuse.sportspot.data.remote.RequestSession
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Headers
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Query
 import retrofit2.http.Tag
@@ -29,6 +31,14 @@ internal interface AuthApi {
         @Query("id") id: String,
         @Tag session: RequestSession,
     ): Response<List<ProfileRow>>
+
+    @Headers("Prefer: return=representation")
+    @PATCH("rest/v1/profiles?select=id,name")
+    suspend fun updateProfileName(
+        @Query("id") id: String,
+        @Body body: JsonObject,
+        @Tag session: RequestSession,
+    ): Response<List<ProfileRow?>>
 
     @POST("auth/v1/logout?scope=local")
     suspend fun signOut(

@@ -55,6 +55,11 @@ class SpotRepositoryImpl
             }
         }
 
+        override suspend fun getCachedSpotNames(ids: Set<SpotId>): Map<SpotId, String> {
+            val byCanonicalId = ids.associateBy { validatedCanonicalId(it) }
+            return cache.readSpotNames(byCanonicalId.keys).mapKeys { (id, _) -> byCanonicalId.getValue(id) }
+        }
+
         override suspend fun searchNearby(
             center: GeoPoint,
             radiusMeters: Int,

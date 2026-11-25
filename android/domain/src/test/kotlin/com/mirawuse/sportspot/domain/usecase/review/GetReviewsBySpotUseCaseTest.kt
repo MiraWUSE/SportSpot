@@ -57,6 +57,8 @@ class GetReviewsBySpotUseCaseTest {
     private class FakeReviewRepository(
         private val reviews: List<Review>,
     ) : ReviewRepository {
+        override suspend fun getReviewsByUser(userId: String): List<Review> = error("Метод не используется в тесте")
+
         var requestedSpotId: SpotId? = null
         var getReviewsCalls = 0
 

@@ -14,11 +14,15 @@ import com.mirawuse.sportspot.domain.model.auth.AuthException
 import com.mirawuse.sportspot.domain.model.auth.AuthFailure
 import com.mirawuse.sportspot.domain.model.auth.AuthState
 import com.mirawuse.sportspot.domain.model.user.UserRole
+import com.mirawuse.sportspot.domain.result.DomainError
 import com.mirawuse.sportspot.domain.result.DomainResult
 import com.mirawuse.sportspot.domain.usecase.auth.SignUpUseCase
+import com.mirawuse.sportspot.domain.usecase.user.UpdateMyProfileUseCase
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
+import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
@@ -28,6 +32,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import java.io.IOException
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 class AuthRepositoryTest {
@@ -162,6 +167,138 @@ class AuthRepositoryTest {
         }
 
     @Test
+    fun savesOnlyTheNameAndKeepsModeratorSessionAcrossRestoreAndLogin() =
+        runBlocking {
+            enqueueSession()
+            enqueueProfile(role = "moderator")
+            val previous = repository.signIn(EMAIL, PASSWORD)
+            repeat(2) { next() }
+            val session = checkNotNull(store.value)
+            val editedName = "Имя после изменения"
+            enqueue(profileNameResponse(editedName))
+
+            val outcome = UpdateMyProfileUseCase(repository, repository)("  $editedName  ", UID)
+            val updated = previous.copy(name = editedName)
+            assertEquals(DomainResult.Success(updated), outcome)
+            val patch = next()
+            assertEquals("PATCH", patch.method)
+            assertEquals("/rest/v1/profiles", patch.requestUrl?.encodedPath)
+            assertEquals("id,name", patch.requestUrl?.queryParameter("select"))
+            assertEquals("eq.$UID", patch.requestUrl?.queryParameter("id"))
+            assertEquals("return=representation", patch.getHeader("Prefer"))
+            assertEquals("Bearer access-one", patch.getHeader("Authorization"))
+            val payload = JsonParser.parseString(patch.body.readUtf8()).asJsonObject
+            assertEquals(setOf("name"), payload.keySet())
+            assertEquals(editedName, payload["name"].asString)
+            val stored = checkNotNull(store.value)
+            assertEquals(updated, stored.profile)
+            assertEquals(session.accessToken, stored.accessToken)
+            assertEquals(session.refreshToken, stored.refreshToken)
+            assertEquals(session.expiresAtMillis, stored.expiresAtMillis)
+            assertEquals(UserRole.MODERATOR, updated.role)
+            assertEquals(AuthState.Authenticated(updated), repository.authState.value)
+            assertEquals(AuthState.Authenticated(updated), newRepository().getAuthState())
+            assertTrue(logs.none { editedName in it || UID in it || EMAIL in it || "access-one" in it })
+
+            enqueue("{}", 204)
+            repository.signOut()
+            enqueueSession()
+            enqueueProfile(name = editedName, role = "moderator")
+            assertEquals(updated, repository.signIn(EMAIL, PASSWORD))
+        }
+
+    @Test
+    fun rejectsWrongOwnerAndFailedOrUnverifiedPatchWithoutChangingTheSession() =
+        runBlocking {
+            signInAndDrain()
+            val session = checkNotNull(store.value)
+            assertEquals(DomainError.Unauthorized, contentFailure { repository.updateMyProfile(OTHER_UID, "Новое имя") })
+            assertEquals(2, server.requestCount)
+            for ((body, expected) in listOf(
+                "[]" to DomainError.NotFound,
+                profileNameResponse("Новое имя", OTHER_UID) to DomainError.Unexpected,
+                profileNameResponse("Другое имя") to DomainError.Unexpected,
+                profileNameResponse(" ") to DomainError.Unexpected,
+            )) {
+                enqueue(body)
+                assertEquals(expected, contentFailure { repository.updateMyProfile(UID, "Новое имя") })
+                assertEquals(session, store.value)
+            }
+            enqueue("{}", 403)
+            assertEquals(DomainError.Forbidden, contentFailure { repository.updateMyProfile(UID, "Новое имя") })
+            enqueue("{}", 503)
+            assertEquals(DomainError.Unavailable, contentFailure { repository.updateMyProfile(UID, "Новое имя") })
+            online = false
+            assertEquals(DomainError.Unavailable, contentFailure { repository.updateMyProfile(UID, "Новое имя") })
+            assertEquals(session, store.value)
+            assertEquals(AuthState.Authenticated(session.profile), repository.authState.value)
+        }
+
+    @Test
+    fun expiredAccessTokenIsRefreshedAndThePatchKeepsTheRotatedTokens() =
+        runBlocking {
+            signInAndDrain()
+            enqueue("{}", 401)
+            enqueueSession(access = "access-two", refresh = "refresh-two")
+            enqueue(profileNameResponse("Новое имя"))
+
+            assertEquals("Новое имя", repository.updateMyProfile(UID, "Новое имя").name)
+            assertEquals("Bearer access-one", next().getHeader("Authorization"))
+            assertEquals("refresh_token", next().requestUrl?.queryParameter("grant_type"))
+            assertEquals("Bearer access-two", next().getHeader("Authorization"))
+            assertEquals("refresh-two", store.value?.refreshToken)
+            assertEquals("access-two", store.value?.accessToken)
+        }
+
+    @Test
+    fun aPatchCompletingAfterLogoutAndAnotherLoginCannotOverwriteTheNewSession() =
+        runBlocking {
+            signInAndDrain()
+            val resumePatch = CountDownLatch(1)
+            val otherEmail = "another@example.test"
+            server.dispatcher =
+                object : Dispatcher() {
+                    override fun dispatch(request: RecordedRequest): MockResponse =
+                        when {
+                            request.method == "PATCH" -> {
+                                if (resumePatch.await(8, TimeUnit.SECONDS)) {
+                                    jsonResponse(profileNameResponse("Новое имя"))
+                                } else {
+                                    MockResponse().setResponseCode(500)
+                                }
+                            }
+                            request.path?.startsWith("/auth/v1/logout") == true -> MockResponse().setResponseCode(204)
+                            request.path?.startsWith("/auth/v1/token") == true ->
+                                jsonResponse(
+                                    """{"access_token":"bob-access","refresh_token":"bob-refresh","expires_in":3600,
+                                      "user":{"id":"$OTHER_UID","email":"$otherEmail"}}""",
+                                )
+                            request.path?.startsWith("/rest/v1/profiles") == true ->
+                                jsonResponse("""[{"id":"$OTHER_UID","name":"Боб","role":"user"}]""")
+                            else -> MockResponse().setResponseCode(404)
+                        }
+                }
+            try {
+                val pending =
+                    async(start = CoroutineStart.UNDISPATCHED) {
+                        contentFailure { repository.updateMyProfile(UID, "Новое имя") }
+                    }
+                assertEquals("PATCH", next().method)
+                repository.signOut()
+                assertEquals(AuthState.Guest, repository.authState.value)
+                val bob = repository.signIn(otherEmail, PASSWORD)
+                val newSession = store.value
+                resumePatch.countDown()
+                assertEquals(DomainError.Unauthorized, pending.await())
+                assertEquals("Боб", bob.name)
+                assertEquals(AuthState.Authenticated(bob), repository.authState.value)
+                assertEquals(newSession, store.value)
+            } finally {
+                resumePatch.countDown()
+            }
+        }
+
+    @Test
     fun logoutClearsTheActiveAccountEvenWhenStorageReportsAnError() =
         runBlocking {
             signInAndDrain()
@@ -197,14 +334,28 @@ class AuthRepositoryTest {
         email: String = EMAIL,
     ) = enqueue("""{"access_token":"$access","refresh_token":"$refresh","expires_in":3600,"user":{"id":"$uid","email":"$email"}}""")
 
-    private fun enqueueProfile(uid: String = UID) = enqueue("""[{"id":"$uid","name":"Имя из profiles","role":"user"}]""")
+    private fun enqueueProfile(
+        uid: String = UID,
+        name: String = "Имя из profiles",
+        role: String = "user",
+    ) = enqueue("""[{"id":"$uid","name":"$name","role":"$role"}]""")
+
+    private fun profileNameResponse(
+        name: String,
+        uid: String = UID,
+    ) = """[{"id":"$uid","name":"$name"}]"""
 
     private fun enqueue(
         json: String,
         code: Int = 200,
     ) {
-        server.enqueue(MockResponse().setResponseCode(code).addHeader("Content-Type", "application/json").setBody(json))
+        server.enqueue(jsonResponse(json, code))
     }
+
+    private fun jsonResponse(
+        json: String,
+        code: Int = 200,
+    ) = MockResponse().setResponseCode(code).addHeader("Content-Type", "application/json").setBody(json)
 
     private fun next(): RecordedRequest = checkNotNull(server.takeRequest(2, TimeUnit.SECONDS))
 

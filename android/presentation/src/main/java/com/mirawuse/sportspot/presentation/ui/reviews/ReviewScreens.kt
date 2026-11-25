@@ -224,5 +224,5 @@ private fun ReviewLoadError(onRetry: () -> Unit) {
 }
 
 @Composable
-private fun reviewRatingColor() =
+internal fun reviewRatingColor() =
     if (MaterialTheme.colorScheme.background.luminance() < 0.5f) SportSpotDarkColors.rating else SportSpotLightColors.rating

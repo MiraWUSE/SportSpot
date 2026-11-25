@@ -43,6 +43,16 @@ class RoomSpotCache
                 CacheSnapshot(null, snapshot.fetchedAtEpochMillis)
             }
 
+        internal suspend fun readSpotNames(canonicalIds: Set<String>): Map<String, String> =
+            buildMap {
+                // Each ID is bound twice. A small batch stays below older SQLite's bind limit.
+                for (batch in canonicalIds.chunked(200)) {
+                    for ((id, name) in dao.spotNames(batch)) {
+                        if (name.isNotBlank()) put(id, name)
+                    }
+                }
+            }
+
         suspend fun replaceSaved(
             spots: List<Spot>,
             fetchedAtEpochMillis: Long,

@@ -6,6 +6,8 @@ import com.mirawuse.sportspot.domain.model.spot.SpotId
 interface ReviewRepository {
     suspend fun getReviewsBySpot(spotId: SpotId): List<Review>
 
+    suspend fun getReviewsByUser(userId: String): List<Review>
+
     suspend fun createReview(
         userId: String,
         spotId: SpotId,

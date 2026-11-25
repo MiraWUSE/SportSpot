@@ -31,6 +31,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.mirawuse.sportspot.domain.validation.FormError
+import com.mirawuse.sportspot.domain.validation.FormValidation
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
@@ -38,6 +39,7 @@ import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 internal fun FormScreen(
     title: String,
     onBack: (() -> Unit)? = null,
+    scrollable: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(Modifier.fillMaxSize().imePadding()) {
@@ -61,11 +63,15 @@ internal fun FormScreen(
                 style = MaterialTheme.typography.headlineSmall,
             )
         }
-        Column(
-            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(SportSpotSpacing.xl),
-            verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.lg),
-            content = content,
-        )
+        if (scrollable) {
+            Column(
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(SportSpotSpacing.xl),
+                verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.lg),
+                content = content,
+            )
+        } else {
+            content()
+        }
     }
 }
 
@@ -80,6 +86,7 @@ internal fun FormField(
     singleLine: Boolean = true,
     keyboardType: KeyboardType = KeyboardType.Text,
     obscure: Boolean = false,
+    enabled: Boolean = true,
 ) {
     val colors = MaterialTheme.colorScheme
     Column(modifier, verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs)) {
@@ -89,6 +96,7 @@ internal fun FormField(
             onValueChange = onValueChange,
             modifier = Modifier.fillMaxWidth().semantics { contentDescription = label },
             placeholder = hint?.let { { Text(it, style = MaterialTheme.typography.bodySmall) } },
+            enabled = enabled,
             isError = error != null,
             supportingText = error?.let { { FormErrorText(it) } },
             singleLine = singleLine,
@@ -114,22 +122,32 @@ internal fun FormErrorText(error: FormError) {
     val message =
         when (error) {
             FormError.REQUIRED -> R.string.form_required
+            FormError.PROFILE_NAME_TOO_LONG -> R.string.form_profile_name_too_long
             FormError.EMAIL_FORMAT -> R.string.form_email_format
             FormError.RATING_REQUIRED -> R.string.form_rating_required
             FormError.SPORT_REQUIRED -> R.string.form_sport_required
             FormError.COORDINATE_FORMAT -> R.string.form_coordinate_format
             FormError.COORDINATE_RANGE -> R.string.form_coordinate_range
         }
-    Text(stringResource(message), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+    val text =
+        if (error ==
+            FormError.PROFILE_NAME_TOO_LONG
+        ) {
+            stringResource(message, FormValidation.MAX_PROFILE_NAME_LENGTH)
+        } else {
+            stringResource(message)
+        }
+    Text(text, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
 }
 
 @Composable
 internal fun FormCard(
     title: String,
+    modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {

@@ -82,6 +82,8 @@ class CommunityContentUiTest {
     private class PublicReviews(
         private val review: Review,
     ) : ReviewRepository {
+        override suspend fun getReviewsByUser(userId: String): List<Review> = error("Guest read")
+
         override suspend fun getReviewsBySpot(spotId: SpotId): List<Review> = listOf(review).filter { it.spotId == spotId }
 
         override suspend fun createReview(

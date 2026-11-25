@@ -163,6 +163,8 @@ internal fun ProfileScreen(
     onOpenAuth: () -> Unit,
     onPropose: () -> Unit,
     onMyProposals: () -> Unit,
+    onMyReviews: () -> Unit,
+    onEditProfile: () -> Unit,
     onModeration: (() -> Unit)? = null,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -178,7 +180,16 @@ internal fun ProfileScreen(
             val caption = if (viewModel.restoring) stringResource(R.string.auth_restoring) else stringResource(R.string.profile_guest)
             Text(profile?.name ?: caption, style = MaterialTheme.typography.headlineMedium)
         }
-        profile?.let { Text(it.email, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium) }
+        if (profile != null) {
+            Text(profile.email, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+            SportSpotButton(
+                text = stringResource(R.string.profile_edit),
+                onClick = onEditProfile,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !viewModel.submitting,
+                variant = SportSpotButtonVariant.SECONDARY,
+            )
+        }
         SportSpotButton(
             text = stringResource(if (profile == null) R.string.auth_open else R.string.auth_sign_out),
             onClick = if (profile == null) onOpenAuth else viewModel::logout,
@@ -187,7 +198,16 @@ internal fun ProfileScreen(
             isLoading = viewModel.submitting,
         )
         FormCard(stringResource(R.string.profile_my_reviews)) {
-            Text(stringResource(R.string.profile_reviews_guest), style = MaterialTheme.typography.bodyMedium)
+            if (profile == null) {
+                Text(stringResource(R.string.profile_reviews_guest), style = MaterialTheme.typography.bodyMedium)
+            } else {
+                SportSpotButton(
+                    text = stringResource(R.string.profile_reviews_open),
+                    onClick = onMyReviews,
+                    modifier = Modifier.fillMaxWidth(),
+                    variant = SportSpotButtonVariant.SECONDARY,
+                )
+            }
         }
         FormCard(stringResource(R.string.profile_my_proposals)) {
             if (profile == null) Text(stringResource(R.string.proposals_sign_in), style = MaterialTheme.typography.bodyMedium)
