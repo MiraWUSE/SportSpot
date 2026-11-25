@@ -207,7 +207,12 @@
     <string name="auth_unavailable">Не удалось выполнить действие. Попробуйте позже.</string>
     <string name="profile_guest">Гость</string>
     <string name="profile_my_reviews">Мои отзывы</string>
-    <string name="profile_reviews_guest">Отзывы пока недоступны.</string>
+    <string name="profile_reviews_guest">Войдите, чтобы посмотреть свои отзывы.</string>
+    <string name="profile_reviews_open">Посмотреть мои отзывы</string>
+    <string name="my_reviews_empty">Вы пока не оставили отзывов</string>
+    <string name="my_reviews_search">Найти площадку</string>
+    <string name="my_reviews_spot">Площадка (%1$s:%2$s)</string>
+    <string name="my_reviews_open_spot">Открыть отзывы площадки</string>
     <string name="profile_my_proposals">Мои предложения</string>
 
     <string name="favorites_saved">Сохранённые площадки</string>

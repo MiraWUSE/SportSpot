@@ -163,6 +163,7 @@ internal fun ProfileScreen(
     onOpenAuth: () -> Unit,
     onPropose: () -> Unit,
     onMyProposals: () -> Unit,
+    onMyReviews: () -> Unit,
     onModeration: (() -> Unit)? = null,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -187,7 +188,16 @@ internal fun ProfileScreen(
             isLoading = viewModel.submitting,
         )
         FormCard(stringResource(R.string.profile_my_reviews)) {
-            Text(stringResource(R.string.profile_reviews_guest), style = MaterialTheme.typography.bodyMedium)
+            if (profile == null) {
+                Text(stringResource(R.string.profile_reviews_guest), style = MaterialTheme.typography.bodyMedium)
+            } else {
+                SportSpotButton(
+                    text = stringResource(R.string.profile_reviews_open),
+                    onClick = onMyReviews,
+                    modifier = Modifier.fillMaxWidth(),
+                    variant = SportSpotButtonVariant.SECONDARY,
+                )
+            }
         }
         FormCard(stringResource(R.string.profile_my_proposals)) {
             if (profile == null) Text(stringResource(R.string.proposals_sign_in), style = MaterialTheme.typography.bodyMedium)

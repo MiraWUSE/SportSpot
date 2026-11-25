@@ -169,6 +169,8 @@ class DeleteReviewUseCaseTest {
     private class FakeReviewRepository(
         private val failure: Throwable? = null,
     ) : ReviewRepository {
+        override suspend fun getReviewsByUser(userId: String): List<Review> = error("Метод не используется в тесте")
+
         val deletedIds = mutableListOf<String>()
         var deleteCalls = 0
 

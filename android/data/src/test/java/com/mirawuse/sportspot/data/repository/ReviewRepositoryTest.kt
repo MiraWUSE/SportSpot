@@ -43,6 +43,59 @@ class ReviewRepositoryTest {
         }
 
     @Test
+    fun ownReviewsUseTheAccountTokenAndReadPagesInServerOrder() =
+        runBlocking {
+            val ids = (1..101).map { "12345678-1234-4123-8123-${it.toString().padStart(12, '0')}" }
+            val firstPage = ids.take(100).map { reviewRow(id = it) }
+            http.enqueue(firstPage.joinToString(",", "[", "]"))
+            http.enqueue("[${firstPage.last()},${reviewRow(canonical = "community:$ITEM_ID", id = ids.last())}]")
+
+            val reviews = repo.getReviewsByUser(ALICE_ID)
+            assertEquals(ids, reviews.map { it.id })
+            assertTrue(reviews.all { it.authorId == ALICE_ID })
+            assertEquals(osm, reviews.first().spotId)
+            assertEquals(SpotId("community", ITEM_ID), reviews.last().spotId)
+            for (offset in listOf("0", "100")) {
+                val request = http.next()
+                assertEquals("Bearer access-$ALICE_ID", request.getHeader("Authorization"))
+                val url = checkNotNull(request.requestUrl)
+                assertEquals("/rest/v1/reviews", url.encodedPath)
+                assertEquals("eq.$ALICE_ID", url.queryParameter("user_id"))
+                assertNull(url.queryParameter("spot_id"))
+                assertEquals("created_at.desc,id.asc", url.queryParameter("order"))
+                assertEquals("100", url.queryParameter("limit"))
+                assertEquals(offset, url.queryParameter("offset"))
+            }
+        }
+
+    @Test
+    fun ownReviewsRejectUnexpectedRowsAndNonAdvancingPages() =
+        runBlocking {
+            for (invalid in listOf(reviewRow(user = BOB_ID), reviewRow(id = "bad-id"), reviewRow(canonical = "osm:invalid"))) {
+                http.enqueue("[$invalid]")
+                assertEquals(DomainError.Unexpected, contentFailure { repo.getReviewsByUser(ALICE_ID) })
+            }
+            val stuck = List(100) { reviewRow() }.joinToString(",", "[", "]")
+            http.enqueue(stuck)
+            http.enqueue(stuck)
+            assertEquals(DomainError.Unexpected, contentFailure { repo.getReviewsByUser(ALICE_ID) })
+            assertEquals(5, server.requestCount)
+        }
+
+    @Test
+    fun ownReviewsSeparateEmptyResultsFromPermissionAndNetworkErrors() =
+        runBlocking {
+            assertEquals(DomainError.Unauthorized, contentFailure { repo.getReviewsByUser(BOB_ID) })
+            assertEquals(0, server.requestCount)
+            http.enqueue("[]")
+            assertTrue(repo.getReviewsByUser(ALICE_ID).isEmpty())
+            http.enqueue("{}", 403)
+            assertEquals(DomainError.Forbidden, contentFailure { repo.getReviewsByUser(ALICE_ID) })
+            http.online = false
+            assertEquals(DomainError.Unavailable, contentFailure { repo.getReviewsByUser(ALICE_ID) })
+        }
+
+    @Test
     fun protectedWritesPinTheAuthorAndAllowClearingTheTitle() =
         runBlocking {
             http.enqueue(row(), 201)
@@ -88,9 +141,16 @@ class ReviewRepositoryTest {
     private fun row(
         canonical: String = "osm:way:42",
         title: String = "\"Хороший корт\"",
+    ) = "[${reviewRow(canonical, title)}]"
+
+    private fun reviewRow(
+        canonical: String = "osm:way:42",
+        title: String = "\"Хороший корт\"",
+        id: String = ITEM_ID,
+        user: String = ALICE_ID,
     ) = """
-        [{"id":"$ITEM_ID","user_id":"$ALICE_ID","spot_id":"$canonical",
-        "rating":5,"text":"Текст","title":$title,"created_at":"2026-11-24T09:00:00+00:00"}]
+        {"id":"$id","user_id":"$user","spot_id":"$canonical",
+        "rating":5,"text":"Текст","title":$title,"created_at":"2026-11-24T09:00:00+00:00"}
         """.trimIndent()
 
     private companion object {

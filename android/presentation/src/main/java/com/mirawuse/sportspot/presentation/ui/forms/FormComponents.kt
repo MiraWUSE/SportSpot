@@ -38,6 +38,7 @@ import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 internal fun FormScreen(
     title: String,
     onBack: (() -> Unit)? = null,
+    scrollable: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(Modifier.fillMaxSize().imePadding()) {
@@ -61,11 +62,15 @@ internal fun FormScreen(
                 style = MaterialTheme.typography.headlineSmall,
             )
         }
-        Column(
-            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(SportSpotSpacing.xl),
-            verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.lg),
-            content = content,
-        )
+        if (scrollable) {
+            Column(
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(SportSpotSpacing.xl),
+                verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.lg),
+                content = content,
+            )
+        } else {
+            content()
+        }
     }
 }
 
@@ -126,10 +131,11 @@ internal fun FormErrorText(error: FormError) {
 @Composable
 internal fun FormCard(
     title: String,
+    modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {

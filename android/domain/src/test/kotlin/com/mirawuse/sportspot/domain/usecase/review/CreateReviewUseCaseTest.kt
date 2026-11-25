@@ -180,6 +180,8 @@ class CreateReviewUseCaseTest {
     private class FakeReviewRepository(
         private val failure: Throwable? = null,
     ) : ReviewRepository {
+        override suspend fun getReviewsByUser(userId: String): List<Review> = error("Метод не используется в тесте")
+
         var createCalls = 0
         var lastSpotId: SpotId? = null
         var lastRating: Int? = null

@@ -82,6 +82,8 @@ import com.mirawuse.sportspot.presentation.ui.photos.SpotUserPhotos
 import com.mirawuse.sportspot.presentation.ui.proposal.MyProposalsScreen
 import com.mirawuse.sportspot.presentation.ui.proposal.ProposalScreen
 import com.mirawuse.sportspot.presentation.ui.proposal.ProposalsViewModel
+import com.mirawuse.sportspot.presentation.ui.reviews.MyReviewsScreen
+import com.mirawuse.sportspot.presentation.ui.reviews.MyReviewsViewModel
 import com.mirawuse.sportspot.presentation.ui.reviews.ReviewFormScreen
 import com.mirawuse.sportspot.presentation.ui.reviews.ReviewScore
 import com.mirawuse.sportspot.presentation.ui.reviews.ReviewsScreen
@@ -94,6 +96,7 @@ private const val APP_GRAPH = "sportspot"
 private const val HOME_ROUTE = "home"
 private const val PROPOSAL_ROUTE = "proposal"
 private const val MY_PROPOSALS_ROUTE = "my-proposals"
+private const val MY_REVIEWS_ROUTE = "my-reviews"
 private const val MODERATION_ROUTE = "moderation"
 private const val AUTH_ROUTE = "auth"
 
@@ -327,7 +330,32 @@ fun SportSpotApp() {
                         navController.navigate(PROPOSAL_ROUTE)
                     },
                     onMyProposals = { navController.navigate(MY_PROPOSALS_ROUTE) },
+                    onMyReviews = { navController.navigate(MY_REVIEWS_ROUTE) },
                     onModeration = moderatorId?.let { { navController.navigate(MODERATION_ROUTE) } },
+                )
+            }
+            composable(MY_REVIEWS_ROUTE) { entry ->
+                val myReviews: MyReviewsViewModel = hiltViewModel(entry)
+                val home by searchViewModel(navController, entry).uiState.collectAsStateWithLifecycle()
+                val map by mapViewModel.state.collectAsStateWithLifecycle()
+                val spotNames =
+                    remember(home, map.spots, openedMapSpot, favoriteList) {
+                        buildMap {
+                            favoriteList.forEach { it.spot?.let { spot -> put(spot.id, spot.name) } }
+                            (home as? HomeUiState.Content)?.spots?.forEach { put(it.id, it.name) }
+                            map.spots?.forEach { put(it.id, it.name) }
+                            openedMapSpot?.let { put(it.id, it.name) }
+                        }
+                    }
+                MyReviewsScreen(
+                    owner = accountId,
+                    restoring = authViewModel.restoring,
+                    viewModel = myReviews,
+                    spotNames = spotNames,
+                    onBack = { navController.popBackStack() },
+                    onOpenAuth = { navController.navigate(AUTH_ROUTE) },
+                    onSearch = { navController.selectTab(Tab.HOME) },
+                    onOpenReviews = { navController.navigate(ReviewsRoute(it.source, it.value)) },
                 )
             }
             composable(PROPOSAL_ROUTE) { entry ->

@@ -14,11 +14,20 @@ import retrofit2.http.Query
 import retrofit2.http.Tag
 
 private const val REVIEWS = "rest/v1/reviews?select=id,user_id,spot_id,rating,text,title,created_at"
+private const val ORDERED_REVIEWS = "$REVIEWS&order=created_at.desc,id.asc"
 
 internal interface ReviewApi {
-    @GET("$REVIEWS&order=created_at.desc,id.asc")
-    suspend fun list(
+    @GET(ORDERED_REVIEWS)
+    suspend fun listBySpot(
         @Query("spot_id") spotId: String,
+        @Query("limit") limit: Int,
+        @Query("offset") offset: Int,
+        @Tag session: RequestSession,
+    ): Response<List<ReviewRow?>>
+
+    @GET(ORDERED_REVIEWS)
+    suspend fun listByUser(
+        @Query("user_id") userId: String,
         @Query("limit") limit: Int,
         @Query("offset") offset: Int,
         @Tag session: RequestSession,
