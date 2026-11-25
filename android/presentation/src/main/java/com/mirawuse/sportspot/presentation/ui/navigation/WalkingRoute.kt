@@ -4,8 +4,25 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.SystemClock
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import com.mirawuse.sportspot.domain.model.location.GeoPoint
+import com.mirawuse.sportspot.presentation.R
+import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
+import com.mirawuse.sportspot.presentation.ui.components.SportSpotButtonVariant
 import java.net.URLEncoder
+
+@Composable
+internal fun WalkingRouteButton(onClick: () -> Unit) {
+    SportSpotButton(
+        text = stringResource(R.string.spot_build_route),
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        variant = SportSpotButtonVariant.SECONDARY,
+    )
+}
 
 internal fun walkingRouteUrl(destination: GeoPoint): String {
     val latitude = destination.latitude.toBigDecimal().toPlainString()

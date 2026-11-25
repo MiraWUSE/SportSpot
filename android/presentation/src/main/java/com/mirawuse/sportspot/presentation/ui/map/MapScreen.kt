@@ -47,6 +47,7 @@ import com.mirawuse.sportspot.presentation.ui.components.SpotSummary
 import com.mirawuse.sportspot.presentation.ui.components.labelRes
 import com.mirawuse.sportspot.presentation.ui.components.sportLabel
 import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
+import com.mirawuse.sportspot.presentation.ui.navigation.WalkingRouteButton
 import com.mirawuse.sportspot.presentation.ui.search.SearchFilterState
 import com.mirawuse.sportspot.presentation.ui.search.SpotFilterEmpty
 import com.mirawuse.sportspot.presentation.ui.search.SpotSearchBar
@@ -70,6 +71,7 @@ internal fun MapScreen(
     onSearchSport: (SportType?) -> Unit = {},
     onResetSearch: () -> Unit = {},
     showVisibleSpots: Boolean = false,
+    onBuildRoute: ((GeoPoint) -> Unit)? = null,
 ) {
     var selectedSource by rememberSaveable(focus, center) { mutableStateOf(focus?.source) }
     var selectedValue by rememberSaveable(focus, center) { mutableStateOf(focus?.value) }
@@ -262,7 +264,7 @@ internal fun MapScreen(
                         Text(stringResource(R.string.map_focus_unavailable))
                     }
                     if (selectedSpot != null) {
-                        SelectedSpotCard(selectedSpot, spots, onOpenSpot)
+                        SelectedSpotCard(selectedSpot, spots, onOpenSpot, onBuildRoute)
                     }
                 }
             }
@@ -299,6 +301,7 @@ private fun SelectedSpotCard(
     spot: Spot,
     spots: List<Spot>,
     onOpenSpot: (SpotId) -> Unit,
+    onBuildRoute: ((GeoPoint) -> Unit)?,
 ) {
     val sharedCount = spots.count { it.location == spot.location }
     if (sharedCount > 1) {
@@ -319,6 +322,7 @@ private fun SelectedSpotCard(
                 onClick = { onOpenSpot(spot.id) },
                 modifier = Modifier.fillMaxWidth(),
             )
+            if (onBuildRoute != null) WalkingRouteButton { onBuildRoute(spot.location) }
         }
     }
 }

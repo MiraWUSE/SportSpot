@@ -339,6 +339,7 @@ class OsmMapTest {
         val viewport = mutableStateOf(MapViewportState(spots = spots, status = MapSearchStatus.READY))
         val filter = mutableStateOf(SearchFilterState())
         val opened = AtomicReference<SpotId>()
+        val routeDestination = AtomicReference<GeoPoint>()
         val gestures = AtomicInteger()
         val restore = StateRestorationTester(compose)
         restore.setContent {
@@ -355,6 +356,7 @@ class OsmMapTest {
                         onViewportIdle = { _, _ -> gestures.incrementAndGet() },
                         filter = filter.value,
                         showVisibleSpots = true,
+                        onBuildRoute = routeDestination::set,
                     )
                 }
             }
@@ -385,6 +387,9 @@ class OsmMapTest {
         compose.onNode(courtRow).assertIsNotSelected()
         compose.onNode(courtRow).performScrollTo().performTouchInput { click() }
         compose.onNode(courtRow).assertIsSelected()
+        scroll.performScrollToIndex(0)
+        compose.onNodeWithText("Построить маршрут").performScrollTo().performClick()
+        assertEquals(court.location, routeDestination.get())
         scroll.performScrollToIndex(0)
         waitForCamera(map, center, 13.5)
         compose.waitUntil(10_000) {
@@ -436,6 +441,9 @@ class OsmMapTest {
         compose.onNodeWithText("Загружено и видно: 1").assertIsDisplayed()
         scroll.performScrollToNode(hasText(far.name) and rowRole)
         compose.onNode(hasText(far.name) and rowRole).assertIsSelected()
+        scroll.performScrollToIndex(0)
+        compose.onNodeWithText("Построить маршрут").performScrollTo().performClick()
+        assertEquals(far.location, routeDestination.get())
 
         val moreSpots = List(15) { index -> far.copy(id = SpotId("osm", "way:$index"), name = "Корт № ${index + 1}") }
         compose.runOnIdle { viewport.value = viewport.value.copy(spots = listOf(far) + moreSpots) }
