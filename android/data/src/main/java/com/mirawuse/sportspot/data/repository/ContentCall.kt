@@ -21,23 +21,28 @@ internal class ContentCall
             userId: String? = null,
             block: suspend (RequestSession) -> T,
         ): T =
-            try {
+            contentRequest {
                 if (userId == null) {
                     network.execute { block(RequestSession(null)) }
                 } else {
                     auth.withAccount(userId) { session -> network.execute { block(session) } }
                 }
-            } catch (failure: NetworkException) {
-                throw DomainOperationException(failure.error.toDomainError())
-            } catch (failure: AuthException) {
-                throw DomainOperationException(
-                    when (failure.failure) {
-                        AuthFailure.SESSION_EXPIRED -> DomainError.Unauthorized
-                        AuthFailure.OFFLINE, AuthFailure.RATE_LIMITED -> DomainError.Unavailable
-                        else -> DomainError.Unexpected
-                    },
-                )
             }
+    }
+
+internal suspend fun <T> contentRequest(block: suspend () -> T): T =
+    try {
+        block()
+    } catch (failure: NetworkException) {
+        throw DomainOperationException(failure.error.toDomainError())
+    } catch (failure: AuthException) {
+        throw DomainOperationException(
+            when (failure.failure) {
+                AuthFailure.SESSION_EXPIRED -> DomainError.Unauthorized
+                AuthFailure.OFFLINE, AuthFailure.RATE_LIMITED -> DomainError.Unavailable
+                else -> DomainError.Unexpected
+            },
+        )
     }
 
 internal fun String.isCanonicalUuid(): Boolean = runCatching { UUID.fromString(this).toString() == this }.getOrDefault(false)

@@ -28,6 +28,7 @@ class UpdateMyProfileUseCaseTest {
                 result,
             )
             assertEquals("Александр", repository.lastName)
+            assertEquals(profile.id, repository.lastUserId)
             assertEquals(1, repository.updateCalls)
         }
 
@@ -103,6 +104,29 @@ class UpdateMyProfileUseCaseTest {
         }
 
     @Test
+    fun `изменение без нового имени не обращается к репозиторию`() =
+        runTest {
+            val profile = createProfile(UserRole.USER)
+            val repository = FakeUserRepository(profile)
+            val useCase = createUseCase(AuthState.Authenticated(profile), repository)
+
+            assertEquals(DomainResult.Success(profile), useCase("  ${profile.name}  ", profile.id))
+            assertEquals(0, repository.updateCalls)
+        }
+
+    @Test
+    fun `слишком длинное имя и смена аккаунта не отправляют изменение`() =
+        runTest {
+            val profile = createProfile(UserRole.USER)
+            val repository = FakeUserRepository(profile)
+            val useCase = createUseCase(AuthState.Authenticated(profile), repository)
+
+            assertTrue((useCase("А".repeat(81)) as DomainResult.Failure).error is DomainError.Validation)
+            assertEquals(DomainResult.Failure(DomainError.Unauthorized), useCase("Александр", "other"))
+            assertEquals(0, repository.updateCalls)
+        }
+
+    @Test
     fun `непредвиденная ошибка репозитория не скрывается`() =
         runTest {
             val profile = createProfile(UserRole.USER)
@@ -163,12 +187,17 @@ class UpdateMyProfileUseCaseTest {
     ) : UserRepository {
         var updateCalls = 0
         var lastName: String? = null
+        var lastUserId: String? = null
         var lastUpdatedProfile: UserProfile? = null
 
         override suspend fun getMyProfile(): UserProfile = error("Метод не используется в тесте")
 
-        override suspend fun updateMyProfile(name: String): UserProfile {
+        override suspend fun updateMyProfile(
+            userId: String,
+            name: String,
+        ): UserProfile {
             updateCalls++
+            lastUserId = userId
             lastName = name
 
             failure?.let { throw it }

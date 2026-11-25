@@ -4,6 +4,7 @@ import com.mirawuse.sportspot.domain.model.spot.SportType
 
 enum class FormError {
     REQUIRED,
+    PROFILE_NAME_TOO_LONG,
     EMAIL_FORMAT,
     RATING_REQUIRED,
     SPORT_REQUIRED,
@@ -12,9 +13,14 @@ enum class FormError {
 }
 
 object FormValidation {
+    const val MAX_PROFILE_NAME_LENGTH = 80
+
     private val emailPattern = Regex("[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+")
 
     fun required(value: String): FormError? = if (value.isBlank()) FormError.REQUIRED else null
+
+    fun profileName(value: String): FormError? =
+        required(value) ?: if (value.trim().length > MAX_PROFILE_NAME_LENGTH) FormError.PROFILE_NAME_TOO_LONG else null
 
     fun email(value: String): FormError? = required(value) ?: if (emailPattern.matches(value.trim())) null else FormError.EMAIL_FORMAT
 

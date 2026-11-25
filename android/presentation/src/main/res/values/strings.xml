@@ -209,6 +209,8 @@
     <string name="profile_my_reviews">Мои отзывы</string>
     <string name="profile_reviews_guest">Войдите, чтобы посмотреть свои отзывы.</string>
     <string name="profile_reviews_open">Посмотреть мои отзывы</string>
+    <string name="profile_edit">Редактировать профиль</string>
+    <string name="form_profile_name_too_long">Имя должно содержать не больше %1$d символов</string>
     <string name="my_reviews_empty">Вы пока не оставили отзывов</string>
     <string name="my_reviews_search">Найти площадку</string>
     <string name="my_reviews_spot">Площадка (%1$s:%2$s)</string>

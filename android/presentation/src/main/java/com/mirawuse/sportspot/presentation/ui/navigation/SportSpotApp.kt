@@ -52,6 +52,8 @@ import com.mirawuse.sportspot.domain.result.DomainResult
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.account.AuthScreen
 import com.mirawuse.sportspot.presentation.ui.account.AuthViewModel
+import com.mirawuse.sportspot.presentation.ui.account.EditProfileScreen
+import com.mirawuse.sportspot.presentation.ui.account.EditProfileViewModel
 import com.mirawuse.sportspot.presentation.ui.account.FavoritesScreen
 import com.mirawuse.sportspot.presentation.ui.account.FavoritesUiState
 import com.mirawuse.sportspot.presentation.ui.account.FavoritesViewModel
@@ -60,6 +62,7 @@ import com.mirawuse.sportspot.presentation.ui.account.labelRes
 import com.mirawuse.sportspot.presentation.ui.account.visibleFor
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButtonVariant
+import com.mirawuse.sportspot.presentation.ui.components.SpotSearchLoading
 import com.mirawuse.sportspot.presentation.ui.components.sportLabel
 import com.mirawuse.sportspot.presentation.ui.details.SpotDetailsScreen
 import com.mirawuse.sportspot.presentation.ui.forms.FormScreen
@@ -109,6 +112,11 @@ internal data class SpotDetailsRoute(
     val spotId: SpotId
         get() = SpotId(source, value)
 }
+
+@Serializable
+internal data class EditProfileRoute(
+    val owner: String,
+)
 
 @Serializable
 internal data class MapRoute(
@@ -331,8 +339,23 @@ fun SportSpotApp() {
                     },
                     onMyProposals = { navController.navigate(MY_PROPOSALS_ROUTE) },
                     onMyReviews = { navController.navigate(MY_REVIEWS_ROUTE) },
+                    onEditProfile = { accountId?.let { navController.navigate(EditProfileRoute(it)) } },
                     onModeration = moderatorId?.let { { navController.navigate(MODERATION_ROUTE) } },
                 )
+            }
+            composable<EditProfileRoute> { entry ->
+                val route = entry.toRoute<EditProfileRoute>()
+                val profile = (authState as? AuthState.Authenticated)?.profile?.takeIf { it.id == route.owner }
+                val editProfile: EditProfileViewModel = hiltViewModel(entry)
+                val back: () -> Unit = {
+                    if (navController.currentBackStackEntry == entry) navController.popBackStack()
+                }
+                if (profile == null) {
+                    LaunchedEffect(authViewModel.restoring) { if (!authViewModel.restoring) back() }
+                    FormScreen(stringResource(R.string.profile_edit)) { SpotSearchLoading() }
+                } else {
+                    EditProfileScreen(profile, editProfile, back)
+                }
             }
             composable(MY_REVIEWS_ROUTE) { entry ->
                 val myReviews: MyReviewsViewModel = hiltViewModel(entry)

@@ -15,6 +15,10 @@ import com.mirawuse.sportspot.domain.model.auth.AuthState
 import com.mirawuse.sportspot.domain.model.user.UserProfile
 import com.mirawuse.sportspot.domain.model.user.UserRole
 import com.mirawuse.sportspot.domain.repository.AuthRepository
+import com.mirawuse.sportspot.domain.repository.UserRepository
+import com.mirawuse.sportspot.domain.result.DomainError
+import com.mirawuse.sportspot.domain.result.DomainOperationException
+import com.mirawuse.sportspot.domain.validation.FormValidation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,7 +38,8 @@ internal class AuthRepositoryImpl
         private val api: AuthApi,
         private val network: NetworkCall,
         private val store: AuthSessionStore,
-    ) : AuthRepository {
+    ) : AuthRepository,
+        UserRepository {
         private val mutex = Mutex()
         private val mutableState = MutableStateFlow<AuthState>(AuthState.Guest)
         override val authState = mutableState.asStateFlow()
@@ -52,7 +57,13 @@ internal class AuthRepositoryImpl
         suspend fun <T> withAccount(
             userId: String,
             request: suspend (RequestSession) -> T,
-        ): T =
+        ): T = withAccount(userId, request) { _, response -> response }
+
+        private suspend fun <T, R> withAccount(
+            userId: String,
+            request: suspend (RequestSession) -> T,
+            complete: (AuthSession, T) -> R,
+        ): R =
             withContext(Dispatchers.IO) {
                 val start =
                     mutex.withLock {
@@ -72,8 +83,7 @@ internal class AuthRepositoryImpl
                             }
                         request(RequestSession(token))
                     }
-                mutex.withLock { requireAccount(userId, start.generation) }
-                result
+                mutex.withLock { complete(requireAccount(userId, start.generation), result) }
             }
 
         private fun requireAccount(
@@ -93,6 +103,38 @@ internal class AuthRepositoryImpl
                         // Temporary failure still allows the account's own offline data.
                     }
                     mutableState.value
+                }
+            }
+
+        override suspend fun getMyProfile(): UserProfile =
+            (getAuthState() as? AuthState.Authenticated)?.profile ?: throw DomainOperationException(DomainError.Unauthorized)
+
+        override suspend fun updateMyProfile(
+            userId: String,
+            name: String,
+        ): UserProfile =
+            contentRequest {
+                val uid = canonicalUid(userId) ?: throw AuthException(AuthFailure.SESSION_EXPIRED)
+                if (name != name.trim() || FormValidation.profileName(name) != null) {
+                    throw DomainOperationException(DomainError.Validation("Проверьте имя пользователя"))
+                }
+                val body = JsonObject().apply { addProperty("name", name) }
+                withAccount(
+                    uid,
+                    request = { requestSession ->
+                        network.execute {
+                            val rows = network.body(api.updateProfileName("eq.$uid", body, requestSession))
+                            if (rows.isEmpty()) throw NetworkException(NetworkError.Http(404))
+                            val row = rows.singleOrNull() ?: invalidContent()
+                            val savedName = row.name ?: invalidContent()
+                            if (row.id != uid || savedName != name) invalidContent()
+                            savedName
+                        }
+                    },
+                ) { current, savedName ->
+                    val profile = current.profile.copy(name = savedName)
+                    save(AuthSession(current.accessToken, current.refreshToken, current.expiresAtMillis, profile), replaceAccount = false)
+                    profile
                 }
             }
 
