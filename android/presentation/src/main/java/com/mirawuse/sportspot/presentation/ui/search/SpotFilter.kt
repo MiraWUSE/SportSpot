@@ -26,6 +26,9 @@ internal data class SearchFilterState(
 
 internal fun validSearchRadius(radius: Int?): Int = radius?.takeIf { it in searchRadiusOptions } ?: DEFAULT_SEARCH_RADIUS_METERS
 
+internal fun SearchFilterState.filteringCriteria(): SearchFilterState =
+    copy(query = query.trim(), sort = SpotSort.DEFAULT, radiusMeters = DEFAULT_SEARCH_RADIUS_METERS)
+
 internal fun filterSpots(
     spots: List<Spot>,
     filter: SearchFilterState,

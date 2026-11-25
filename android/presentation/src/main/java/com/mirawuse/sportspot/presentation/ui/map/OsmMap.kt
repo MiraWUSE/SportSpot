@@ -100,6 +100,7 @@ internal fun OsmMap(
     onSpotVisibility: ((MapSpotVisibility) -> Unit)? = null,
     pickedPoint: GeoPoint? = null,
     onMapTap: ((GeoPoint) -> Unit)? = null,
+    visibilitySpots: List<Spot> = spots,
     overlay: @Composable BoxScope.() -> Unit = {},
 ) {
     var attempt by remember { mutableIntStateOf(0) }
@@ -139,6 +140,7 @@ internal fun OsmMap(
                         onSpotVisibility = onSpotVisibility,
                         pickedPoint = pickedPoint,
                         onMapTap = onMapTap,
+                        visibilitySpots = visibilitySpots,
                     )
                 }
             } else {
@@ -190,6 +192,7 @@ private fun NativeOsmMap(
     onSpotVisibility: ((MapSpotVisibility) -> Unit)?,
     pickedPoint: GeoPoint?,
     onMapTap: ((GeoPoint) -> Unit)?,
+    visibilitySpots: List<Spot>,
 ) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
@@ -517,7 +520,7 @@ private fun NativeOsmMap(
     }
     if (onSpotVisibility != null) {
         val geometryUnavailable = mapView == null || projectionFailed || (!cameraApplied && loadState == MapLoadState.ERROR)
-        LaunchedEffect(cameraApplied, cameraMoving, settledCamera, mapSize, spots, geometryUnavailable) {
+        LaunchedEffect(cameraApplied, cameraMoving, settledCamera, mapSize, visibilitySpots, geometryUnavailable) {
             val map = nativeMap
             val visibility =
                 when {
@@ -527,7 +530,7 @@ private fun NativeOsmMap(
                     else -> {
                         val projection = map.projection
                         MapSpotVisibility.Ready(
-                            projectedSpotIds(spots, mapSize) { point ->
+                            projectedSpotIds(visibilitySpots, mapSize) { point ->
                                 val screen = projection.toScreenLocation(LatLng(point.latitude, point.longitude))
                                 Offset(screen.x, screen.y)
                             },

@@ -33,27 +33,24 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.LocalPinnableContainer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.mirawuse.sportspot.domain.model.location.GeoPoint
-import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
 import com.mirawuse.sportspot.presentation.ui.components.SpotSummary
 import com.mirawuse.sportspot.presentation.ui.components.labelRes
-import com.mirawuse.sportspot.presentation.ui.components.sportLabel
 import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
 import com.mirawuse.sportspot.presentation.ui.navigation.WalkingRouteButton
 import com.mirawuse.sportspot.presentation.ui.search.SearchFilterState
 import com.mirawuse.sportspot.presentation.ui.search.SpotFilterEmpty
 import com.mirawuse.sportspot.presentation.ui.search.SpotSearchBar
-import com.mirawuse.sportspot.presentation.ui.search.SpotSort
-import com.mirawuse.sportspot.presentation.ui.search.filterSpots
-import com.mirawuse.sportspot.presentation.ui.search.sortSpots
+import com.mirawuse.sportspot.presentation.ui.search.filteringCriteria
+import com.mirawuse.sportspot.presentation.ui.search.rememberFilteredSpots
+import com.mirawuse.sportspot.presentation.ui.search.rememberSortedSpots
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
 @Composable
@@ -70,7 +67,7 @@ internal fun MapScreen(
     onViewportIdle: ((MapViewport, MapViewport?) -> Unit)? = null,
     filter: SearchFilterState? = null,
     onSearchQuery: (String) -> Unit = {},
-    onSearchSport: (SportType?) -> Unit = {},
+    onApplySearch: (SearchFilterState) -> Unit = {},
     onResetSearch: () -> Unit = {},
     showVisibleSpots: Boolean = false,
     onBuildRoute: ((GeoPoint) -> Unit)? = null,
@@ -84,18 +81,37 @@ internal fun MapScreen(
     var visibility by remember(center, focus, showVisibleSpots) { mutableStateOf<MapSpotVisibility>(MapSpotVisibility.Loading) }
     var listExpanded by rememberSaveable { mutableStateOf(true) }
     val initial = state as? HomeUiState.Content
-    val availableSpots = viewport?.spots ?: initial?.spots.orEmpty()
-    val resources = LocalResources.current
-    val spots = if (filter == null) availableSpots else filterSpots(availableSpots, filter) { it.sportLabel(resources::getString) }
+    val loadedSpots = viewport?.spots ?: initial?.spots.orEmpty()
+    val focusedSpot = focus?.let { id -> loadedSpots.firstOrNull { it.id == id } ?: initial?.findSpot(id) }
+    val availableSpots =
+        remember(loadedSpots, focusedSpot) {
+            if (focusedSpot != null && loadedSpots.none { it.id == focusedSpot.id }) listOf(focusedSpot) + loadedSpots else loadedSpots
+        }
+    val currentFilter = filter ?: SearchFilterState()
+    val criteria = currentFilter.filteringCriteria()
+    val entryCriteria = remember(focus, center) { criteria }
+    val keepExplicitFocus = focusedSpot != null && selectedId == focus && criteria == entryCriteria
+    val matched = rememberFilteredSpots(availableSpots, currentFilter)
+    val spots =
+        remember(matched, focusedSpot, keepExplicitFocus) {
+            if (focusedSpot != null && keepExplicitFocus && matched.orEmpty().none { it.id == focus }) {
+                listOf(focusedSpot) + matched.orEmpty()
+            } else {
+                matched.orEmpty()
+            }
+        }
     val visible = visibility as? MapSpotVisibility.Ready
     val visibleIds = visible?.ids
-    val visibleSpots = visibleIds?.let { ids -> spots.filter { it.id in ids }.distinctBy(Spot::id) }
+    val visibleSpots =
+        remember(visibleIds, spots, matched != null) {
+            if (matched == null) null else visibleIds?.let { ids -> spots.filter { it.id in ids }.distinctBy(Spot::id) }
+        }
+    val choices = if (showVisibleSpots) visibleSpots.orEmpty() else spots
     val sortingCenter = visible?.center ?: center
-    val sort = filter?.sort ?: SpotSort.DEFAULT
-    val sortedSpots = remember(spots, sort, sortingCenter) { sortSpots(spots, sort, sortingCenter) }
-    val sortedVisibleSpots = remember(visibleSpots, sort, sortingCenter) { sortSpots(visibleSpots.orEmpty(), sort, sortingCenter) }
-    val selectedSpot = selectedMapSpot(if (focus == null) visibleSpots ?: spots else spots, selectedId)
-    if (selectedId != null && spots.none { it.id == selectedId } && availableSpots.any { it.id == selectedId }) {
+    val sortedChoices = rememberSortedSpots(choices, currentFilter.sort, sortingCenter)
+    val selectedSpot = selectedMapSpot(visibleSpots ?: spots, selectedId)
+    val canResolveSelection = matched != null && (!showVisibleSpots || visibleSpots != null)
+    if (canResolveSelection && selectedId != null && spots.none { it.id == selectedId } && availableSpots.any { it.id == selectedId }) {
         LaunchedEffect(selectedId, selectedSpot?.id) {
             selectedSource = selectedSpot?.id?.source
             selectedValue = selectedSpot?.id?.value
@@ -105,7 +121,6 @@ internal fun MapScreen(
         selectedSource = id.source
         selectedValue = id.value
     }
-    val focusedSpot = focus?.let { initial?.findSpot(it) }
     val status = viewport?.status ?: MapSearchStatus.INITIAL
     val loading = status == MapSearchStatus.LOADING || (status == MapSearchStatus.INITIAL && state == HomeUiState.Loading)
     val error =
@@ -118,8 +133,9 @@ internal fun MapScreen(
         availableSpots.isEmpty() &&
             (status == MapSearchStatus.READY || status == MapSearchStatus.INITIAL && state == HomeUiState.Empty)
     val noMatches =
-        availableSpots.isNotEmpty() &&
-            spots.isEmpty() &&
+        matched != null &&
+            (if (showVisibleSpots) !visibleIds.isNullOrEmpty() else availableSpots.isNotEmpty()) &&
+            choices.isEmpty() &&
             (status == MapSearchStatus.READY || status == MapSearchStatus.INITIAL && initial != null)
     val searchMessage =
         when {
@@ -141,8 +157,9 @@ internal fun MapScreen(
                         searchMessage != null && !visibleSpots.isNullOrEmpty() && status != MapSearchStatus.READY ->
                             stringResource(R.string.map_list_previous, searchMessage)
                         searchMessage != null -> searchMessage
+                        matched == null || sortedChoices == null -> stringResource(R.string.search_filters_updating)
                         empty -> stringResource(R.string.map_search_empty)
-                        noMatches -> stringResource(R.string.map_no_matches)
+                        noMatches -> null
                         visibleSpots.isNullOrEmpty() -> stringResource(R.string.map_list_empty)
                         else -> null
                     }
@@ -195,7 +212,7 @@ internal fun MapScreen(
                         )
                         if (filter != null) {
                             Column(verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs)) {
-                                SpotSearchBar(filter, onSearchQuery, onSearchSport)
+                                SpotSearchBar(filter, onSearchQuery, onApplySearch, onResetSearch)
                                 Text(
                                     stringResource(R.string.map_search_scope),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -208,7 +225,7 @@ internal fun MapScreen(
                             horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.sm),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            SpotPickerButton(sortedSpots, selectedSpot?.id) { id ->
+                            SpotPickerButton(sortedChoices.orEmpty(), selectedSpot?.id) { id ->
                                 selectSpot(id)
                                 selectionFocusRequest++
                             }
@@ -220,9 +237,9 @@ internal fun MapScreen(
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
-                                    if (spots.isNotEmpty() || noMatches) {
+                                    if (choices.isNotEmpty() || noMatches) {
                                         Text(
-                                            stringResource(R.string.home_results_count, spots.size),
+                                            stringResource(R.string.home_results_count, choices.size),
                                             style = MaterialTheme.typography.labelSmall,
                                         )
                                     }
@@ -243,6 +260,7 @@ internal fun MapScreen(
                         onViewportMoveStarted = onViewportMoveStarted,
                         onViewportIdle = onViewportIdle,
                         onSpotVisibility = if (showVisibleSpots) ({ visibility = it }) else null,
+                        visibilitySpots = availableSpots,
                     ) {
                         val message = searchMessage ?: if (empty) stringResource(R.string.map_search_empty) else null
                         if (message != null) {
@@ -265,7 +283,7 @@ internal fun MapScreen(
                         TextButton(onClick = onRetry) { Text(stringResource(R.string.map_search_retry)) }
                     }
                     if (noMatches) {
-                        SpotFilterEmpty(stringResource(R.string.map_no_matches), onResetSearch)
+                        SpotFilterEmpty(stringResource(R.string.home_no_matches), onResetSearch)
                     }
                     if (focus != null && selectedId == focus && availableSpots.isNotEmpty() && availableSpots.none { it.id == focus }) {
                         Text(stringResource(R.string.map_focus_unavailable))
@@ -289,7 +307,7 @@ internal fun MapScreen(
                             Text(listMessage, style = MaterialTheme.typography.bodyMedium)
                         }
                     }
-                    items(sortedVisibleSpots, key = { "${it.id.source.length}:${it.id.source}${it.id.value}" }) { spot ->
+                    items(sortedChoices.orEmpty(), key = { "${it.id.source.length}:${it.id.source}${it.id.value}" }) { spot ->
                         VisibleMapSpotRow(
                             spot = spot,
                             selected = selectedSpot?.id == spot.id,

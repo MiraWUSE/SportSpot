@@ -11,34 +11,33 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.presentation.R
-import com.mirawuse.sportspot.presentation.ui.components.labelRes
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
 internal val SpotSearchCategories = listOf(null) + SportType.entries
@@ -47,46 +46,78 @@ internal val SpotSearchCategories = listOf(null) + SportType.entries
 internal fun SpotSearchBar(
     filter: SearchFilterState,
     onQuery: (String) -> Unit,
-    onSport: (SportType?) -> Unit,
+    onApply: (SearchFilterState) -> Unit,
+    onReset: () -> Unit,
+    showRadius: Boolean = false,
 ) {
     val query = filter.query
-    var menuOpen by remember { mutableStateOf(false) }
+    var panelOpen by rememberSaveable { mutableStateOf(false) }
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
     val theme = MaterialTheme.colorScheme
     val searchLabel = stringResource(R.string.home_search)
     val textStyle = MaterialTheme.typography.bodySmall
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(MaterialTheme.shapes.medium)
-                .background(if (theme.background.luminance() < 0.5f) theme.surfaceVariant else theme.surface)
-                .padding(start = SportSpotSpacing.lg, end = SportSpotSpacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.sm),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(painterResource(R.drawable.ic_home_search), contentDescription = null, tint = theme.onSurfaceVariant)
-        BasicTextField(
-            value = query,
-            onValueChange = onQuery,
-            modifier = Modifier.weight(1f).semantics { contentDescription = searchLabel }.padding(vertical = SportSpotSpacing.lg),
-            textStyle = textStyle.copy(color = theme.onSurface),
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            cursorBrush = SolidColor(theme.onSurface),
-            decorationBox = { input ->
-                Box {
-                    if (query.isEmpty()) Text(searchLabel, color = theme.onSurfaceVariant, style = textStyle)
-                    input()
-                }
-            },
-        )
-        Box {
+    val active =
+        listOf(
+            filter.sport != null,
+            filter.sort != SpotSort.DEFAULT,
+            filter.lighting != LightingFilter.ALL,
+            filter.surface != SurfaceFilter.ALL,
+        ).count { it }
+    val countLabel = stringResource(R.string.search_filters_count, active)
+    val radiusLabel =
+        if (showRadius) {
+            stringResource(
+                R.string.search_radius_summary,
+                stringResource(radiusLabelRes(filter.radiusMeters)),
+            )
+        } else {
+            null
+        }
+    val distanceLabel =
+        if (filter.sort == SpotSort.NEAREST) {
+            stringResource(if (showRadius) R.string.search_distance_origin else R.string.map_distance_origin)
+        } else {
+            null
+        }
+
+    Column(verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs)) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(if (theme.background.luminance() < 0.5f) theme.surfaceVariant else theme.surface)
+                    .padding(start = SportSpotSpacing.lg, end = SportSpotSpacing.xs),
+            horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(painterResource(R.drawable.ic_home_search), contentDescription = null, tint = theme.onSurfaceVariant)
+            BasicTextField(
+                value = query,
+                onValueChange = onQuery,
+                modifier = Modifier.weight(1f).semantics { contentDescription = searchLabel }.padding(vertical = SportSpotSpacing.lg),
+                textStyle = textStyle.copy(color = theme.onSurface),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                cursorBrush = SolidColor(theme.onSurface),
+                decorationBox = { input ->
+                    Box {
+                        if (query.isEmpty()) Text(searchLabel, color = theme.onSurfaceVariant, style = textStyle)
+                        input()
+                    }
+                },
+            )
             Box(
                 modifier =
                     Modifier
                         .size(48.dp)
                         .clip(MaterialTheme.shapes.medium)
-                        .clickable(role = Role.Button) { menuOpen = true },
+                        .clickable(role = Role.Button) {
+                            focus.clearFocus()
+                            keyboard?.hide()
+                            panelOpen = true
+                        }.semantics { if (active > 0) stateDescription = countLabel },
                 contentAlignment = Alignment.Center,
             ) {
                 Box(
@@ -100,20 +131,26 @@ internal fun SpotSearchBar(
                     )
                 }
             }
-            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                SpotSearchCategories.forEach { category ->
-                    DropdownMenuItem(
-                        text = { Text(stringResource(category?.labelRes() ?: R.string.home_filter_all)) },
-                        leadingIcon = { RadioButton(selected = category == filter.sport, onClick = null) },
-                        modifier = Modifier.semantics { selected = category == filter.sport },
-                        onClick = {
-                            onSport(category)
-                            menuOpen = false
-                        },
-                    )
-                }
-            }
         }
+        val summary = listOfNotNull(radiusLabel, countLabel.takeIf { active > 0 }, distanceLabel)
+        if (summary.isNotEmpty()) {
+            Text(summary.joinToString(" · "), color = theme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+        }
+    }
+    if (panelOpen) {
+        SpotFilterPanel(
+            filter = filter,
+            showRadius = showRadius,
+            onApply = {
+                onApply(it)
+                panelOpen = false
+            },
+            onReset = {
+                onReset()
+                panelOpen = false
+            },
+            onDismiss = { panelOpen = false },
+        )
     }
 }
 
@@ -124,6 +161,8 @@ internal fun SpotFilterEmpty(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs)) {
         Text(message, style = MaterialTheme.typography.bodyMedium)
-        TextButton(onClick = onReset) { Text(stringResource(R.string.spot_search_reset)) }
+        TextButton(onClick = onReset, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
+            Text(stringResource(R.string.spot_search_reset))
+        }
     }
 }

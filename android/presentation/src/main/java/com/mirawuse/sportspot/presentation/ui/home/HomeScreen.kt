@@ -20,7 +20,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -29,7 +28,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -45,13 +43,12 @@ import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchLoading
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchMessage
 import com.mirawuse.sportspot.presentation.ui.components.labelRes
-import com.mirawuse.sportspot.presentation.ui.components.sportLabel
 import com.mirawuse.sportspot.presentation.ui.search.SearchFilterState
 import com.mirawuse.sportspot.presentation.ui.search.SpotFilterEmpty
 import com.mirawuse.sportspot.presentation.ui.search.SpotSearchBar
 import com.mirawuse.sportspot.presentation.ui.search.SpotSearchCategories
-import com.mirawuse.sportspot.presentation.ui.search.filterSpots
-import com.mirawuse.sportspot.presentation.ui.search.sortSpots
+import com.mirawuse.sportspot.presentation.ui.search.rememberFilteredSpots
+import com.mirawuse.sportspot.presentation.ui.search.rememberSortedSpots
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotPillShape
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
@@ -69,6 +66,7 @@ internal fun HomeScreen(
     onSearchQuery: (String) -> Unit,
     onSearchSport: (SportType?) -> Unit,
     onResetSearch: () -> Unit,
+    onApplySearch: (SearchFilterState) -> Unit,
     signedIn: Boolean = false,
     savedSpotIds: Set<SpotId> = emptySet(),
     favoriteEnabled: Boolean = true,
@@ -76,12 +74,8 @@ internal fun HomeScreen(
     onOpenAuth: () -> Unit = {},
 ) {
     var favoritesInfo by rememberSaveable { mutableStateOf(false) }
-    val resources = LocalResources.current
-    val filtered =
-        remember(state, filter.query, filter.sport, filter.lighting, filter.surface, resources) {
-            filterSpots((state as? HomeUiState.Content)?.spots.orEmpty(), filter) { it.sportLabel(resources::getString) }
-        }
-    val sorted = remember(filtered, filter.sort, location.center) { sortSpots(filtered, filter.sort, location.center) }
+    val filtered = rememberFilteredSpots((state as? HomeUiState.Content)?.spots.orEmpty(), filter)
+    val sorted = rememberSortedSpots(filtered.orEmpty(), filter.sort, location.center)
     // Keep permission callbacks and cancellation alive when the header scrolls off screen.
     val requestLocation = rememberDeviceLocationRequest(onLocate, onPermissionDenied, onCancelLocation)
 
@@ -97,7 +91,7 @@ internal fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.md),
     ) {
         item {
-            HomeHeader(filter, onSearchQuery, onSearchSport) {
+            HomeHeader(filter, onSearchQuery, onSearchSport, onApplySearch, onResetSearch) {
                 DeviceLocationControl(location, requestLocation)
             }
         }
@@ -116,7 +110,7 @@ internal fun HomeScreen(
                     SpotSearchMessage(stringResource(R.string.home_error_title), state.message, onRetry)
                 }
             is HomeUiState.Content -> {
-                item { HomeMapPreview(filtered, location.center, onOpenMap) }
+                item { HomeMapPreview(filtered.orEmpty(), location.center, resultsPending = filtered == null, onOpenMap = onOpenMap) }
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -140,12 +134,14 @@ internal fun HomeScreen(
                         }
                     }
                 }
-                if (filtered.isEmpty()) {
+                if (filtered == null || sorted == null) {
+                    item { Text(stringResource(R.string.search_filters_updating), style = MaterialTheme.typography.bodyMedium) }
+                } else if (filtered.isEmpty()) {
                     item {
                         SpotFilterEmpty(stringResource(R.string.home_no_matches), onResetSearch)
                     }
                 }
-                items(sorted, key = { "${it.id.source.length}:${it.id.source}${it.id.value}" }) { spot ->
+                items(sorted.orEmpty(), key = { "${it.id.source.length}:${it.id.source}${it.id.value}" }) { spot ->
                     HomeSpotCard(
                         spot,
                         onClick = { onOpenSpot(spot.id) },
@@ -180,6 +176,8 @@ private fun HomeHeader(
     filter: SearchFilterState,
     onQuery: (String) -> Unit,
     onSport: (SportType?) -> Unit,
+    onApply: (SearchFilterState) -> Unit,
+    onReset: () -> Unit,
     locationContent: @Composable () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -199,7 +197,7 @@ private fun HomeHeader(
         }
         locationContent()
         Column(verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs)) {
-            SpotSearchBar(filter, onQuery, onSport)
+            SpotSearchBar(filter, onQuery, onApply, onReset, showRadius = true)
             Text(
                 stringResource(R.string.home_search_scope),
                 color = colors.onSurfaceVariant,
