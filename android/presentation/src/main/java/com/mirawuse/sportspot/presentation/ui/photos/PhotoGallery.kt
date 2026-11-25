@@ -34,6 +34,10 @@ internal fun PhotoGallery(
     target: PhotoTarget,
     model: PhotosViewModel,
     collapsible: Boolean = false,
+    showTitle: Boolean = !collapsible,
+    refreshButton: @Composable (label: Int, enabled: Boolean, onRefresh: () -> Unit) -> Unit = { label, enabled, onRefresh ->
+        PhotoActionButton(label, enabled = enabled, onClick = onRefresh)
+    },
 ) {
     key(target) {
         var expanded by rememberSaveable { mutableStateOf(!collapsible) }
@@ -44,7 +48,7 @@ internal fun PhotoGallery(
                 PhotoActionButton(R.string.photos_review_gallery, icon = R.drawable.ic_photo_visibility) { expanded = true }
             }
         }
-        if (expanded) GalleryContent(target, model, showTitle = !collapsible)
+        if (expanded) GalleryContent(target, model, showTitle, refreshButton)
     }
 }
 
@@ -53,6 +57,7 @@ private fun GalleryContent(
     target: PhotoTarget,
     model: PhotosViewModel,
     showTitle: Boolean,
+    refreshButton: @Composable (label: Int, enabled: Boolean, onRefresh: () -> Unit) -> Unit,
 ) {
     var attempt by rememberSaveable { mutableIntStateOf(0) }
     var opened by rememberSaveable { mutableStateOf<String?>(null) }
@@ -85,7 +90,7 @@ private fun GalleryContent(
                     }
                 }
         }
-        PhotoActionButton(if (error != null) R.string.home_retry else R.string.photos_refresh, enabled = gallery != null) { attempt++ }
+        refreshButton(if (error != null) R.string.home_retry else R.string.photos_refresh, gallery != null) { attempt++ }
     }
     opened?.takeIf { images?.contains(it) == true }?.let { id ->
         AlertDialog(

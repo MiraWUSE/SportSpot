@@ -1,40 +1,61 @@
 package com.mirawuse.sportspot.presentation.ui.photos
 
+import android.app.Activity
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.media.ExifInterface
 import android.net.Uri
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivityResultRegistryOwner
+import androidx.activity.result.ActivityResultRegistry
+import androidx.activity.result.ActivityResultRegistryOwner
+import androidx.activity.result.contract.ActivityResultContract
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasNoClickAction
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertWidthIsAtLeast
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityOptionsCompat
+import androidx.test.platform.app.InstrumentationRegistry
 import com.mirawuse.sportspot.domain.model.auth.AuthState
+import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.photo.MAX_USER_PHOTO_BYTES
 import com.mirawuse.sportspot.domain.model.photo.PhotoAttachment
 import com.mirawuse.sportspot.domain.model.photo.PhotoError
@@ -43,11 +64,16 @@ import com.mirawuse.sportspot.domain.model.photo.PhotoStatus
 import com.mirawuse.sportspot.domain.model.photo.PhotoSubmission
 import com.mirawuse.sportspot.domain.model.photo.PhotoTarget
 import com.mirawuse.sportspot.domain.model.photo.PhotoTargetType
+import com.mirawuse.sportspot.domain.model.spot.SportType
+import com.mirawuse.sportspot.domain.model.spot.Spot
+import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.model.user.UserProfile
 import com.mirawuse.sportspot.domain.model.user.UserRole
 import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.UserPhotoRepository
 import com.mirawuse.sportspot.presentation.R
+import com.mirawuse.sportspot.presentation.ui.details.SpotDetailsScreen
+import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotTheme
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -188,6 +214,101 @@ class UserPhotosUiTest {
     }
 
     @Test
+    fun spotPhotoSectionKeepsOneRefreshAndSendsThePickedImage() {
+        val context = compose.activity.applicationContext
+        val source = File.createTempFile("photo-picker-test", ".jpg", context.cacheDir)
+        try {
+            source.writeBytes(image(128, 64))
+            val photos = FakePhotos(null)
+            val model = PhotosViewModel(context, FakeAuth(profile(alice)), photos)
+            val narrow = mutableStateOf(false)
+            val picker = TestPhotoPicker(Uri.fromFile(source))
+            val spot = Spot(SpotId("osm", "way:7"), "Площадка у набережной", SportType.TENNIS, GeoPoint(56.3, 44.0))
+            compose.setContent {
+                SportSpotTheme(darkTheme = !narrow.value) {
+                    val density = Density(LocalDensity.current.density, if (narrow.value) 1.6f else 1f)
+                    CompositionLocalProvider(
+                        LocalDensity provides density,
+                        LocalActivityResultRegistryOwner provides picker,
+                    ) {
+                        Surface(
+                            modifier = Modifier.size(if (narrow.value) 300.dp else 400.dp, 670.dp).testTag("spot-photo-details"),
+                            color = MaterialTheme.colorScheme.background,
+                        ) {
+                            SpotDetailsScreen(
+                                spotId = spot.id,
+                                state = HomeUiState.Content(listOf(spot)),
+                                onRetry = {},
+                                onBack = {},
+                                onOpenReviews = {},
+                                onShowMap = {},
+                                userPhotos = { SpotUserPhotos(alice, PhotoTarget.spot(it.id), model, onOpenAuth = {}) },
+                            )
+                        }
+                    }
+                }
+            }
+            val heading = SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)
+            val choose = compose.onNodeWithText(label(R.string.photos_choose))
+            val refresh = compose.onNodeWithText(label(R.string.photos_refresh))
+            for (small in listOf(false, true)) {
+                compose.runOnIdle { narrow.value = small }
+                compose.onNode(hasText(label(R.string.photos_gallery)) and heading).performScrollTo().assertIsDisplayed()
+                compose.onNodeWithText(label(R.string.photos_empty_gallery)).performScrollTo().assertIsDisplayed()
+                compose.onNode(hasText(label(R.string.photos_add)) and heading).assertHasNoClickAction()
+                compose.onAllNodesWithText(label(R.string.photos_refresh)).assertCountEquals(1)
+                refresh.performScrollTo().assertHeightIsAtLeast(48.dp).assertIsEnabled()
+                val mine = compose.onNodeWithText(label(R.string.photos_my_uploads)).fetchSemanticsNode().boundsInRoot
+                val refreshTop = refresh.fetchSemanticsNode().boundsInRoot.top
+                assertEquals(small, refreshTop >= mine.bottom)
+                choose
+                    .performScrollTo()
+                    .assertHeightIsAtLeast(48.dp)
+                    .assertWidthIsAtLeast(200.dp)
+                    .assertIsEnabled()
+                captureSpotPhotoDetails(if (small) "spot-photo-light-narrow.png" else "spot-photo-dark.png")
+            }
+            compose.runOnIdle {
+                assertEquals(1, photos.historyReads)
+                assertEquals(1, photos.galleryReads)
+            }
+            refresh.performScrollTo().performClick()
+            compose.runOnIdle {
+                assertEquals(2, photos.historyReads)
+                assertEquals(2, photos.galleryReads)
+            }
+            choose.performScrollTo().performClick()
+            val send = label(R.string.photos_send)
+            compose.waitUntil(5_000) { compose.onAllNodesWithText(send).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText(send).performScrollTo().performClick()
+            compose.onNodeWithText(label(R.string.photos_pending)).performScrollTo().assertIsDisplayed()
+            compose.runOnIdle {
+                assertEquals(1, picker.launches)
+                assertEquals(alice, photos.uploads.single().ownerId)
+                assertEquals(target, photos.uploads.single().target)
+            }
+        } finally {
+            source.delete()
+        }
+    }
+
+    @Test
+    fun guestSeesTheUploadHeadingAndUsesTheExistingSignInAction() {
+        val model = PhotosViewModel(compose.activity.applicationContext, FakeAuth(AuthState.Guest), FakePhotos(null))
+        var signIns = 0
+        compose.setContent {
+            SportSpotTheme {
+                SpotUserPhotos(null, target, model) { signIns++ }
+            }
+        }
+        compose.onNodeWithText(label(R.string.photos_add)).assertHasNoClickAction()
+        compose.onNodeWithText(label(R.string.photos_choose)).assertDoesNotExist()
+        compose.onNodeWithText(label(R.string.photos_refresh_gallery)).assertIsEnabled()
+        compose.onNodeWithText(label(R.string.content_open_auth)).performClick()
+        compose.runOnIdle { assertEquals(1, signIns) }
+    }
+
+    @Test
     fun preparationResizesJpegStripsGpsAndRejectsNonImages() =
         runBlocking {
             val context = compose.activity.applicationContext
@@ -221,6 +342,37 @@ class UserPhotosUiTest {
 
     private fun label(res: Int) = compose.activity.getString(res)
 
+    private fun captureSpotPhotoDetails(fileName: String) {
+        if (InstrumentationRegistry.getArguments().getString("spotPhotoScreenshots") != "true") return
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val bitmap = compose.onNodeWithTag("spot-photo-details").captureToImage().asAndroidBitmap()
+        context.filesDir
+            .resolve(fileName)
+            .outputStream()
+            .use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    private class TestPhotoPicker(
+        private val chosen: Uri,
+    ) : ActivityResultRegistryOwner {
+        var launches = 0
+            private set
+
+        override val activityResultRegistry =
+            object : ActivityResultRegistry() {
+                override fun <I, O> onLaunch(
+                    requestCode: Int,
+                    contract: ActivityResultContract<I, O>,
+                    input: I,
+                    options: ActivityOptionsCompat?,
+                ) {
+                    assertTrue(contract is ActivityResultContracts.PickMultipleVisualMedia)
+                    launches++
+                    dispatchResult(requestCode, Activity.RESULT_OK, Intent().setData(chosen))
+                }
+            }
+    }
+
     private fun profile(
         id: String,
         role: UserRole = UserRole.USER,
@@ -250,31 +402,40 @@ class UserPhotosUiTest {
     }
 
     private class FakePhotos(
-        private val item: PhotoSubmission,
+        private val item: PhotoSubmission?,
     ) : UserPhotoRepository {
         var approved = false
         var lastPreviewOwner: String? = "No image requested"
         var readQueue: suspend (String?) -> List<PhotoSubmission> = { emptyList() }
         val queueRequests = mutableListOf<String?>()
         val decisions = mutableListOf<Triple<String, String, String?>>()
+        val uploads = mutableListOf<PhotoSubmission>()
+        var galleryReads = 0
+        var historyReads = 0
 
         override suspend fun upload(
             ownerId: String,
             target: PhotoTarget,
             attachment: PhotoAttachment,
-        ): PhotoSubmission = error("Unexpected upload")
+        ): PhotoSubmission = PhotoSubmission(attachment.id, ownerId, target, PhotoStatus.PENDING, null).also { uploads.add(it) }
 
         override suspend fun mine(
             ownerId: String,
             target: PhotoTarget,
-        ) = listOf(item).filter { it.ownerId == ownerId && it.target == target }
+        ): List<PhotoSubmission> {
+            historyReads++
+            return (listOfNotNull(item) + uploads).filter { it.ownerId == ownerId && it.target == target }
+        }
 
         override suspend fun remove(
             ownerId: String,
             photoId: String,
         ) = Unit
 
-        override suspend fun gallery(target: PhotoTarget) = if (approved && item.target == target) listOf(item.id) else emptyList()
+        override suspend fun gallery(target: PhotoTarget): List<String> {
+            galleryReads++
+            return if (approved && item?.target == target) listOf(item.id) else emptyList()
+        }
 
         override suspend fun image(
             photoId: String,
