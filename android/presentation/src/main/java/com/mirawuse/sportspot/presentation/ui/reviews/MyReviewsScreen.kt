@@ -35,9 +35,10 @@ internal fun MyReviewsScreen(
     onBack: () -> Unit,
     onOpenAuth: () -> Unit,
     onSearch: () -> Unit,
+    reviewRevision: Int,
     onOpenReviews: (SpotId) -> Unit,
 ) {
-    LifecycleResumeEffect(owner, restoring) {
+    LifecycleResumeEffect(owner, restoring, reviewRevision) {
         if (!restoring) viewModel.load(owner)
         onPauseOrDispose { viewModel.clear() }
     }
@@ -79,7 +80,7 @@ internal fun MyReviewsScreen(
                 state is DomainResult.Success ->
                     items(state.value, key = { it.id }) { review ->
                         val spotName =
-                            spotNames[review.spotId] ?: stringResource(
+                            spotNames[review.spotId] ?: viewModel.cachedSpotNames[review.spotId] ?: stringResource(
                                 R.string.my_reviews_spot,
                                 review.spotId.source,
                                 review.spotId.value,

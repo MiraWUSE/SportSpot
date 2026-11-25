@@ -28,17 +28,22 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.mirawuse.sportspot.domain.model.auth.AuthState
+import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.review.Review
+import com.mirawuse.sportspot.domain.model.spot.SportType
+import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.model.user.UserProfile
 import com.mirawuse.sportspot.domain.model.user.UserRole
 import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.ReviewRepository
+import com.mirawuse.sportspot.domain.repository.SpotRepository
 import com.mirawuse.sportspot.domain.result.DomainError
 import com.mirawuse.sportspot.domain.result.DomainOperationException
 import com.mirawuse.sportspot.presentation.ui.navigation.ReviewFormRoute
 import com.mirawuse.sportspot.presentation.ui.navigation.ReviewsRoute
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotTheme
+import kotlinx.coroutines.CompletableDeferred
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -89,17 +94,22 @@ class MyReviewsUiTest {
         compose.onNodeWithText("Есть сетка").assertDoesNotExist()
 
         compose.onNodeWithText("Теннис").performClick()
+        val deletion = CompletableDeferred<Unit>()
+        compose.runOnIdle { repository.deletion = deletion }
         compose.onNodeWithText("Удалить отзыв").performScrollTo().performClick()
         compose.onNodeWithText("Удалить ваш отзыв об этой площадке?").assertIsDisplayed()
         compose.onNode(hasText("Удалить отзыв") and hasAnyAncestor(isDialog())).performClick()
         compose.onNodeWithContentDescription("Назад").performClick()
+        compose.onNodeWithText("Заменили сетку").assertIsDisplayed()
+        compose.runOnIdle { deletion.complete(Unit) }
         compose.onNodeWithText("Вы пока не оставили отзывов").assertIsDisplayed()
         compose.onNodeWithText("Найти площадку").assertIsDisplayed()
     }
 
     @Test
     fun switchingAccountsHidesPreviousReviewsAndRetryDistinguishesErrorFromEmpty() {
-        setContent()
+        setContent(mapOf(spot to "Корт из кеша"))
+        compose.onNodeWithText("Корт из кеша").assertIsDisplayed()
         compose.onNodeWithText("Есть сетка").assertIsDisplayed()
         compose.runOnIdle {
             repository.offline = true
@@ -117,8 +127,22 @@ class MyReviewsUiTest {
         compose.onNodeWithText("Есть сетка").assertDoesNotExist()
     }
 
-    private fun setContent() {
-        val myReviews = MyReviewsViewModel(auth, repository)
+    private fun setContent(cachedNames: Map<SpotId, String> = emptyMap()) {
+        val cache =
+            object : SpotRepository {
+                override suspend fun getCachedSpotNames(ids: Set<SpotId>): Map<SpotId, String> = cachedNames.filterKeys { it in ids }
+
+                override suspend fun getSpots(): List<Spot> = error("Unexpected catalog request")
+
+                override suspend fun getSpotById(id: SpotId): Spot? = error("Unexpected spot lookup")
+
+                override suspend fun searchNearby(
+                    center: GeoPoint,
+                    radiusMeters: Int,
+                    sportType: SportType?,
+                ): List<Spot> = error("Unexpected search")
+            }
+        val myReviews = MyReviewsViewModel(auth, repository, cache)
         val reviews = ReviewsViewModel(auth, repository)
         compose.setContent {
             val controller = rememberNavController()
@@ -132,7 +156,7 @@ class MyReviewsUiTest {
                     Box(Modifier.width(320.dp)) {
                         NavHost(controller, startDestination = "my") {
                             composable("my") {
-                                MyReviewsScreen(owner, false, myReviews, emptyMap(), ::back, {}, {}) {
+                                MyReviewsScreen(owner, false, myReviews, emptyMap(), ::back, {}, {}, reviews.revision) {
                                     controller.navigate(ReviewsRoute(it.source, it.value))
                                 }
                             }
@@ -180,6 +204,7 @@ class MyReviewsUiTest {
         private var review: Review?,
     ) : ReviewRepository {
         var offline = false
+        var deletion: CompletableDeferred<Unit>? = null
 
         override suspend fun getReviewsByUser(userId: String): List<Review> {
             if (offline) throw DomainOperationException(DomainError.Unavailable)
@@ -209,6 +234,7 @@ class MyReviewsUiTest {
             reviewId: String,
         ) {
             owned(userId, reviewId)
+            deletion?.await()
             review = null
         }
 

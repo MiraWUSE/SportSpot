@@ -10,6 +10,8 @@ interface SpotRepository {
 
     suspend fun getSpotById(id: SpotId): Spot?
 
+    suspend fun getCachedSpotNames(ids: Set<SpotId>): Map<SpotId, String> = emptyMap()
+
     suspend fun searchNearby(
         center: GeoPoint,
         radiusMeters: Int,

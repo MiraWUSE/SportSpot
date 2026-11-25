@@ -378,6 +378,7 @@ fun SportSpotApp() {
                     onBack = { navController.popBackStack() },
                     onOpenAuth = { navController.navigate(AUTH_ROUTE) },
                     onSearch = { navController.selectTab(Tab.HOME) },
+                    reviewRevision = reviews.revision,
                     onOpenReviews = { navController.navigate(ReviewsRoute(it.source, it.value)) },
                 )
             }
