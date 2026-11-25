@@ -1,5 +1,6 @@
 package com.mirawuse.sportspot.presentation.ui.map
 
+import android.graphics.PointF
 import android.graphics.RectF
 import android.os.Handler
 import android.os.Looper
@@ -90,6 +91,53 @@ class OsmMapTest {
         compose.runOnIdle { showing.value = false }
         compose.waitForIdle()
         compose.activityRule.scenario.onActivity { MapLibre.setConnected(null) }
+    }
+
+    @Test
+    fun picksAnEmptyLocationAndKeepsTheMarkerAtItsCoordinatesAfterPanning() {
+        val center = GeoPoint(56.3269, 44.0059)
+        val point = mutableStateOf<GeoPoint?>(null)
+        compose.setContent {
+            SportSpotTheme {
+                if (showing.value) {
+                    OsmMap(
+                        center = center,
+                        spots = emptyList(),
+                        selectedId = null,
+                        isInteractive = true,
+                        modifier = Modifier.size(300.dp),
+                        networkStatus = MapNetworkStatus.NO_NETWORK,
+                        pickedPoint = point.value,
+                        onMapTap = { point.value = it },
+                    )
+                }
+            }
+        }
+        val map = nativeMap()
+        waitForCamera(map, center, 13.5)
+        assertEquals(null, point.value)
+
+        val expectedFirst = tapAt(map, 0.35f, 0.55f)
+        compose.waitUntil(5_000) { point.value != null }
+        val first = checkNotNull(point.value)
+        assertEquals(expectedFirst.latitude, first.latitude, 0.000001)
+        assertEquals(expectedFirst.longitude, first.longitude, 0.000001)
+        waitForPickedMarker(map, first)
+
+        val expectedSecond = tapAt(map, 0.65f, 0.60f)
+        compose.waitUntil(5_000) { point.value != first }
+        val second = checkNotNull(point.value)
+        assertEquals(expectedSecond.latitude, second.latitude, 0.000001)
+        assertEquals(expectedSecond.longitude, second.longitude, 0.000001)
+        waitForPickedMarker(map, second)
+
+        val moved = center.copy(longitude = center.longitude + 0.0008)
+        compose.runOnIdle {
+            map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(moved.latitude, moved.longitude), 14.0))
+        }
+        waitForCamera(map, moved, 14.0)
+        waitForPickedMarker(map, second)
+        assertEquals(second, point.value)
     }
 
     @Test
@@ -523,6 +571,44 @@ class OsmMapTest {
             compose.activityRule.scenario.onActivity {
                 MapLibre.setModuleProvider(original)
                 MapLibre.setConnected(false)
+            }
+        }
+    }
+
+    private fun tapAt(
+        map: MapLibreMap,
+        xFraction: Float,
+        yFraction: Float,
+    ): LatLng {
+        val expected = AtomicReference<LatLng>()
+        onView(isAssignableFrom(MapView::class.java)).perform(
+            GeneralClickAction(
+                Tap.SINGLE,
+                { view ->
+                    val x = view.width * xFraction
+                    val y = view.height * yFraction
+                    val origin = IntArray(2)
+                    view.getLocationOnScreen(origin)
+                    expected.set(map.projection.fromScreenLocation(PointF(x, y)))
+                    floatArrayOf(origin[0] + x, origin[1] + y)
+                },
+                Press.FINGER,
+                InputDevice.SOURCE_TOUCHSCREEN,
+                MotionEvent.BUTTON_PRIMARY,
+            ),
+        )
+        return expected.get()
+    }
+
+    private fun waitForPickedMarker(
+        map: MapLibreMap,
+        point: GeoPoint,
+    ) {
+        compose.waitUntil(5_000) {
+            compose.runOnIdle {
+                val screen = map.projection.toScreenLocation(LatLng(point.latitude, point.longitude))
+                val area = RectF(screen.x - 4, screen.y - 4, screen.x + 4, screen.y + 4)
+                map.queryRenderedFeatures(area, MAP_PICKED_POINT_LAYER).isNotEmpty()
             }
         }
     }
