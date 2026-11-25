@@ -332,6 +332,7 @@ fun SportSpotApp() {
             }
             composable(PROPOSAL_ROUTE) { entry ->
                 val photos: PhotosViewModel = hiltViewModel(entry)
+                val location by searchViewModel(navController, entry).location.collectAsStateWithLifecycle()
                 val submission = proposals.submissionFor(accountId)
                 val saved = (submission as? DomainResult.Success)?.value
                 val ready = photos.readyFor(accountId)
@@ -349,6 +350,7 @@ fun SportSpotApp() {
                     onSubmit = { name, sport, point, address ->
                         accountId?.let { proposals.submit(it, name, sport, point, address) }
                     },
+                    mapCenter = location.center,
                     photoAttachments = { proposal ->
                         if (accountId != null) {
                             PhotoEditor(

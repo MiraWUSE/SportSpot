@@ -78,6 +78,8 @@ import org.maplibre.geojson.Point
 
 internal const val MAP_SPOT_SOURCE = "sportspot-spots"
 private const val SPOT_LAYER = "sportspot-markers"
+private const val PICKED_POINT_SOURCE = "sportspot-picked-point"
+internal const val MAP_PICKED_POINT_LAYER = "sportspot-picked-marker"
 
 private enum class MapLoadState { LOADING, READY, ERROR }
 
@@ -96,6 +98,8 @@ internal fun OsmMap(
     onViewportMoveStarted: (() -> Unit)? = null,
     onViewportIdle: ((MapViewport, MapViewport?) -> Unit)? = null,
     onSpotVisibility: ((MapSpotVisibility) -> Unit)? = null,
+    pickedPoint: GeoPoint? = null,
+    onMapTap: ((GeoPoint) -> Unit)? = null,
     overlay: @Composable BoxScope.() -> Unit = {},
 ) {
     var attempt by remember { mutableIntStateOf(0) }
@@ -133,6 +137,8 @@ internal fun OsmMap(
                         onViewportMoveStarted = onViewportMoveStarted.takeIf { isInteractive },
                         onViewportIdle = onViewportIdle.takeIf { isInteractive },
                         onSpotVisibility = onSpotVisibility,
+                        pickedPoint = pickedPoint,
+                        onMapTap = onMapTap,
                     )
                 }
             } else {
@@ -182,6 +188,8 @@ private fun NativeOsmMap(
     onViewportMoveStarted: (() -> Unit)?,
     onViewportIdle: ((MapViewport, MapViewport?) -> Unit)?,
     onSpotVisibility: ((MapSpotVisibility) -> Unit)?,
+    pickedPoint: GeoPoint?,
+    onMapTap: ((GeoPoint) -> Unit)?,
 ) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
@@ -199,6 +207,7 @@ private fun NativeOsmMap(
     val currentSpots by rememberUpdatedState(spots)
     val currentSelected by rememberUpdatedState(selectedId)
     val select by rememberUpdatedState(onSelect)
+    val mapTap by rememberUpdatedState(onMapTap)
     val saveCamera by rememberUpdatedState(onCameraSaved)
     val viewportMoveStarted by rememberUpdatedState(onViewportMoveStarted)
     val viewportIdle by rememberUpdatedState(onViewportIdle)
@@ -288,6 +297,12 @@ private fun NativeOsmMap(
                 MapLibreMap.OnMapClickListener { point ->
                     val map = nativeMap
                     if (disposed || map == null) return@OnMapClickListener false
+                    val pick = mapTap
+                    if (pick != null) {
+                        val coordinate = point.toViewportPoint()?.takeIf { isMapCoordinate(it.latitude, it.longitude) }
+                        coordinate?.let(pick)
+                        return@OnMapClickListener coordinate != null
+                    }
                     val touch = map.projection.toScreenLocation(point)
                     val radius = 20 * context.resources.displayMetrics.density
                     val hits =
@@ -444,6 +459,30 @@ private fun NativeOsmMap(
                 map.moveCamera(CameraUpdateFactory.newCameraPosition(savedCamera))
             }
             onCameraApplied()
+        }
+        if (onMapTap != null) {
+            LaunchedEffect(style, pickedPoint, colors.primary, colors.onPrimary) {
+                val loaded = style ?: return@LaunchedEffect
+                val marker =
+                    pickedPoint?.takeIf { isMapCoordinate(it.latitude, it.longitude) }?.let {
+                        Feature.fromGeometry(Point.fromLngLat(it.longitude, it.latitude))
+                    }
+                val features = FeatureCollection.fromFeatures(listOfNotNull(marker))
+                val source = loaded.getSourceAs<GeoJsonSource>(PICKED_POINT_SOURCE)
+                if (source == null) {
+                    if (marker == null) return@LaunchedEffect
+                    loaded.addSource(GeoJsonSource(PICKED_POINT_SOURCE, features))
+                    loaded.addLayer(CircleLayer(MAP_PICKED_POINT_LAYER, PICKED_POINT_SOURCE))
+                } else {
+                    source.setGeoJson(features)
+                }
+                loaded.getLayerAs<CircleLayer>(MAP_PICKED_POINT_LAYER)?.setProperties(
+                    circleRadius(10f),
+                    circleColor(colors.primary.toArgb()),
+                    circleStrokeColor(colors.onPrimary.toArgb()),
+                    circleStrokeWidth(3f),
+                )
+            }
         }
         // A list choice may reveal an offscreen point. Marker taps keep the current camera.
         LaunchedEffect(style, selectionFocusRequest) {

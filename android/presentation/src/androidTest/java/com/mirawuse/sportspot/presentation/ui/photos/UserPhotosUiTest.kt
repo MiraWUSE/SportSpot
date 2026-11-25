@@ -7,6 +7,8 @@ import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.media.ExifInterface
 import android.net.Uri
+import android.view.InputDevice
+import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.result.ActivityResultRegistry
@@ -36,11 +38,14 @@ import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -50,9 +55,17 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityOptionsCompat
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.Espresso.pressBack
+import androidx.test.espresso.action.GeneralClickAction
+import androidx.test.espresso.action.Press
+import androidx.test.espresso.action.Tap
+import androidx.test.espresso.action.ViewActions.swipeUp
+import androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom
 import androidx.test.platform.app.InstrumentationRegistry
 import com.mirawuse.sportspot.domain.model.auth.AuthState
 import com.mirawuse.sportspot.domain.model.location.GeoPoint
@@ -64,6 +77,7 @@ import com.mirawuse.sportspot.domain.model.photo.PhotoStatus
 import com.mirawuse.sportspot.domain.model.photo.PhotoSubmission
 import com.mirawuse.sportspot.domain.model.photo.PhotoTarget
 import com.mirawuse.sportspot.domain.model.photo.PhotoTargetType
+import com.mirawuse.sportspot.domain.model.proposal.SpotProposal
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
@@ -72,8 +86,12 @@ import com.mirawuse.sportspot.domain.model.user.UserRole
 import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.UserPhotoRepository
 import com.mirawuse.sportspot.presentation.R
+import com.mirawuse.sportspot.presentation.ui.components.labelRes
 import com.mirawuse.sportspot.presentation.ui.details.SpotDetailsScreen
 import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
+import com.mirawuse.sportspot.presentation.ui.map.OsmMapTiles
+import com.mirawuse.sportspot.presentation.ui.proposal.ProposalCoordinates
+import com.mirawuse.sportspot.presentation.ui.proposal.ProposalScreen
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotTheme
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -83,8 +101,13 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import org.maplibre.android.MapLibre
+import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.MapView
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.concurrent.atomic.AtomicReference
+import kotlin.math.abs
 
 class UserPhotosUiTest {
     @get:Rule
@@ -309,6 +332,161 @@ class UserPhotosUiTest {
     }
 
     @Test
+    fun proposalMapPreservesTheFormAndPhotosThroughConfirmCancelAndRestore() {
+        val context = compose.activity.applicationContext
+        val source = File.createTempFile("proposal-photo", ".jpg", context.cacheDir)
+        val showing = mutableStateOf(true)
+        compose.activityRule.scenario.onActivity {
+            OsmMapTiles.initialize(it)
+            MapLibre.setConnected(false)
+        }
+        try {
+            source.writeBytes(image(128, 64))
+            val picker = TestPhotoPicker(Uri.fromFile(source))
+            val auth = FakeAuth(profile(alice))
+            val photos = FakePhotos(null)
+            val model = PhotosViewModel(context, auth, photos)
+            val busy = mutableStateOf(false)
+            val center = GeoPoint(56.3269, 44.0059)
+            val manual = ProposalCoordinates("56,4500001", "44,2000002")
+            val restoration = StateRestorationTester(compose)
+            var submitted: SpotProposal? = null
+            restoration.setContent {
+                SportSpotTheme(darkTheme = true) {
+                    val authState by auth.authState.collectAsState()
+                    val owner = (authState as? AuthState.Authenticated)?.profile?.id
+                    CompositionLocalProvider(
+                        LocalDensity provides Density(LocalDensity.current.density * 1.35f, 1.5f),
+                        LocalActivityResultRegistryOwner provides picker,
+                    ) {
+                        if (showing.value) {
+                            ProposalScreen(
+                                owner = owner,
+                                restoring = false,
+                                busy = busy.value,
+                                submission = null,
+                                onBack = {},
+                                onOpenAuth = {},
+                                onViewProposals = {},
+                                onSubmit = { name, sport, point, address ->
+                                    submitted = SpotProposal("test-proposal", alice, name, sport, point, address = address)
+                                },
+                                mapCenter = center,
+                            ) {
+                                if (owner != null) PhotoEditor(owner, PhotoTargetType.PROPOSAL.limit, model)
+                            }
+                        }
+                    }
+                }
+            }
+            val name = compose.onNodeWithContentDescription(label(R.string.proposal_name))
+            val address = compose.onNodeWithContentDescription(label(R.string.proposal_address))
+            val latitude = compose.onNodeWithContentDescription(label(R.string.proposal_latitude))
+            val longitude = compose.onNodeWithContentDescription(label(R.string.proposal_longitude))
+            val open = compose.onNodeWithText(label(R.string.proposal_map_open))
+            val confirm = compose.onNodeWithText(label(R.string.proposal_map_confirm))
+            val discard = compose.onNodeWithText(label(R.string.photos_discard))
+            name.performScrollTo().performTextInput("Корт у парка")
+            address.performScrollTo().performTextInput("Южный вход")
+            compose.onNodeWithText(label(R.string.proposal_sport_hint)).performScrollTo().performClick()
+            compose.onNodeWithText(label(SportType.TENNIS.labelRes())).performClick()
+            compose.onNodeWithText(label(R.string.photos_choose)).performScrollTo().performClick()
+            compose.waitUntil(5_000) { compose.onAllNodesWithText(label(R.string.photos_discard)).fetchSemanticsNodes().isNotEmpty() }
+            discard.performScrollTo().assertIsDisplayed()
+            val attachmentId =
+                compose.runOnIdle {
+                    model
+                        .draftFor(alice)
+                        .attachments
+                        .single()
+                        .id
+                }
+
+            open.performScrollTo().performClick()
+            compose.onNodeWithText(label(R.string.proposal_map_title)).assertIsDisplayed()
+            compose.onNodeWithText(label(R.string.map_attribution)).performScrollTo().assertIsDisplayed()
+            confirm.performScrollTo().assertIsNotEnabled()
+            awaitMapAt(center)
+            tapProposalMap()
+            val chosen = displayedProposalPoint()
+            val map = awaitMapAt(center)
+            onView(isAssignableFrom(MapView::class.java)).perform(swipeUp())
+            compose.waitUntil(5_000) {
+                compose.runOnIdle {
+                    abs(checkNotNull(map.cameraPosition.target).latitude - center.latitude) > 0.0001
+                }
+            }
+            assertEquals(chosen, displayedProposalPoint())
+            restoration.emulateSavedInstanceStateRestore()
+            assertEquals(chosen, displayedProposalPoint())
+            compose.runOnIdle { busy.value = true }
+            confirm.performScrollTo().assertIsNotEnabled()
+            compose.runOnIdle { busy.value = false }
+            confirm.performScrollTo().performClick()
+            latitude.performScrollTo().assertTextContains(chosen.latitude)
+            longitude.performScrollTo().assertTextContains(chosen.longitude)
+
+            open.performScrollTo().performClick()
+            awaitMapAt(checkNotNull(chosen.pointOrNull()))
+            assertEquals(chosen, displayedProposalPoint())
+            tapProposalMap()
+            assertTrue(displayedProposalPoint() != chosen)
+            compose.onNodeWithText(label(R.string.content_cancel)).performScrollTo().performClick()
+            longitude.performScrollTo().assertTextContains(chosen.longitude)
+            latitude.performScrollTo().assertTextContains(chosen.latitude)
+
+            latitude.performScrollTo().performTextReplacement(manual.latitude)
+            longitude.performScrollTo().performTextReplacement(manual.longitude)
+            open.performScrollTo().performClick()
+            awaitMapAt(checkNotNull(manual.pointOrNull()))
+            assertEquals(ProposalCoordinates.fromPoint(checkNotNull(manual.pointOrNull())), displayedProposalPoint())
+            tapProposalMap()
+            pressBack()
+            latitude.performScrollTo().assertTextContains(manual.latitude)
+            longitude.performScrollTo().assertTextContains(manual.longitude)
+            discard.performScrollTo().assertIsDisplayed()
+            compose.runOnIdle {
+                assertNull(submitted)
+                assertTrue(photos.uploads.isEmpty())
+                assertEquals(
+                    attachmentId,
+                    model
+                        .draftFor(alice)
+                        .attachments
+                        .single()
+                        .id,
+                )
+            }
+            open.performScrollTo().performClick()
+            awaitMapAt(checkNotNull(manual.pointOrNull()))
+            tapProposalMap()
+            val finalPoint = displayedProposalPoint()
+            confirm.performScrollTo().performClick()
+            compose.onNodeWithText(label(R.string.proposal_submit)).performScrollTo().performClick()
+            compose.runOnIdle {
+                assertEquals(
+                    SpotProposal(
+                        "test-proposal",
+                        alice,
+                        "Корт у парка",
+                        SportType.TENNIS,
+                        checkNotNull(finalPoint.pointOrNull()),
+                        address = "Южный вход",
+                    ),
+                    submitted,
+                )
+                auth.authState.value = profile(bob)
+            }
+            compose.onNodeWithText("Корт у парка").assertDoesNotExist()
+            discard.assertDoesNotExist()
+        } finally {
+            compose.runOnIdle { showing.value = false }
+            compose.activityRule.scenario.onActivity { MapLibre.setConnected(null) }
+            source.delete()
+        }
+    }
+
+    @Test
     fun preparationResizesJpegStripsGpsAndRejectsNonImages() =
         runBlocking {
             val context = compose.activity.applicationContext
@@ -339,6 +517,46 @@ class UserPhotosUiTest {
             }
             Unit
         }
+
+    private fun awaitMapAt(center: GeoPoint): MapLibreMap {
+        val map = AtomicReference<MapLibreMap>()
+        onView(isAssignableFrom(MapView::class.java)).check { view, _ -> (view as MapView).getMapAsync { map.set(it) } }
+        compose.waitUntil(10_000) {
+            compose.runOnIdle {
+                val target = map.get()?.cameraPosition?.target
+                target != null && abs(target.latitude - center.latitude) < 0.0001 && abs(target.longitude - center.longitude) < 0.0001
+            }
+        }
+        return checkNotNull(map.get())
+    }
+
+    private fun tapProposalMap() {
+        onView(isAssignableFrom(MapView::class.java)).perform(
+            GeneralClickAction(
+                Tap.SINGLE,
+                { view ->
+                    val origin = IntArray(2)
+                    view.getLocationOnScreen(origin)
+                    floatArrayOf(origin[0] + view.width * 0.63f, origin[1] + view.height * 0.55f)
+                },
+                Press.FINGER,
+                InputDevice.SOURCE_TOUCHSCREEN,
+                MotionEvent.BUTTON_PRIMARY,
+            ),
+        )
+    }
+
+    private fun displayedProposalPoint(): ProposalCoordinates {
+        val text =
+            compose
+                .onNodeWithText("Широта:", substring = true)
+                .fetchSemanticsNode()
+                .config[SemanticsProperties.Text]
+                .single()
+                .text
+        val (latitude, longitude) = text.lines().map { it.substringAfter(": ") }
+        return ProposalCoordinates(latitude, longitude)
+    }
 
     private fun label(res: Int) = compose.activity.getString(res)
 

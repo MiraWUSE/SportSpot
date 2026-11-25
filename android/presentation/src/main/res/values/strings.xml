@@ -170,6 +170,13 @@
     <string name="proposal_address">Адрес или район (необязательно)</string>
     <string name="proposal_address_hint">Укажите местоположение</string>
     <string name="proposal_coordinates">Координаты</string>
+    <string name="proposal_coordinates_hint">Укажите место площадки на карте или введите координаты вручную.</string>
+    <string name="proposal_map_open">Выбрать на карте</string>
+    <string name="proposal_map_title">Выберите точку на карте</string>
+    <string name="proposal_map_hint">Нажмите на карту, где находится площадка.</string>
+    <string name="proposal_map_confirm">Подтвердить точку</string>
+    <string name="proposal_map_selected">Широта: %1$s\nДолгота: %2$s</string>
+    <string name="proposal_map_point_unavailable">Эта точка за пределами карты. Выберите другую или вернитесь к ручному вводу.</string>
     <string name="proposal_latitude">Широта</string>
     <string name="proposal_longitude">Долгота</string>
 
