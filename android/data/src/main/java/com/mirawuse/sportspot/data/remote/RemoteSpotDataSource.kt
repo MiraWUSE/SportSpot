@@ -14,6 +14,7 @@ class RemoteSpotDataSource
     constructor(
         private val api: SpotApi,
         private val calls: NetworkCall,
+        private val diagnostics: SpotSearchDiagnostics = SpotSearchDiagnostics(),
     ) {
         suspend fun getSpots(): List<Spot> =
             calls.execute {
@@ -42,9 +43,13 @@ class RemoteSpotDataSource
 
         internal suspend fun searchNearby(request: SpotSearchRequest): List<Spot> =
             calls.execute {
-                val response = api.searchSpots(request.latitude, request.longitude, request.radiusMeters, request.sport)
-                val osm = calls.body(response).toDomain()
-                (osm + getCommunitySpots(request)).distinctBy(Spot::id)
+                val payload =
+                    diagnostics.stage("function.decode") {
+                        calls.body(api.searchSpots(request.latitude, request.longitude, request.radiusMeters, request.sport))
+                    }
+                val osm = diagnostics.stage("function.map") { payload.toDomain() }
+                val community = diagnostics.stage("community") { getCommunitySpots(request) }
+                (osm + community).distinctBy(Spot::id)
             }
 
         private suspend fun getCommunitySpots(request: SpotSearchRequest): List<Spot> {

@@ -78,7 +78,7 @@ class NetworkClientTest {
     }
 
     @Test
-    fun `debug logs contain only safe path status and duration`() {
+    fun `debug logs trace response body without logging request or response data`() {
         val logs = mutableListOf<String>()
         server.enqueue(MockResponse().setBody("secret-response-body").addHeader("Set-Cookie", "secret-cookie"))
         val config = NetworkConfig(server.url("/"), "test-publishable-key", debugLogging = true)
@@ -91,17 +91,18 @@ class NetworkClientTest {
                 .build()
         client.newCall(request).execute().use { it.body?.string() }
 
-        val log = logs.single()
-        assertTrue(log.contains("GET /functions/v1/search-sports-spots-v1 -> 200"))
+        assertTrue(logs.any { it.startsWith("GET /functions/v1/search-sports-spots-v1 -> 200 ") })
+        assertTrue(logs.any { it.startsWith("wire.body.start /functions/v1/search-sports-spots-v1 ") })
+        assertTrue(logs.any { it.startsWith("wire.body.end /functions/v1/search-sports-spots-v1 ") })
         listOf("56.3269", "44.0059", "test.user.token", "test-publishable-key", "secret-", "Cookie", "Authorization", "apikey")
-            .forEach { assertFalse(log.contains(it)) }
+            .forEach { value -> assertFalse(logs.any { it.contains(value) }) }
     }
 
     @Test
     fun `release logs are disabled`() {
         val logs = mutableListOf<String>()
-        server.enqueue(MockResponse())
-        create(NetworkConfig(server.url("/")), null, logs).newCall(request()).execute().close()
+        server.enqueue(MockResponse().setBody("[]"))
+        create(NetworkConfig(server.url("/")), null, logs).newCall(request()).execute().use { it.body?.string() }
         assertTrue(logs.isEmpty())
     }
 
@@ -119,8 +120,9 @@ class NetworkClientTest {
             client.newCall(Request.Builder().url(server.url("/rest/v1/spots?private=sensitive-query")).build()).execute()
         }
 
-        assertTrue(logs.single().contains("GET /rest/v1/spots -> failed"))
-        assertFalse(logs.single().contains("sensitive-"))
+        assertTrue(logs.any { it.startsWith("GET /rest/v1/spots -> failed ") })
+        assertTrue(logs.any { it.startsWith("wire.failed /rest/v1/spots cause=IOException ") })
+        assertFalse(logs.any { it.contains("sensitive-") })
         assertEquals(0, server.requestCount)
     }
 

@@ -4,6 +4,7 @@ import com.mirawuse.sportspot.data.local.CacheClock
 import com.mirawuse.sportspot.data.local.CacheSnapshot
 import com.mirawuse.sportspot.data.local.RoomSpotCache
 import com.mirawuse.sportspot.data.remote.RemoteSpotDataSource
+import com.mirawuse.sportspot.data.remote.SpotSearchDiagnostics
 import com.mirawuse.sportspot.data.remote.connectivity.NetworkMonitor
 import com.mirawuse.sportspot.data.remote.error.NetworkError
 import com.mirawuse.sportspot.data.remote.error.NetworkException
@@ -28,6 +29,7 @@ class SpotRepositoryImpl
         private val cache: RoomSpotCache,
         private val monitor: NetworkMonitor,
         private val clock: CacheClock,
+        private val diagnostics: SpotSearchDiagnostics = SpotSearchDiagnostics(),
     ) : SpotRepository {
         // The saved list and individual details update the same Room rows.
         private val savedMutex = Mutex()
@@ -92,29 +94,30 @@ class SpotRepositoryImpl
             sportType: SportType?,
             refresh: Boolean,
             permitNetwork: (() -> Boolean)? = null,
-        ): List<Spot> {
-            val request = validatedSearchRequest(center, radiusMeters, sportType)
-            val key = request.cacheKey
-            return searchMutex.withLock {
-                readOrRefresh(
-                    ttlMillis = if (refresh) 0L else SEARCH_TTL_MILLIS,
-                    readCache = { cache.readSearch(key) },
-                    fetchRemote = { cached ->
-                        if (permitNetwork != null && !permitNetwork()) throw ViewportDeferred()
-                        try {
-                            remote.searchNearby(request)
-                        } catch (failure: NetworkException) {
-                            val http = failure.error as? NetworkError.Http
-                            if (permitNetwork != null && http?.status == 429) {
-                                throw ViewportRateLimited(ViewportSearchResult.RateLimited(http.retryAfterSeconds, cached))
+        ): List<Spot> =
+            diagnostics.stage("search") {
+                val request = validatedSearchRequest(center, radiusMeters, sportType)
+                val key = request.cacheKey
+                searchMutex.withLock {
+                    readOrRefresh(
+                        ttlMillis = if (refresh) 0L else SEARCH_TTL_MILLIS,
+                        readCache = { diagnostics.stage("cache.read") { cache.readSearch(key) } },
+                        fetchRemote = { cached ->
+                            if (permitNetwork != null && !permitNetwork()) throw ViewportDeferred()
+                            try {
+                                remote.searchNearby(request)
+                            } catch (failure: NetworkException) {
+                                val http = failure.error as? NetworkError.Http
+                                if (permitNetwork != null && http?.status == 429) {
+                                    throw ViewportRateLimited(ViewportSearchResult.RateLimited(http.retryAfterSeconds, cached))
+                                }
+                                throw failure
                             }
-                            throw failure
-                        }
-                    },
-                    writeCache = { spots, time -> cache.replaceSearch(key, spots, time) },
-                )
+                        },
+                        writeCache = { spots, time -> diagnostics.stage("cache.write") { cache.replaceSearch(key, spots, time) } },
+                    )
+                }
             }
-        }
 
         private suspend fun <T> readOrRefresh(
             ttlMillis: Long,

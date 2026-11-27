@@ -2,6 +2,7 @@ package com.mirawuse.sportspot.data.remote
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import com.google.gson.JsonParseException
 import com.mirawuse.sportspot.data.remote.api.SpotApi
 import com.mirawuse.sportspot.data.remote.connectivity.NetworkMonitor
 import com.mirawuse.sportspot.data.remote.error.NetworkCall
@@ -23,9 +24,10 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Assert.fail
 import org.junit.Rule
 import org.junit.Test
+import java.net.ProtocolException
+import java.net.SocketTimeoutException
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
@@ -435,6 +437,65 @@ class RemoteSpotDataSourceTest {
         }
 
     @Test
+    fun `logged 200 with a slow body times out before community search`() =
+        runBlocking {
+            val logs = mutableListOf<String>()
+            val repository =
+                repository(readTimeoutMillis = 750, callTimeoutMillis = 4000, stubCommunity = false, logger = NetworkLogger(logs::add))
+            server.enqueue(json(fixture("search-spots.json")).setBodyDelay(1500, TimeUnit.MILLISECONDS))
+
+            val failure = networkFailure(NetworkError.Timeout) { repository.searchNearby(center, 1000) }
+            assertTrue(failure.cause is SocketTimeoutException)
+            val headers = logs.indexOfFirst { it.startsWith("GET /functions/v1/search-sports-spots-v1 -> 200 ") }
+            val failedBody =
+                logs.indexOfFirst {
+                    it.startsWith(
+                        "wire.failed /functions/v1/search-sports-spots-v1 cause=SocketTimeoutException ",
+                    )
+                }
+            val failedDecode = logs.indexOfFirst { it.startsWith("function.decode.failed type=SocketTimeoutException ") }
+            assertTrue(headers >= 0 && failedBody > headers && failedDecode > failedBody)
+            assertTrue(logs.none { it.startsWith("function.map") || it.startsWith("community") })
+            assertEquals(1, server.requestCount)
+        }
+
+    @Test
+    fun `body cut off on the wire is distinct from invalid complete JSON`() =
+        runBlocking {
+            val repository = repository(stubCommunity = false)
+            val incomplete = fixture("search-spots.json")
+            server.enqueue(json(incomplete).setSocketPolicy(SocketPolicy.DISCONNECT_DURING_RESPONSE_BODY))
+            val transport = networkFailure(NetworkError.Connection) { repository.searchNearby(center, 1000) }
+            assertTrue(transport.cause is ProtocolException)
+
+            server.enqueue(json(incomplete.trimEnd().dropLast(1)))
+            val invalidJson = networkFailure(NetworkError.Parsing) { repository.searchNearby(center, 1000) }
+            assertTrue(invalidJson.cause is JsonParseException)
+            assertEquals(2, server.requestCount)
+        }
+
+    @Test
+    fun `successful function results still depend on a second REST request`() =
+        runBlocking {
+            val logs = mutableListOf<String>()
+            val repository =
+                repository(readTimeoutMillis = 750, callTimeoutMillis = 4000, stubCommunity = false, logger = NetworkLogger(logs::add))
+            server.enqueue(json(fixture("search-spots.json")))
+            server.enqueue(json("""{"code":"TEMP_UNAVAILABLE"}""").setResponseCode(503))
+            assertError(NetworkError.Http(503, "TEMP_UNAVAILABLE")) { repository.searchNearby(center, 1000) }
+
+            server.enqueue(json(fixture("search-spots.json")))
+            server.enqueue(json("[]").setBodyDelay(1500, TimeUnit.MILLISECONDS))
+            assertError(NetworkError.Timeout) { repository.searchNearby(center, 1000) }
+            assertEquals(4, server.requestCount)
+            assertEquals(2, logs.count { it.startsWith("GET /rest/v1/spots") })
+            assertEquals(2, logs.count { it.startsWith("function.map.ok ") })
+            assertTrue(logs.any { it.startsWith("community.failed type=Http(503) ") })
+            assertTrue(logs.any { it.startsWith("community.failed type=SocketTimeoutException ") })
+            assertTrue(logs.none { it.contains("TEMP_UNAVAILABLE") })
+        }
+
+    @Test
     fun `real socket read timeout becomes Timeout`() =
         runBlocking {
             server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
@@ -461,11 +522,13 @@ class RemoteSpotDataSourceTest {
         readTimeoutMillis: Long = 2000,
         callTimeoutMillis: Long = 5000,
         stubCommunity: Boolean = true,
+        logger: NetworkLogger? = null,
     ): SpotRepository {
         val config =
             NetworkConfig(
                 baseUrl = server.url("/"),
                 publishableKey = testPublishableKey,
+                debugLogging = logger != null,
                 connectTimeoutMillis = 1000,
                 readTimeoutMillis = readTimeoutMillis,
                 writeTimeoutMillis = 1000,
@@ -473,13 +536,13 @@ class RemoteSpotDataSourceTest {
             )
         val client =
             NetworkClient
-                .createOkHttp(config, AccessTokenProvider { null })
+                .createOkHttp(config, AccessTokenProvider { null }, logger ?: NetworkLogger {})
                 .newBuilder()
                 .addInterceptor(emptyCommunityCatalog { stubCommunity })
                 .build()
                 .also { clients += it }
         val api = NetworkClient.createRetrofit(config, client, gson).create(SpotApi::class.java)
-        val remote = RemoteSpotDataSource(api, NetworkCall(NetworkMonitor { online }, gson))
+        val remote = RemoteSpotDataSource(api, NetworkCall(NetworkMonitor { online }, gson), SpotSearchDiagnostics(logger))
         return object : SpotRepository {
             override suspend fun getSpots(): List<Spot> = remote.getSpots()
 
@@ -497,12 +560,20 @@ class RemoteSpotDataSourceTest {
         expected: NetworkError,
         block: suspend () -> Any?,
     ) {
+        networkFailure(expected, block)
+    }
+
+    private suspend fun networkFailure(
+        expected: NetworkError,
+        block: suspend () -> Any?,
+    ): NetworkException {
         try {
             block()
-            fail("Expected a typed network failure")
         } catch (failure: NetworkException) {
             assertEquals(expected, failure.error)
+            return failure
         }
+        throw AssertionError("Expected a typed network failure")
     }
 
     private fun json(body: String): MockResponse = MockResponse().setHeader("Content-Type", "application/json").setBody(body)

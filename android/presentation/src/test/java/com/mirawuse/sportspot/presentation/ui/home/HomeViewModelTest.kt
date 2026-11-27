@@ -32,6 +32,7 @@ import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import java.io.IOException
+import java.net.SocketTimeoutException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelTest {
@@ -242,9 +243,9 @@ class HomeViewModelTest {
         }
 
     @Test
-    fun `failed search shows a safe message`() =
+    fun `failed cache operation shows a safe search error`() =
         runTest(dispatcher) {
-            val repository = FakeSpotRepository { _, _, _ -> throw IOException("Internal transport details") }
+            val repository = FakeSpotRepository { _, _, _ -> throw IllegalStateException("Internal cache details") }
             val viewModel = HomeViewModel(SearchNearbySpotsUseCase(repository), FakeDeviceLocationProvider())
 
             advanceUntilIdle()
@@ -256,16 +257,21 @@ class HomeViewModelTest {
         }
 
     @Test
-    fun `retry after failure starts one more search and can show content`() =
+    fun `read timeout ends loading and retry shows all recovered spots`() =
         runTest(dispatcher) {
             var online = false
+            val spots = (1..21).map { spot.copy(id = SpotId("osm", "node:$it")) }
             val repository =
                 FakeSpotRepository { _, _, _ ->
-                    if (!online) throw IOException("Offline")
-                    listOf(spot)
+                    if (!online) throw SocketTimeoutException("Internal transport details")
+                    spots
                 }
             val viewModel = HomeViewModel(SearchNearbySpotsUseCase(repository), FakeDeviceLocationProvider())
             advanceUntilIdle()
+            assertEquals(
+                HomeUiState.Error("Не удалось загрузить площадки. Проверьте соединение и попробуйте снова."),
+                viewModel.uiState.value,
+            )
 
             online = true
             viewModel.retry()
@@ -273,7 +279,7 @@ class HomeViewModelTest {
             assertEquals(HomeUiState.Loading, viewModel.uiState.value)
             advanceUntilIdle()
 
-            assertEquals(HomeUiState.Content(listOf(spot)), viewModel.uiState.value)
+            assertEquals(HomeUiState.Content(spots), viewModel.uiState.value)
             assertEquals(2, repository.searchCalls)
         }
 
