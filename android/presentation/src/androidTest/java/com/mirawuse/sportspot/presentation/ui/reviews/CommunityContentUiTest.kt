@@ -8,13 +8,16 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -168,8 +171,12 @@ class CommunityContentUiTest {
         compose.onNodeWithText("Отклонить").performScrollTo().performClick()
         compose.onNodeWithText("Подтвердить отклонение").performScrollTo().performClick()
         compose.runOnIdle { assertNull(rejection) }
-        compose.onNodeWithContentDescription("Причина отклонения").performScrollTo().performTextInput("Уточните адрес")
-        compose.onNodeWithText("Подтвердить отклонение").performScrollTo().performClick()
+        val reason = compose.onNodeWithContentDescription("Причина отклонения")
+        reason.performScrollTo().performTextInput("Уточните адрес")
+        reason.assertTextContains("Уточните адрес")
+        val confirm = compose.onNodeWithText("Подтвердить отклонение")
+        confirm.performScrollTo().assertIsDisplayed()
+        confirm.performSemanticsAction(SemanticsActions.OnClick)
         compose.runOnIdle { assertEquals("proposal" to "Уточните адрес", rejection) }
     }
 }
