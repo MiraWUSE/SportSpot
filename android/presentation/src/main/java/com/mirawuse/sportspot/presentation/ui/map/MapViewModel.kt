@@ -8,7 +8,6 @@ import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.repository.ViewportSearchResult
 import com.mirawuse.sportspot.domain.usecase.spot.SearchNearbySpotsUseCase
-import com.mirawuse.sportspot.presentation.ui.home.SPOT_SEARCH_RADIUS_METERS
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -57,7 +56,10 @@ internal class MapViewModel(
     private var nextAttemptAt = 0L
     private var serverRetryAt = 0L
 
-    fun activate(anchor: MapAnchor) {
+    fun activate(
+        anchor: MapAnchor,
+        loadInitial: Boolean = false,
+    ) {
         if (_state.value.anchor != anchor) {
             job?.cancel()
             target = null
@@ -66,7 +68,11 @@ internal class MapViewModel(
             _state.value = MapViewportState(anchor)
         }
         active = true
-        if (pending && job?.isActive != true) start()
+        if (pending && job?.isActive != true) {
+            start()
+        } else if (loadInitial && _state.value.status == MapSearchStatus.INITIAL) {
+            initialViewport()?.let { select(it, refresh = false) }
+        }
     }
 
     fun deactivate(anchor: MapAnchor) {
@@ -201,11 +207,12 @@ internal class MapViewModel(
     private fun initialViewport(): MapViewport? {
         val center = _state.value.anchor?.center ?: return null
         if (!isMapCoordinate(center.latitude, center.longitude)) return null
-        val radius = SPOT_SEARCH_RADIUS_METERS
+        val radius = INITIAL_RADIUS_METERS
         return MapViewport(center, radius.toDouble(), MapSearchRequest(center, radius), limited = false)
     }
 
     private companion object {
+        const val INITIAL_RADIUS_METERS = 1000
         const val DEBOUNCE_MILLIS = 550L
         const val NETWORK_INTERVAL_MILLIS = 20_000L
         const val DEFAULT_RETRY_SECONDS = 60L

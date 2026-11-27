@@ -53,6 +53,7 @@ import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 internal fun HomeMapPreview(
     spots: List<Spot>,
     center: GeoPoint,
+    resultsPending: Boolean = false,
     onOpenMap: () -> Unit,
 ) {
     val view = LocalView.current
@@ -78,7 +79,7 @@ internal fun HomeMapPreview(
                 isInteractive = false,
                 modifier = Modifier.fillMaxSize(),
             ) {
-                HomeMapControls(spots.size, onOpenMap, Modifier.align(Alignment.BottomCenter))
+                HomeMapControls(spots.size.takeUnless { resultsPending }, onOpenMap, Modifier.align(Alignment.BottomCenter))
             }
         }
     }
@@ -86,7 +87,7 @@ internal fun HomeMapPreview(
 
 @Composable
 private fun HomeMapControls(
-    count: Int,
+    count: Int?,
     onOpenMap: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -99,7 +100,14 @@ private fun HomeMapControls(
     ) {
         Box(Modifier.weight(1f)) {
             Text(
-                text = stringResource(R.string.home_results_count, count),
+                text =
+                    if (count ==
+                        null
+                    ) {
+                        stringResource(R.string.search_filters_updating)
+                    } else {
+                        stringResource(R.string.home_results_count, count)
+                    },
                 modifier =
                     Modifier
                         .clip(SportSpotPillShape)

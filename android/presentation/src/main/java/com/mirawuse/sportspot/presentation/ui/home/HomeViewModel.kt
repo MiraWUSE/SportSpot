@@ -9,8 +9,12 @@ import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.repository.DeviceLocationProvider
 import com.mirawuse.sportspot.domain.usecase.spot.SearchNearbySpotsUseCase
 import com.mirawuse.sportspot.presentation.R
+import com.mirawuse.sportspot.presentation.ui.search.LightingFilter
 import com.mirawuse.sportspot.presentation.ui.search.SearchFilterState
-import com.mirawuse.sportspot.presentation.ui.search.filterSpots
+import com.mirawuse.sportspot.presentation.ui.search.SpotSort
+import com.mirawuse.sportspot.presentation.ui.search.SurfaceFilter
+import com.mirawuse.sportspot.presentation.ui.search.validSearchRadius
+import com.mirawuse.sportspot.presentation.ui.search.withoutConflicts
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -23,9 +27,17 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 internal val spotSearchCenter = GeoPoint(latitude = 56.3269, longitude = 44.0059)
-internal const val SPOT_SEARCH_RADIUS_METERS = 1000
 private const val SEARCH_QUERY_KEY = "spotSearchQuery"
 private const val SEARCH_SPORT_KEY = "spotSearchSport"
+private const val SEARCH_SORT_KEY = "spotSearchSort"
+private const val SEARCH_LIGHTING_KEY = "spotSearchLighting"
+private const val SEARCH_SURFACE_KEY = "spotSearchSurface"
+private const val SEARCH_RADIUS_KEY = "spotSearchRadius"
+
+private inline fun <reified T : Enum<T>> SavedStateHandle.readEnum(key: String): T? {
+    val name = get<Any>(key) as? String ?: return null
+    return enumValues<T>().firstOrNull { it.name == name }
+}
 
 @HiltViewModel
 class HomeViewModel
@@ -42,8 +54,12 @@ class HomeViewModel
         private val mutableSearchFilter =
             MutableStateFlow(
                 SearchFilterState(
-                    query = savedState.get<String>(SEARCH_QUERY_KEY).orEmpty(),
-                    sport = savedState.get<String>(SEARCH_SPORT_KEY)?.let { name -> SportType.entries.find { it.name == name } },
+                    query = (savedState.get<Any>(SEARCH_QUERY_KEY) as? String).orEmpty(),
+                    sport = savedState.readEnum<SportType>(SEARCH_SPORT_KEY),
+                    sort = savedState.readEnum<SpotSort>(SEARCH_SORT_KEY) ?: SpotSort.DEFAULT,
+                    lighting = savedState.readEnum<LightingFilter>(SEARCH_LIGHTING_KEY) ?: LightingFilter.ALL,
+                    surface = savedState.readEnum<SurfaceFilter>(SEARCH_SURFACE_KEY) ?: SurfaceFilter.ALL,
+                    radiusMeters = validSearchRadius(savedState.get<Any>(SEARCH_RADIUS_KEY) as? Int),
                 ),
             )
         internal val searchFilter = mutableSearchFilter.asStateFlow()
@@ -56,28 +72,36 @@ class HomeViewModel
         }
 
         internal fun setSearchQuery(query: String) {
-            updateSearchFilter(mutableSearchFilter.value.copy(query = query))
+            applySearchFilter(mutableSearchFilter.value.copy(query = query))
         }
 
         internal fun setSearchSport(sport: SportType?) {
-            updateSearchFilter(mutableSearchFilter.value.copy(sport = sport))
+            applySearchFilter(mutableSearchFilter.value.copy(sport = sport))
         }
 
         internal fun resetSearchFilter() {
-            updateSearchFilter(SearchFilterState())
+            applySearchFilter(SearchFilterState())
         }
 
         internal fun clearConflictingSearchFilter(
             spot: Spot,
             sportLabel: (Spot) -> String,
         ) {
-            if (filterSpots(listOf(spot), searchFilter.value, sportLabel).isEmpty()) resetSearchFilter()
+            applySearchFilter(searchFilter.value.withoutConflicts(spot, sportLabel))
         }
 
-        private fun updateSearchFilter(filter: SearchFilterState) {
+        internal fun applySearchFilter(requested: SearchFilterState) {
+            val filter = requested.copy(radiusMeters = validSearchRadius(requested.radiusMeters))
+            if (filter == mutableSearchFilter.value) return
+            val radiusChanged = filter.radiusMeters != mutableSearchFilter.value.radiusMeters
             savedState[SEARCH_QUERY_KEY] = filter.query
             savedState[SEARCH_SPORT_KEY] = filter.sport?.name
+            savedState[SEARCH_SORT_KEY] = filter.sort.name
+            savedState[SEARCH_LIGHTING_KEY] = filter.lighting.name
+            savedState[SEARCH_SURFACE_KEY] = filter.surface.name
+            savedState[SEARCH_RADIUS_KEY] = filter.radiusMeters
             mutableSearchFilter.value = filter
+            if (radiusChanged) loadSpots()
         }
 
         fun retry() {
@@ -131,12 +155,13 @@ class HomeViewModel
             refresh: Boolean = false,
         ) {
             searchJob?.cancel()
+            val radius = mutableSearchFilter.value.radiusMeters
             _location.value = _location.value.copy(center = center, source = source)
             _uiState.value = HomeUiState.Loading
             searchJob =
                 viewModelScope.launch {
                     try {
-                        val spots = searchNearbySpots(center = center, radiusMeters = SPOT_SEARCH_RADIUS_METERS, refresh = refresh)
+                        val spots = searchNearbySpots(center = center, radiusMeters = radius, refresh = refresh)
                         currentCoroutineContext().ensureActive()
                         _uiState.value = if (spots.isEmpty()) HomeUiState.Empty else HomeUiState.Content(spots)
                     } catch (cancelled: CancellationException) {

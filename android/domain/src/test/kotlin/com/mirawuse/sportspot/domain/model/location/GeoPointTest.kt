@@ -26,6 +26,23 @@ class GeoPointTest {
     }
 
     @Test
+    fun distanceIsZeroAtTheSamePointAndFiniteAtThePoles() {
+        val first = GeoPoint(56.3269, 44.0059)
+        assertEquals(0.0, first.distanceMetersTo(first), 0.0)
+        assertEquals(0.0, GeoPoint(90.0, 0.0).distanceMetersTo(GeoPoint(90.0, 180.0)), 0.000001)
+        assertEquals(Math.PI * 6_371_000, GeoPoint(90.0, 0.0).distanceMetersTo(GeoPoint(-90.0, 180.0)), 0.001)
+    }
+
+    @Test
+    fun distanceFollowsTheShortArcAcrossTheDateLine() {
+        val east = GeoPoint(0.0, 179.999)
+        val west = GeoPoint(0.0, -179.999)
+        assertEquals(222.39, east.distanceMetersTo(west), 0.01)
+        assertEquals(east.distanceMetersTo(west), west.distanceMetersTo(east), 0.000001)
+        assertEquals(0.0, GeoPoint(0.0, 180.0).distanceMetersTo(GeoPoint(0.0, -180.0)), 0.0)
+    }
+
+    @Test
     fun `неправильная широта вызывает ошибку`() {
         assertThrows(IllegalArgumentException::class.java) {
             GeoPoint(91.0, 44.0)

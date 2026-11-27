@@ -92,6 +92,7 @@ import com.mirawuse.sportspot.presentation.ui.reviews.ReviewScore
 import com.mirawuse.sportspot.presentation.ui.reviews.ReviewsScreen
 import com.mirawuse.sportspot.presentation.ui.reviews.ReviewsState
 import com.mirawuse.sportspot.presentation.ui.reviews.ReviewsViewModel
+import com.mirawuse.sportspot.presentation.ui.search.DEFAULT_SEARCH_RADIUS_METERS
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 
@@ -261,6 +262,7 @@ fun SportSpotApp() {
                     onSearchQuery = viewModel::setSearchQuery,
                     onSearchSport = viewModel::setSearchSport,
                     onResetSearch = viewModel::resetSearchFilter,
+                    onApplySearch = viewModel::applySearchFilter,
                     signedIn = authState is AuthState.Authenticated,
                     savedSpotIds = savedIds,
                     favoriteEnabled = favoriteEnabled,
@@ -275,9 +277,10 @@ fun SportSpotApp() {
                 val location by viewModel.location.collectAsStateWithLifecycle()
                 val filter by viewModel.searchFilter.collectAsStateWithLifecycle()
                 val anchor = MapAnchor(location.center, route.spotId)
+                val needsMapSeed = filter.radiusMeters != DEFAULT_SEARCH_RADIUS_METERS
                 if (!route.favorite) {
                     LifecycleResumeEffect(anchor) {
-                        mapViewModel.activate(anchor)
+                        mapViewModel.activate(anchor, loadInitial = needsMapSeed)
                         onPauseOrDispose { mapViewModel.deactivate(anchor) }
                     }
                 }
@@ -286,6 +289,9 @@ fun SportSpotApp() {
                 val seed =
                     if (route.favorite) {
                         favoriteDestinationState(favoriteState, route.spotId, favoriteError)
+                    } else if (needsMapSeed) {
+                        val focus = route.spotId?.let { (state as? HomeUiState.Content)?.findSpot(it) } ?: openedMapSpot
+                        HomeUiState.Loading.withOpenedMapSpot(route.spotId, focus)
                     } else {
                         state.withOpenedMapSpot(route.spotId, openedMapSpot)
                     }
@@ -310,7 +316,7 @@ fun SportSpotApp() {
                     onViewportIdle = if (route.favorite) null else mapViewModel::onViewportIdle,
                     filter = filter.takeUnless { route.favorite },
                     onSearchQuery = viewModel::setSearchQuery,
-                    onSearchSport = viewModel::setSearchSport,
+                    onApplySearch = viewModel::applySearchFilter,
                     onResetSearch = viewModel::resetSearchFilter,
                     showVisibleSpots = !route.favorite,
                     onBuildRoute = routeLauncher::open,

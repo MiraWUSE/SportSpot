@@ -59,6 +59,8 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityOptionsCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.Espresso.pressBack
 import androidx.test.espresso.action.GeneralClickAction
@@ -390,7 +392,19 @@ class UserPhotosUiTest {
             address.performScrollTo().performTextInput("Южный вход")
             compose.onNodeWithText(label(R.string.proposal_sport_hint)).performScrollTo().performClick()
             compose.onNodeWithText(label(SportType.TENNIS.labelRes())).performClick()
-            compose.onNodeWithText(label(R.string.photos_choose)).performScrollTo().performClick()
+            compose.activityRule.scenario.onActivity { activity ->
+                WindowCompat.getInsetsController(activity.window, activity.window.decorView).hide(WindowInsetsCompat.Type.ime())
+            }
+            compose.waitUntil(5_000) { compose.runOnIdle { model.readyFor(alice) } }
+            val choosePhoto = compose.onNodeWithText(label(R.string.photos_choose))
+            choosePhoto.performScrollTo()
+            choosePhoto.assertIsEnabled().performClick()
+            compose.runOnIdle { assertEquals("Photo picker launches", 1, picker.launches) }
+            compose.waitUntil(5_000) { compose.runOnIdle { !model.draftFor(alice).preparing } }
+            compose.runOnIdle {
+                assertNull(model.draftFor(alice).error)
+                assertEquals("Prepared attachments", 1, model.draftFor(alice).attachments.size)
+            }
             compose.waitUntil(5_000) { compose.onAllNodesWithText(label(R.string.photos_discard)).fetchSemanticsNodes().isNotEmpty() }
             discard.performScrollTo().assertIsDisplayed()
             val attachmentId =

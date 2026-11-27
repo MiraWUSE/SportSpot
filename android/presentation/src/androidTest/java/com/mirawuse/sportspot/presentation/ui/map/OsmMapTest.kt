@@ -53,6 +53,7 @@ import com.mirawuse.sportspot.domain.repository.SpotRepository
 import com.mirawuse.sportspot.domain.usecase.spot.SearchNearbySpotsUseCase
 import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
 import com.mirawuse.sportspot.presentation.ui.search.SearchFilterState
+import com.mirawuse.sportspot.presentation.ui.search.SpotSort
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotTheme
 import org.hamcrest.Matcher
 import org.junit.After
@@ -365,20 +366,20 @@ class OsmMapTest {
             }
         }
         val map = nativeMap()
-        compose.waitUntil(10_000) { visibility.get() == MapSpotVisibility.Ready(setOf(home.id, acrossDateLine.id)) }
+        compose.waitUntil(10_000) { (visibility.get() as? MapSpotVisibility.Ready)?.ids == setOf(home.id, acrossDateLine.id) }
         compose.runOnIdle { mapSize.value = 120.dp }
-        compose.waitUntil(10_000) { visibility.get() == MapSpotVisibility.Ready(setOf(home.id)) }
+        compose.waitUntil(10_000) { (visibility.get() as? MapSpotVisibility.Ready)?.ids == setOf(home.id) }
         compose.runOnIdle { mapSize.value = 300.dp }
-        compose.waitUntil(10_000) { visibility.get() == MapSpotVisibility.Ready(setOf(home.id, acrossDateLine.id)) }
+        compose.waitUntil(10_000) { (visibility.get() as? MapSpotVisibility.Ready)?.ids == setOf(home.id, acrossDateLine.id) }
         compose.runOnIdle {
             map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(center.latitude, center.longitude), 16.0))
         }
-        compose.waitUntil(10_000) { visibility.get() == MapSpotVisibility.Ready(setOf(home.id)) }
+        compose.waitUntil(10_000) { (visibility.get() as? MapSpotVisibility.Ready)?.ids == setOf(home.id) }
         assertEquals(0, gestures.get())
     }
 
     @Test
-    fun visibleListSharesSelectionAndFiltersAndPickerCanStillRevealAnOffscreenSpot() {
+    fun visibleListAndPickerShareFilteredSpotsAndSortingPreservesSelection() {
         val center = GeoPoint(56.3269, 44.0059)
         val field = Spot(SpotId("osm", "node:1"), "Поле у школы", SportType.FOOTBALL, center, address = "Школьная, 2")
         val court = field.copy(id = SpotId("community", field.id.value), name = "Корт у школы", sportType = SportType.TENNIS)
@@ -472,21 +473,29 @@ class OsmMapTest {
         }
         scroll.performScrollToNode(listTitle)
         compose.onNodeWithText("Загружено и видно: 0").assertIsDisplayed()
-        compose.onAllNodesWithText("Нет совпадений среди загруженных площадок.")[0].assertExists()
+        compose.onAllNodesWithText("По заданным фильтрам ничего не найдено.")[0].assertExists()
         compose.runOnIdle { viewport.value = MapViewportState(spots = emptyList(), status = MapSearchStatus.READY) }
         compose.onAllNodesWithText("В этой области площадки не найдены.")[0].assertExists()
-        compose.onNodeWithText("Нет совпадений среди загруженных площадок.").assertDoesNotExist()
+        compose.onNodeWithText("По заданным фильтрам ничего не найдено.").assertDoesNotExist()
 
         compose.runOnIdle {
-            filter.value = SearchFilterState()
+            filter.value = SearchFilterState(sort = SpotSort.NAME_ASC)
             viewport.value = MapViewportState(spots = spots, status = MapSearchStatus.READY)
         }
         scroll.performScrollToIndex(0)
         compose.onNodeWithText("Выбрать площадку").performClick()
-        compose.onNodeWithText("3. Дальний корт").performClick()
+        compose.onNodeWithText("1. Корт у школы").assertIsDisplayed()
+        compose.onNodeWithText("2. Поле у школы").assertIsSelected()
+        compose.onNodeWithText("3. Дальний корт").assertDoesNotExist()
+        compose.onNodeWithText("Закрыть").performClick()
+        compose.runOnIdle { map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(far.location.latitude, far.location.longitude), 15.5)) }
         waitForCamera(map, far.location, 15.5)
         scroll.performScrollToNode(listTitle)
         compose.onNodeWithText("Загружено и видно: 1").assertIsDisplayed()
+        scroll.performScrollToIndex(0)
+        compose.onNodeWithText("Выбрать площадку").performClick()
+        compose.onNodeWithText("1. Дальний корт").performClick()
+        scroll.performScrollToNode(listTitle)
         scroll.performScrollToNode(hasText(far.name) and rowRole)
         compose.onNode(hasText(far.name) and rowRole).assertIsSelected()
         scroll.performScrollToIndex(0)

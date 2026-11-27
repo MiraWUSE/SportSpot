@@ -15,6 +15,7 @@ internal sealed interface MapSpotVisibility {
 
     data class Ready(
         val ids: Set<SpotId>,
+        val center: GeoPoint,
     ) : MapSpotVisibility
 }
 

@@ -146,6 +146,7 @@ class DeviceLocationControlTest {
                         onSearchQuery = {},
                         onSearchSport = {},
                         onResetSearch = {},
+                        onApplySearch = {},
                     )
                 }
             }

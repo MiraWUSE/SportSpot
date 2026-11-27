@@ -214,28 +214,28 @@ class OfflineSpotRepositoryTest {
     @Test
     fun `search stores independent nonempty and empty snapshots on disk`() =
         runBlocking {
-            server.enqueue(json(fixture("search-spots.json")))
-            server.enqueue(json(emptySearch()))
-            assertEquals(searchSpots, repository.searchNearby(center, 1000, SportType.BASKETBALL))
-            assertTrue(repository.searchNearby(center, 2000, SportType.BASKETBALL).isEmpty())
-
-            val first = requireNotNull(takeRequest().requestUrl)
-            val second = requireNotNull(takeRequest().requestUrl)
-            assertEquals("/functions/v1/search-sports-spots-v1", first.encodedPath)
-            assertEquals("56.3269", first.queryParameter("lat"))
-            assertEquals("44.0059", first.queryParameter("lon"))
-            assertEquals("1000", first.queryParameter("radius"))
-            assertEquals("basketball", first.queryParameter("sport"))
-            assertEquals("2000", second.queryParameter("radius"))
+            val results = mapOf(500 to emptyList(), 1000 to searchSpots, 2000 to emptyList(), 3000 to searchSpots)
+            for ((radius, expected) in results) {
+                server.enqueue(json(if (expected.isEmpty()) emptySearch() else fixture("search-spots.json")))
+                assertEquals(expected, repository.searchNearby(center, radius, SportType.BASKETBALL))
+                val request = requireNotNull(takeRequest().requestUrl)
+                assertEquals("/functions/v1/search-sports-spots-v1", request.encodedPath)
+                assertEquals(setOf("lat", "lon", "radius", "sport"), request.queryParameterNames)
+                assertEquals("56.3269", request.queryParameter("lat"))
+                assertEquals("44.0059", request.queryParameter("lon"))
+                assertEquals(radius.toString(), request.queryParameter("radius"))
+                assertEquals("basketball", request.queryParameter("sport"))
+            }
 
             timeMillis += SEARCH_TTL
             online = false
             reopenDatabase()
-            assertEquals(searchSpots, repository.searchNearby(center, 1000, SportType.BASKETBALL))
-            assertTrue(repository.searchNearby(center, 2000, SportType.BASKETBALL).isEmpty())
+            for ((radius, expected) in results) {
+                assertEquals(expected, repository.searchNearby(center, radius, SportType.BASKETBALL))
+            }
             assertError(NetworkError.Offline) { repository.getSpots() }
             assertError(NetworkError.Offline) { repository.getSpotById(osmId) }
-            assertEquals(2, server.requestCount)
+            assertEquals(4, server.requestCount)
         }
 
     @Test
