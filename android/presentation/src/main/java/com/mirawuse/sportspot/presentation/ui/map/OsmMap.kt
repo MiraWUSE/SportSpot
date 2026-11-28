@@ -196,6 +196,7 @@ private fun NativeOsmMap(
 ) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
+    val mapDescription = stringResource(R.string.map_description)
     val colors = MaterialTheme.colorScheme
     var loadState by remember { mutableStateOf(MapLoadState.LOADING) }
     var loadGeneration by remember { mutableIntStateOf(0) }
@@ -223,10 +224,7 @@ private fun NativeOsmMap(
                         prefetchZoomDelta =
                             OsmMapTiles.PREFETCH_ZOOM_DELTA
                     }
-                MapView(context, options).apply {
-                    contentDescription = context.getString(R.string.map_description)
-                    onCreate(null)
-                }
+                MapView(context, options).apply { onCreate(null) }
             } catch (_: Exception) {
                 null
             } catch (_: LinkageError) {
@@ -505,6 +503,7 @@ private fun NativeOsmMap(
             factory = { mapView },
             modifier = Modifier.fillMaxSize(),
             update = { view ->
+                if (view.contentDescription != mapDescription) view.contentDescription = mapDescription
                 view.setOnTouchListener { _, event ->
                     if (interactive) {
                         view.parent?.requestDisallowInterceptTouchEvent(
