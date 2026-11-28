@@ -179,6 +179,14 @@
     <string name="network_rate_limited">Слишком много запросов. Подождите немного и повторите.</string>
     <string name="network_saved_spots">Показаны сохранённые данные. %1$s</string>
     <string name="network_cached_title">Показаны сохранённые данные</string>
+    <string name="background_refresh">Обновить в фоне</string>
+    <string name="background_queued">Запланировано. Обновление начнётся при наличии сети.</string>
+    <string name="background_running">Обновляем в фоне…</string>
+    <string name="background_succeeded">Площадки обновлены</string>
+    <string name="background_other_area">В фоне обновлены площадки другой области</string>
+    <string name="background_failed">Не удалось обновить площадки в фоне.</string>
+    <string name="background_cancelled">Фоновое обновление отменено</string>
+    <string name="background_cancel">Отменить</string>
     <string name="network_check_before_resubmit">Проверьте, сохранилось ли изменение, перед повторной отправкой.</string>
     <string name="review_rating">Ваша оценка</string>
     <string name="review_rating_choice">Оценка %1$d из 5</string>

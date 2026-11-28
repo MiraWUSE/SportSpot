@@ -36,6 +36,11 @@ interface SpotRepository {
         refresh: Boolean,
     ): NearbySpots = NearbySpots(if (refresh) refreshNearby(center, radiusMeters, null) else searchNearby(center, radiusMeters))
 
+    /** Completes only after a successful remote search has been committed to local storage. */
+    suspend fun refreshStoredSearch(area: SpotRefreshArea): Unit = throw UnsupportedOperationException("Background refresh is unavailable")
+
+    suspend fun readStoredSearch(area: SpotRefreshArea): List<Spot>? = null
+
     /** The callback is consulted before a network attempt, after checking local data. */
     suspend fun searchViewport(
         center: GeoPoint,

@@ -4,6 +4,7 @@ import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.repository.NearbySpots
+import com.mirawuse.sportspot.domain.repository.SpotRefreshArea
 import com.mirawuse.sportspot.domain.repository.SpotRepository
 import com.mirawuse.sportspot.domain.repository.ViewportSearchResult
 
@@ -33,6 +34,10 @@ class SearchNearbySpotsUseCase(
         validateRadius(radiusMeters)
         return repository.nearbyWithStatus(center, radiusMeters, refresh)
     }
+
+    suspend fun refreshStoredSearch(area: SpotRefreshArea) = repository.refreshStoredSearch(area)
+
+    suspend fun readStoredSearch(area: SpotRefreshArea): List<Spot>? = repository.readStoredSearch(area)
 
     suspend fun forViewport(
         center: GeoPoint,

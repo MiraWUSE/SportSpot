@@ -144,10 +144,15 @@ internal class MapViewModel(
                 try {
                     load(request, forceRefresh)
                 } catch (failure: Exception) {
-                    if (failure is CancellationException && failure !is TimeoutCancellationException) throw failure
                     currentCoroutineContext().ensureActive()
                     pending = false
-                    _state.update { it.copy(status = MapSearchStatus.ERROR, error = failure.readError()) }
+                    _state.update {
+                        if (failure is CancellationException && failure !is TimeoutCancellationException) {
+                            it.copy(status = MapSearchStatus.READY)
+                        } else {
+                            it.copy(status = MapSearchStatus.ERROR, error = failure.readError())
+                        }
+                    }
                 }
             }
     }

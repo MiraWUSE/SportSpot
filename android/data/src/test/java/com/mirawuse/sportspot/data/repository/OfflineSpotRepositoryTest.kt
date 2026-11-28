@@ -2,6 +2,7 @@ package com.mirawuse.sportspot.data.repository
 
 import android.database.sqlite.SQLiteConstraintException
 import androidx.room.Room
+import androidx.work.ListenableWorker.Result
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.mirawuse.sportspot.data.local.CacheClock
@@ -18,11 +19,16 @@ import com.mirawuse.sportspot.data.remote.emptyCommunityCatalog
 import com.mirawuse.sportspot.data.remote.error.NetworkCall
 import com.mirawuse.sportspot.data.remote.error.NetworkError
 import com.mirawuse.sportspot.data.remote.error.NetworkException
+import com.mirawuse.sportspot.data.remote.validatedSearchRequest
+import com.mirawuse.sportspot.data.work.asWorkData
+import com.mirawuse.sportspot.data.work.buildRefreshWorker
+import com.mirawuse.sportspot.data.work.workError
 import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.model.spot.SpotSport
+import com.mirawuse.sportspot.domain.repository.SpotRefreshArea
 import com.mirawuse.sportspot.domain.repository.ViewportSearchResult
 import com.mirawuse.sportspot.domain.result.DomainError
 import com.mirawuse.sportspot.domain.result.NetworkIssue
@@ -76,6 +82,7 @@ class OfflineSpotRepositoryTest {
     private var stubCommunity = true
 
     private var timeMillis = 10_000_000L
+    private var sessionToken: String? = null
     private val monitor = NetworkMonitor { online }
     private val clock = CacheClock { timeMillis }
     private val gson = NetworkClient.createGson()
@@ -113,7 +120,7 @@ class OfflineSpotRepositoryTest {
             )
         client =
             NetworkClient
-                .createOkHttp(config, AccessTokenProvider { null })
+                .createOkHttp(config, AccessTokenProvider { sessionToken })
                 .newBuilder()
                 .addInterceptor(emptyCommunityCatalog { stubCommunity })
                 .dns(
@@ -425,6 +432,51 @@ class OfflineSpotRepositoryTest {
 
             online = false
             assertEquals(savedSpots, repository.getSpots())
+            assertEquals(6, server.requestCount)
+        }
+
+    @Test
+    fun `background worker fails on stale fallback and only succeeds after committing an anonymous response`() =
+        runBlocking {
+            val area = SpotRefreshArea(center, 1000)
+            val nearby = SpotRefreshArea(center, 500)
+            val input = area.asWorkData()
+            val app = RuntimeEnvironment.getApplication()
+            server.enqueue(json(fixture("search-spots.json")))
+            server.enqueue(json(fixture("search-spots.json")))
+            assertEquals(searchSpots, repository.searchNearby(center, area.radiusMeters))
+            assertEquals(searchSpots, repository.searchNearby(center, nearby.radiusMeters))
+            repeat(2) { takeRequest() }
+            val key = validatedSearchRequest(center, area.radiusMeters, null).cacheKey
+            val cache = RoomSpotCache(database)
+            val oldTimestamp = requireNotNull(cache.readSearch(key)).fetchedAtEpochMillis
+
+            timeMillis += SEARCH_TTL
+            server.enqueue(json("{}").setResponseCode(503))
+            val fallback = repository.nearbyWithStatus(center, area.radiusMeters, refresh = true)
+            assertEquals(searchSpots, fallback.spots)
+            assertEquals(DomainError.Network(NetworkIssue.SERVER), fallback.fallback)
+            server.enqueue(json("{}").setResponseCode(503))
+            val failed = buildRefreshWorker(app, repository, input, attempt = 2).doWork() as Result.Failure
+            assertEquals(DomainError.Network(NetworkIssue.SERVER), failed.outputData.workError())
+
+            online = false
+            assertEquals(Result.retry(), buildRefreshWorker(app, repository, input).doWork())
+            assertEquals(searchSpots, repository.readStoredSearch(area))
+            assertEquals(oldTimestamp, cache.readSearch(key)?.fetchedAtEpochMillis)
+            repeat(2) { takeRequest() }
+
+            online = true
+            stubCommunity = false
+            sessionToken = "fixture-session"
+            server.enqueue(json(emptySearch()))
+            server.enqueue(json("[]"))
+            assertEquals(Result.success(input), buildRefreshWorker(app, repository, input).doWork())
+            repeat(2) { assertNull(takeRequest().getHeader("Authorization")) }
+            assertEquals(emptyList<Spot>(), repository.readStoredSearch(area))
+            assertEquals(timeMillis, cache.readSearch(key)?.fetchedAtEpochMillis)
+            assertEquals(searchSpots, repository.readStoredSearch(nearby))
+            assertEquals(emptyList<Spot>(), repository.searchNearby(center, area.radiusMeters))
             assertEquals(6, server.requestCount)
         }
 

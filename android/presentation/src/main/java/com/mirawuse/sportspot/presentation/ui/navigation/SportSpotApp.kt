@@ -69,6 +69,7 @@ import com.mirawuse.sportspot.presentation.ui.forms.userMessage
 import com.mirawuse.sportspot.presentation.ui.home.HomeScreen
 import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
 import com.mirawuse.sportspot.presentation.ui.home.HomeViewModel
+import com.mirawuse.sportspot.presentation.ui.home.SpotBackgroundRefresh
 import com.mirawuse.sportspot.presentation.ui.map.MapAnchor
 import com.mirawuse.sportspot.presentation.ui.map.MapScreen
 import com.mirawuse.sportspot.presentation.ui.map.MapViewModel
@@ -249,6 +250,7 @@ fun SportSpotApp() {
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
                 val location by viewModel.location.collectAsStateWithLifecycle()
                 val filter by viewModel.searchFilter.collectAsStateWithLifecycle()
+                val backgroundStatus by viewModel.backgroundStatus.collectAsStateWithLifecycle()
                 HomeScreen(
                     state = state,
                     location = location,
@@ -269,6 +271,15 @@ fun SportSpotApp() {
                     onFavorite = favorites::toggle,
                     onOpenAuth = { navController.navigate(AUTH_ROUTE) },
                     coverLoader = photos.spotCovers,
+                    backgroundRefresh = {
+                        val area = backgroundStatus?.area
+                        SpotBackgroundRefresh(
+                            backgroundStatus,
+                            viewModel::scheduleBackgroundRefresh,
+                            viewModel::cancelBackgroundRefresh,
+                            matchesArea = area == null || (area.center == location.center && area.radiusMeters == filter.radiusMeters),
+                        )
+                    },
                 )
             }
             composable<MapRoute> { entry ->

@@ -1,18 +1,21 @@
 package com.mirawuse.sportspot.data.remote.api
 
+import com.mirawuse.sportspot.data.remote.RequestSession
 import com.mirawuse.sportspot.data.remote.dto.SpotDto
 import com.mirawuse.sportspot.data.remote.dto.SpotSearchResponseDto
 import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.Query
+import retrofit2.http.Tag
 
-interface SpotApi {
+internal interface SpotApi {
     @GET("functions/v1/search-sports-spots-v1")
     suspend fun searchSpots(
         @Query("lat") lat: String,
         @Query("lon") lon: String,
         @Query("radius") radius: Int,
         @Query("sport") sport: String,
+        @Tag session: RequestSession? = null,
     ): Response<SpotSearchResponseDto>
 
     @GET("rest/v1/spots")
@@ -31,5 +34,6 @@ interface SpotApi {
         @Query("sport_type") sport: String?,
         @Query("limit") limit: Int,
         @Query("offset") offset: Int,
+        @Tag session: RequestSession? = null,
     ): Response<List<SpotDto?>>
 }

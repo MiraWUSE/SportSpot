@@ -6,7 +6,11 @@ import androidx.lifecycle.viewModelScope
 import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
+import com.mirawuse.sportspot.domain.repository.BackgroundSpotRefresh
 import com.mirawuse.sportspot.domain.repository.DeviceLocationProvider
+import com.mirawuse.sportspot.domain.repository.SpotRefreshArea
+import com.mirawuse.sportspot.domain.repository.SpotRefreshPhase
+import com.mirawuse.sportspot.domain.repository.SpotRefreshStatus
 import com.mirawuse.sportspot.domain.result.DomainError
 import com.mirawuse.sportspot.domain.usecase.spot.SearchNearbySpotsUseCase
 import com.mirawuse.sportspot.presentation.R
@@ -36,6 +40,9 @@ private const val SEARCH_SORT_KEY = "spotSearchSort"
 private const val SEARCH_LIGHTING_KEY = "spotSearchLighting"
 private const val SEARCH_SURFACE_KEY = "spotSearchSurface"
 private const val SEARCH_RADIUS_KEY = "spotSearchRadius"
+private const val SEARCH_LATITUDE_KEY = "spotSearchLatitude"
+private const val SEARCH_LONGITUDE_KEY = "spotSearchLongitude"
+private const val SEARCH_LOCATION_SOURCE_KEY = "spotSearchLocationSource"
 
 private inline fun <reified T : Enum<T>> SavedStateHandle.readEnum(key: String): T? {
     val name = get<Any>(key) as? String ?: return null
@@ -49,10 +56,11 @@ class HomeViewModel
         private val searchNearbySpots: SearchNearbySpotsUseCase,
         private val deviceLocation: DeviceLocationProvider,
         private val savedState: SavedStateHandle = SavedStateHandle(),
+        private val backgroundRefresh: BackgroundSpotRefresh? = null,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
         val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
-        private val _location = MutableStateFlow(SearchLocationState())
+        private val _location = MutableStateFlow(restoredLocation())
         val location: StateFlow<SearchLocationState> = _location.asStateFlow()
         private val mutableSearchFilter =
             MutableStateFlow(
@@ -66,12 +74,72 @@ class HomeViewModel
                 ),
             )
         internal val searchFilter = mutableSearchFilter.asStateFlow()
+        private val mutableBackgroundStatus = MutableStateFlow<SpotRefreshStatus?>(null)
+        internal val backgroundStatus = mutableBackgroundStatus.asStateFlow()
+        private var refreshCommand: Job? = null
         private var searchJob: Job? = null
         private var locationJob: Job? = null
         private var locationRequest = 0
 
         init {
             loadSpots()
+            backgroundRefresh?.let { scheduler ->
+                viewModelScope.launch {
+                    scheduler.status.collect { status ->
+                        mutableBackgroundStatus.value = status
+                        if (status?.phase == SpotRefreshPhase.SUCCEEDED) {
+                            status.area?.let { applyBackgroundSnapshot(it) }
+                        }
+                    }
+                }
+            }
+        }
+
+        internal fun scheduleBackgroundRefresh() = changeBackgroundWork { it.enqueue(currentArea()) }
+
+        internal fun cancelBackgroundRefresh() = changeBackgroundWork { it.cancel() }
+
+        private fun changeBackgroundWork(operation: suspend (BackgroundSpotRefresh) -> Unit) {
+            val scheduler = backgroundRefresh ?: return
+            if (refreshCommand?.isActive == true) return
+            refreshCommand =
+                viewModelScope.launch {
+                    try {
+                        operation(scheduler)
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (failure: Exception) {
+                        mutableBackgroundStatus.value = SpotRefreshStatus("", SpotRefreshPhase.FAILED, error = failure.readError())
+                    }
+                }
+        }
+
+        private fun currentArea() = SpotRefreshArea(_location.value.center, searchFilter.value.radiusMeters)
+
+        private suspend fun applyBackgroundSnapshot(area: SpotRefreshArea) {
+            if (area != currentArea()) return
+            val foreground = searchJob
+            foreground?.join()
+            val spots =
+                try {
+                    searchNearbySpots.readStoredSearch(area)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    null
+                } ?: return
+            if (area == currentArea() && searchJob === foreground) {
+                _uiState.value = if (spots.isEmpty()) HomeUiState.Empty else HomeUiState.Content(spots)
+            }
+        }
+
+        private fun restoredLocation(): SearchLocationState {
+            val latitude = savedState.get<Any>(SEARCH_LATITUDE_KEY) as? Double
+            val longitude = savedState.get<Any>(SEARCH_LONGITUDE_KEY) as? Double
+            val source = savedState.readEnum<LocationSource>(SEARCH_LOCATION_SOURCE_KEY)
+            if (latitude == null || longitude == null || source == null) return SearchLocationState()
+            val center = runCatching { GeoPoint(latitude, longitude) }.getOrNull() ?: return SearchLocationState()
+            return SearchLocationState(center = center, source = source)
         }
 
         internal fun setSearchQuery(query: String) {
@@ -162,7 +230,11 @@ class HomeViewModel
         ) {
             searchJob?.cancel()
             val radius = mutableSearchFilter.value.radiusMeters
+            savedState[SEARCH_LATITUDE_KEY] = center.latitude
+            savedState[SEARCH_LONGITUDE_KEY] = center.longitude
+            savedState[SEARCH_LOCATION_SOURCE_KEY] = source.name
             _location.value = _location.value.copy(center = center, source = source)
+            val previous = _uiState.value
             _uiState.value = HomeUiState.Loading
             searchJob =
                 viewModelScope.launch {
@@ -176,9 +248,13 @@ class HomeViewModel
                                 HomeUiState.Content(result.spots, result.fallback)
                             }
                     } catch (cancelled: CancellationException) {
-                        if (cancelled !is TimeoutCancellationException) throw cancelled
                         currentCoroutineContext().ensureActive()
-                        _uiState.value = HomeUiState.Error(cancelled.readError())
+                        _uiState.value =
+                            when {
+                                cancelled is TimeoutCancellationException -> HomeUiState.Error(cancelled.readError())
+                                refresh && previous != HomeUiState.Loading -> previous
+                                else -> HomeUiState.Empty
+                            }
                     } catch (failure: Exception) {
                         currentCoroutineContext().ensureActive()
                         _uiState.value = HomeUiState.Error(failure.readError())

@@ -77,6 +77,7 @@ internal fun HomeScreen(
     onFavorite: (Spot) -> Unit = {},
     onOpenAuth: () -> Unit = {},
     coverLoader: SpotCoverLoader? = null,
+    backgroundRefresh: (@Composable () -> Unit)? = null,
 ) {
     var favoritesInfo by rememberSaveable { mutableStateOf(false) }
     val filtered = rememberFilteredSpots((state as? HomeUiState.Content)?.spots.orEmpty(), filter)
@@ -100,6 +101,7 @@ internal fun HomeScreen(
                 DeviceLocationControl(location, requestLocation)
             }
         }
+        if (backgroundRefresh != null) item(key = "background-refresh") { backgroundRefresh() }
         when (state) {
             HomeUiState.Loading -> item { SpotSearchLoading() }
             HomeUiState.Empty ->

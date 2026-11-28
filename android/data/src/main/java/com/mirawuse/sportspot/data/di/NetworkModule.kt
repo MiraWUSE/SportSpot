@@ -54,5 +54,5 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideSpotApi(retrofit: Retrofit): SpotApi = retrofit.create(SpotApi::class.java)
+    internal fun provideSpotApi(retrofit: Retrofit): SpotApi = retrofit.create(SpotApi::class.java)
 }

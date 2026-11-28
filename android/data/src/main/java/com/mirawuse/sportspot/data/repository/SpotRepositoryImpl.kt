@@ -5,6 +5,7 @@ import com.mirawuse.sportspot.data.local.CacheSnapshot
 import com.mirawuse.sportspot.data.local.RoomSpotCache
 import com.mirawuse.sportspot.data.remote.RemoteSpotDataSource
 import com.mirawuse.sportspot.data.remote.SpotSearchDiagnostics
+import com.mirawuse.sportspot.data.remote.SpotSearchRequest
 import com.mirawuse.sportspot.data.remote.connectivity.NetworkMonitor
 import com.mirawuse.sportspot.data.remote.error.NetworkError
 import com.mirawuse.sportspot.data.remote.error.NetworkException
@@ -15,6 +16,7 @@ import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.repository.NearbySpots
+import com.mirawuse.sportspot.domain.repository.SpotRefreshArea
 import com.mirawuse.sportspot.domain.repository.SpotRepository
 import com.mirawuse.sportspot.domain.repository.ViewportSearchResult
 import com.mirawuse.sportspot.domain.result.DomainError
@@ -36,6 +38,7 @@ class SpotRepositoryImpl
         // The saved list and individual details update the same Room rows.
         private val savedMutex = Mutex()
         private val searchMutex = Mutex()
+        private var searchRateLimit: NetworkException? = null
 
         override suspend fun getSpots(): List<Spot> =
             savedMutex.withLock {
@@ -82,6 +85,13 @@ class SpotRepositoryImpl
             refresh: Boolean,
         ): NearbySpots = searchNearby(center, radiusMeters, null, refresh)
 
+        override suspend fun refreshStoredSearch(area: SpotRefreshArea) {
+            searchNearby(area.center, area.radiusMeters, null, refresh = true, allowCached = false)
+        }
+
+        override suspend fun readStoredSearch(area: SpotRefreshArea): List<Spot>? =
+            cache.readSearch(validatedSearchRequest(area.center, area.radiusMeters, null).cacheKey)?.value
+
         override suspend fun searchViewport(
             center: GeoPoint,
             radiusMeters: Int,
@@ -103,6 +113,7 @@ class SpotRepositoryImpl
             sportType: SportType?,
             refresh: Boolean,
             permitNetwork: (() -> Boolean)? = null,
+            allowCached: Boolean = true,
         ): NearbySpots =
             diagnostics.stage("search") {
                 val request = validatedSearchRequest(center, radiusMeters, sportType)
@@ -112,25 +123,41 @@ class SpotRepositoryImpl
                     val spots =
                         readOrRefresh(
                             ttlMillis = if (refresh) 0L else SEARCH_TTL_MILLIS,
-                            readCache = { diagnostics.stage("cache.read") { cache.readSearch(key) } },
-                            fetchRemote = { cached ->
-                                if (permitNetwork != null && !permitNetwork()) throw ViewportDeferred()
-                                try {
-                                    remote.searchNearby(request)
-                                } catch (failure: NetworkException) {
-                                    val http = failure.error as? NetworkError.Http
-                                    if (permitNetwork != null && http?.status == 429) {
-                                        throw ViewportRateLimited(ViewportSearchResult.RateLimited(http.retryAfterSeconds, cached))
-                                    }
-                                    throw failure
-                                }
-                            },
+                            readCache = { if (allowCached) diagnostics.stage("cache.read") { cache.readSearch(key) } else null },
+                            fetchRemote = { cached -> fetchSearch(request, permitNetwork, cached, publicOnly = !allowCached) },
                             writeCache = { spots, time -> diagnostics.stage("cache.write") { cache.replaceSearch(key, spots, time) } },
                             onFallback = { fallback = it },
                         )
                     NearbySpots(spots, fallback)
                 }
             }
+
+        private suspend fun fetchSearch(
+            request: SpotSearchRequest,
+            permitNetwork: (() -> Boolean)?,
+            cached: List<Spot>?,
+            publicOnly: Boolean,
+        ): List<Spot> {
+            searchRateLimit?.let { failure ->
+                val remaining = (failure.domainError as DomainError.Network).retryAtMillis - System.currentTimeMillis()
+                if (remaining > 0) {
+                    if (permitNetwork != null) throw ViewportRateLimited(ViewportSearchResult.RateLimited((remaining + 999) / 1000, cached))
+                    throw failure
+                }
+                searchRateLimit = null
+            }
+            if (permitNetwork != null && !permitNetwork()) throw ViewportDeferred()
+            try {
+                return remote.searchNearby(request, publicOnly)
+            } catch (failure: NetworkException) {
+                val http = failure.error as? NetworkError.Http
+                if (http?.status == 429) {
+                    searchRateLimit = failure
+                    if (permitNetwork != null) throw ViewportRateLimited(ViewportSearchResult.RateLimited(http.retryAfterSeconds, cached))
+                }
+                throw failure
+            }
+        }
 
         private suspend fun <T> readOrRefresh(
             ttlMillis: Long,

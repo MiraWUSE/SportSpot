@@ -5,6 +5,10 @@ import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
+import com.mirawuse.sportspot.domain.repository.BackgroundSpotRefresh
+import com.mirawuse.sportspot.domain.repository.SpotRefreshArea
+import com.mirawuse.sportspot.domain.repository.SpotRefreshPhase
+import com.mirawuse.sportspot.domain.repository.SpotRefreshStatus
 import com.mirawuse.sportspot.domain.repository.SpotRepository
 import com.mirawuse.sportspot.domain.result.DomainError
 import com.mirawuse.sportspot.domain.result.NetworkIssue
@@ -20,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -293,7 +298,7 @@ class HomeViewModelTest {
 
             advanceUntilIdle()
 
-            assertEquals(HomeUiState.Loading, viewModel.uiState.value)
+            assertEquals(HomeUiState.Empty, viewModel.uiState.value)
             assertEquals(1, repository.searchCalls)
         }
 
@@ -526,11 +531,69 @@ class HomeViewModelTest {
             assertEquals(1, device.calls)
         }
 
+    @Test
+    fun `background refresh uses selected area and reads matching success from cache without a second search`() =
+        runTest(dispatcher) {
+            val repository = FakeSpotRepository { _, _, _ -> listOf(spot) }
+            val scheduler = FakeBackgroundRefresh()
+            val device = FakeDeviceLocationProvider { GeoPoint(50.0, 40.0) }
+            val state = SavedStateHandle()
+            val viewModel = HomeViewModel(SearchNearbySpotsUseCase(repository), device, state, scheduler)
+            advanceUntilIdle()
+            viewModel.useDeviceLocation(approximate = true)
+            viewModel.applySearchFilter(SearchFilterState(query = spot.name, radiusMeters = 2000))
+            advanceUntilIdle()
+
+            viewModel.scheduleBackgroundRefresh()
+            advanceUntilIdle()
+            val oldArea = SpotRefreshArea(viewModel.location.value.center, 2000)
+            assertEquals(listOf(oldArea), scheduler.scheduled)
+            assertEquals(1, device.calls)
+
+            viewModel.applySearchFilter(viewModel.searchFilter.value.copy(radiusMeters = 3000))
+            advanceUntilIdle()
+            val requests = repository.searchCalls
+            repository.storedSpots = emptyList()
+            scheduler.status.value = SpotRefreshStatus("old", SpotRefreshPhase.SUCCEEDED, oldArea)
+            advanceUntilIdle()
+            assertEquals(HomeUiState.Content(listOf(spot)), viewModel.uiState.value)
+            assertEquals(emptyList<SpotRefreshArea>(), repository.cacheReads)
+
+            val currentArea = oldArea.copy(radiusMeters = 3000)
+            scheduler.status.value = SpotRefreshStatus("new", SpotRefreshPhase.SUCCEEDED, currentArea)
+            advanceUntilIdle()
+            assertEquals(HomeUiState.Empty, viewModel.uiState.value)
+            assertEquals(listOf(currentArea), repository.cacheReads)
+            assertEquals(requests, repository.searchCalls)
+            assertEquals(spot.name, viewModel.searchFilter.value.query)
+            assertEquals(1, scheduler.scheduled.size)
+        }
+
+    private class FakeBackgroundRefresh : BackgroundSpotRefresh {
+        override val status = MutableStateFlow<SpotRefreshStatus?>(null)
+        val scheduled = mutableListOf<SpotRefreshArea>()
+
+        override suspend fun enqueue(area: SpotRefreshArea) {
+            scheduled += area
+        }
+
+        override suspend fun cancel() {
+            status.value = SpotRefreshStatus("cancelled", SpotRefreshPhase.CANCELLED)
+        }
+    }
+
     private class FakeSpotRepository(
         private val search: suspend (GeoPoint, Int, SportType?) -> List<Spot>,
     ) : SpotRepository {
         var searchCalls = 0
             private set
+        var storedSpots: List<Spot>? = null
+        val cacheReads = mutableListOf<SpotRefreshArea>()
+
+        override suspend fun readStoredSearch(area: SpotRefreshArea): List<Spot>? {
+            cacheReads += area
+            return storedSpots
+        }
 
         override suspend fun getSpots(): List<Spot> = error("Home only calls searchNearby")
 
