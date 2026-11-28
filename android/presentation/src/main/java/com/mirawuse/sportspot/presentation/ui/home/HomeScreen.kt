@@ -43,6 +43,7 @@ import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchLoading
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchMessage
 import com.mirawuse.sportspot.presentation.ui.components.labelRes
+import com.mirawuse.sportspot.presentation.ui.photos.SpotCoverLoader
 import com.mirawuse.sportspot.presentation.ui.search.SearchFilterState
 import com.mirawuse.sportspot.presentation.ui.search.SpotFilterEmpty
 import com.mirawuse.sportspot.presentation.ui.search.SpotSearchBar
@@ -72,6 +73,7 @@ internal fun HomeScreen(
     favoriteEnabled: Boolean = true,
     onFavorite: (Spot) -> Unit = {},
     onOpenAuth: () -> Unit = {},
+    coverLoader: SpotCoverLoader? = null,
 ) {
     var favoritesInfo by rememberSaveable { mutableStateOf(false) }
     val filtered = rememberFilteredSpots((state as? HomeUiState.Content)?.spots.orEmpty(), filter)
@@ -148,6 +150,8 @@ internal fun HomeScreen(
                         onFavorite = { if (signedIn) onFavorite(spot) else favoritesInfo = true },
                         isFavorite = spot.id in savedSpotIds,
                         favoriteEnabled = favoriteEnabled,
+                        coverLoader = coverLoader,
+                        showUnknownAddress = true,
                     )
                 }
             }

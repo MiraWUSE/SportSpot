@@ -35,9 +35,12 @@ import com.mirawuse.sportspot.presentation.ui.components.SpotPhotoImage
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchLoading
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchMessage
 import com.mirawuse.sportspot.presentation.ui.components.SpotSportTag
+import com.mirawuse.sportspot.presentation.ui.components.addressLabel
 import com.mirawuse.sportspot.presentation.ui.components.spotCardContainerColor
 import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
 import com.mirawuse.sportspot.presentation.ui.navigation.WalkingRouteButton
+import com.mirawuse.sportspot.presentation.ui.photos.SpotCoverLoader
+import com.mirawuse.sportspot.presentation.ui.photos.SpotCoverSize
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
 @Composable
@@ -52,6 +55,7 @@ internal fun SpotDetailsScreen(
     reviewSummary: (@Composable () -> Unit)? = null,
     userPhotos: @Composable (Spot) -> Unit = {},
     onBuildRoute: ((GeoPoint) -> Unit)? = null,
+    coverLoader: SpotCoverLoader? = null,
 ) {
     val backLabel = stringResource(R.string.details_back)
     Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -81,7 +85,8 @@ internal fun SpotDetailsScreen(
                 state is HomeUiState.Loading -> SpotSearchLoading()
                 state is HomeUiState.Error ->
                     SpotSearchMessage(stringResource(R.string.home_error_title), state.message, onRetry)
-                spot != null -> DetailsContent(spot, onShowMap, onOpenReviews, favoriteAction, reviewSummary, userPhotos, onBuildRoute)
+                spot != null ->
+                    DetailsContent(spot, onShowMap, onOpenReviews, favoriteAction, reviewSummary, userPhotos, onBuildRoute, coverLoader)
                 else ->
                     SpotSearchMessage(
                         title = stringResource(R.string.details_not_found),
@@ -102,12 +107,15 @@ private fun DetailsContent(
     reviewSummary: (@Composable () -> Unit)?,
     userPhotos: @Composable (Spot) -> Unit,
     onBuildRoute: ((GeoPoint) -> Unit)?,
+    coverLoader: SpotCoverLoader?,
 ) {
     val uriHandler = LocalUriHandler.current
     SpotPhotoImage(
         spot = spot,
         illustration = R.drawable.spot_court_illustration,
         modifier = Modifier.fillMaxWidth().aspectRatio(347f / 218f).clip(MaterialTheme.shapes.large),
+        coverLoader = coverLoader,
+        coverSize = SpotCoverSize.DETAIL,
     ) { photo ->
         PhotoAttributionLink(
             text = stringResource(R.string.spot_photo_credit, photo.author, photo.license),
@@ -123,7 +131,7 @@ private fun DetailsContent(
         Text(text = spot.name, modifier = Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineSmall)
         SpotSportTag(spot)
         Text(
-            text = spot.address?.takeIf { it.isNotBlank() } ?: stringResource(R.string.details_no_address),
+            text = spot.addressLabel(),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium,
         )

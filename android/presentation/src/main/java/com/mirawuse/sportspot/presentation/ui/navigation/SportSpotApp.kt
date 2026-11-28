@@ -245,6 +245,7 @@ fun SportSpotApp() {
             modifier = Modifier.fillMaxSize().padding(innerPadding),
         ) {
             composable(HOME_ROUTE) { entry ->
+                val photos: PhotosViewModel = hiltViewModel(entry)
                 val viewModel = searchViewModel(navController, entry)
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
                 val location by viewModel.location.collectAsStateWithLifecycle()
@@ -268,6 +269,7 @@ fun SportSpotApp() {
                     favoriteEnabled = favoriteEnabled,
                     onFavorite = favorites::toggle,
                     onOpenAuth = { navController.navigate(AUTH_ROUTE) },
+                    coverLoader = photos.spotCovers,
                 )
             }
             composable<MapRoute> { entry ->
@@ -545,6 +547,7 @@ fun SportSpotApp() {
                         }
                     },
                     onBuildRoute = routeLauncher::open,
+                    coverLoader = photos.spotCovers,
                 )
             }
             composable<ReviewsRoute> { entry ->

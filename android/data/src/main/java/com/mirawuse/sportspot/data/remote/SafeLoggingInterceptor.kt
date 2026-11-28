@@ -15,7 +15,7 @@ class SafeLoggingInterceptor(
     override fun intercept(chain: Interceptor.Chain): Response {
         if (!enabled) return chain.proceed(chain.request())
         val request = chain.request()
-        val path = request.url.encodedPath.takeIf { it in PUBLIC_PATHS } ?: "/[redacted]"
+        val path = request.url.encodedPath.takeIf { it in PUBLIC_SPOT_PATHS } ?: "/[redacted]"
         val start = System.nanoTime()
         var status = "failed"
         try {
@@ -27,6 +27,6 @@ class SafeLoggingInterceptor(
     }
 
     companion object {
-        private val PUBLIC_PATHS = setOf("/rest/v1/spots", "/functions/v1/search-sports-spots-v1")
+        internal val PUBLIC_SPOT_PATHS = setOf("/rest/v1/spots", "/functions/v1/search-sports-spots-v1")
     }
 }

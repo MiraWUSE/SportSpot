@@ -1,5 +1,6 @@
 package com.mirawuse.sportspot.data.repository
 
+import android.database.sqlite.SQLiteConstraintException
 import androidx.room.Room
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
@@ -162,20 +163,55 @@ class OfflineSpotRepositoryTest {
     fun `refresh sees an approved community spot immediately and persists it for offline use`() =
         runBlocking {
             stubCommunity = false
-            server.enqueue(json(fixture("search-spots.json")))
+            val payload = gson.fromJson(fixture("search-spots.json"), JsonObject::class.java)
+            val template = payload.getAsJsonArray("spots")[0].asJsonObject
+            val osm = (1L..21).map { osmSpot.copy(id = SpotId("osm", "node:$it"), lighting = null) }
+            val rows = JsonArray()
+            for ((index, spot) in osm.withIndex()) {
+                rows.add(
+                    template.deepCopy().apply {
+                        addProperty("id", "osm:${spot.id.value}")
+                        addProperty("osm_id", index + 1)
+                    },
+                )
+            }
+            payload.add("spots", rows)
+            payload.addProperty("count", osm.size)
+            payload.addProperty("cache", "hit")
+            server.enqueue(json(payload.toString()))
             server.enqueue(json("[]"))
-            assertEquals(searchSpots, repository.searchNearby(center, 1000))
+            assertEquals(osm, repository.searchNearby(center, 1000))
 
-            server.enqueue(json(fixture("search-spots.json")))
+            server.enqueue(json(payload.toString()))
             server.enqueue(json(JsonArray().apply { add(savedRows()[1]) }.toString()))
             val published = savedSpots[1]
-            assertEquals(searchSpots + published, repository.refreshNearby(center, 1000, null))
+            assertEquals(osm + published, repository.refreshNearby(center, 1000, null))
             assertEquals(4, server.requestCount)
 
             online = false
             reopenDatabase()
-            assertEquals(searchSpots + published, repository.refreshNearby(center, 1000, null))
+            assertEquals(osm + published, repository.refreshNearby(center, 1000, null))
             assertEquals(4, server.requestCount)
+        }
+
+    @Test
+    fun `failed search cache write rolls back and the next refresh may succeed`() =
+        runBlocking {
+            server.enqueue(json(fixture("search-spots.json")))
+            assertEquals(searchSpots, repository.searchNearby(center, 1000))
+            val disk = database.openHelper.writableDatabase
+            disk.execSQL("CREATE TRIGGER reject_search_write BEFORE INSERT ON search_spots BEGIN SELECT RAISE(ABORT, 'test'); END")
+            server.enqueue(json(fixture("search-spots.json")))
+            val failure = runCatching { repository.refreshNearby(center, 1000, null) }.exceptionOrNull()
+            assertTrue(failure is SQLiteConstraintException)
+
+            online = false
+            assertEquals(searchSpots, repository.refreshNearby(center, 1000, null))
+            online = true
+            disk.execSQL("DROP TRIGGER reject_search_write")
+            server.enqueue(json(emptySearch()))
+            assertTrue(repository.refreshNearby(center, 1000, null).isEmpty())
+            assertEquals(3, server.requestCount)
         }
 
     @Test

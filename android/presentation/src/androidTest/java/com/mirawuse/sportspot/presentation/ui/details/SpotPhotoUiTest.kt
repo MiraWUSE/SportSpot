@@ -5,6 +5,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -18,6 +19,7 @@ import coil3.SingletonImageLoader
 import coil3.annotation.DelicateCoilApi
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import com.mirawuse.sportspot.domain.model.location.GeoPoint
+import com.mirawuse.sportspot.domain.model.photo.PhotoTarget
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
@@ -25,6 +27,7 @@ import com.mirawuse.sportspot.domain.model.spot.SpotPhoto
 import com.mirawuse.sportspot.domain.model.spot.SpotSport
 import com.mirawuse.sportspot.presentation.ui.home.HomeSpotCard
 import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
+import com.mirawuse.sportspot.presentation.ui.photos.SpotCoverLoader
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotTheme
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -65,6 +68,7 @@ class SpotPhotoUiTest {
                 ),
         )
     private val photoLabel = "Фото площадки «Тестовый корт»"
+    private val userPhotoLabel = "$photoLabel, добавленное пользователем"
     private val credit = "Фото: Test Author · CC BY 4.0"
     private val cropNotice = "Кадрировано для отображения"
     private val source = "Источник фото на Wikimedia Commons"
@@ -130,6 +134,54 @@ class SpotPhotoUiTest {
     }
 
     @Test
+    fun approvedCoverWinsOnHomeAndDetailsAndRefreshRestoresWikimedia() {
+        installFixture(200)
+        val details = mutableStateOf(false)
+        val galleryReads = AtomicInteger()
+        val imageReads = AtomicInteger()
+        val target = PhotoTarget.spot(spot.id)
+        var approved = listOf("newest", "older")
+        val jpg = fixtureImage(Bitmap.CompressFormat.JPEG)
+        val coverLoader =
+            SpotCoverLoader(
+                readGallery = {
+                    assertEquals(target, it)
+                    galleryReads.incrementAndGet()
+                    approved
+                },
+                readImage = {
+                    assertEquals("newest", it)
+                    imageReads.incrementAndGet()
+                    jpg
+                },
+            )
+        compose.setContent {
+            SportSpotTheme {
+                if (details.value) {
+                    SpotDetailsScreen(spot.id, HomeUiState.Content(listOf(spot)), {}, {}, {}, {}, coverLoader = coverLoader)
+                } else {
+                    HomeSpotCard(spot, { details.value = true }, {}, coverLoader = coverLoader)
+                }
+            }
+        }
+        waitForPhoto(userPhotoLabel)
+        compose.onNodeWithText(spot.name).performClick()
+        waitForPhoto(userPhotoLabel)
+        compose.onNodeWithText(credit).assertDoesNotExist()
+        compose.onNodeWithText(cropNotice).assertDoesNotExist()
+        compose.runOnIdle {
+            assertEquals(1, galleryReads.get())
+            assertEquals(2, imageReads.get())
+            approved = emptyList()
+            coverLoader.invalidate(target)
+        }
+        waitForPhoto()
+        compose.onNodeWithContentDescription(userPhotoLabel).assertDoesNotExist()
+        compose.onNodeWithText(credit).performScrollTo().assertIsDisplayed()
+        assertEquals(2, galleryReads.get())
+    }
+
+    @Test
     fun absentOrUnavailablePhotoLeavesDetailsAndHidesAttribution() {
         installFixture(503)
         val current =
@@ -142,7 +194,11 @@ class SpotPhotoUiTest {
         compose.onNodeWithText(spot.name).assertIsDisplayed()
         compose.onNodeWithText(credit).assertDoesNotExist()
         compose.onNodeWithText(cropNotice).assertDoesNotExist()
-        compose.onNodeWithText("Адрес не указан").performScrollTo().assertIsDisplayed()
+        compose
+            .onNodeWithText("Адрес неизвестен")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .assertHasNoClickAction()
         compose.onNodeWithText("Вид спорта не указан").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Характеристики не указаны").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Покрытие:", substring = true).assertDoesNotExist()
@@ -162,22 +218,24 @@ class SpotPhotoUiTest {
         compose.onNodeWithText("Показать на карте").performScrollTo().assertIsDisplayed()
     }
 
-    private fun waitForPhoto() {
-        compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription(photoLabel).fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithContentDescription(photoLabel).assertIsDisplayed()
+    private fun waitForPhoto(label: String = photoLabel) {
+        compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription(label).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription(label).assertIsDisplayed()
     }
+
+    private fun fixtureImage(format: Bitmap.CompressFormat): ByteArray =
+        ByteArrayOutputStream().use { stream ->
+            Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888).apply {
+                eraseColor(android.graphics.Color.BLUE)
+                compress(format, 100, stream)
+                recycle()
+            }
+            stream.toByteArray()
+        }
 
     private fun installFixture(status: Int) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val image =
-            ByteArrayOutputStream().use { stream ->
-                Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888).apply {
-                    eraseColor(android.graphics.Color.BLUE)
-                    compress(Bitmap.CompressFormat.PNG, 100, stream)
-                    recycle()
-                }
-                stream.toByteArray()
-            }
+        val image = fixtureImage(Bitmap.CompressFormat.PNG)
         val client =
             OkHttpClient
                 .Builder()

@@ -7,6 +7,7 @@ import com.mirawuse.sportspot.data.remote.AccessTokenProvider
 import com.mirawuse.sportspot.data.remote.NetworkClient
 import com.mirawuse.sportspot.data.remote.NetworkConfig
 import com.mirawuse.sportspot.data.remote.NetworkLogger
+import com.mirawuse.sportspot.data.remote.SpotSearchDiagnostics
 import com.mirawuse.sportspot.data.remote.api.SpotApi
 import dagger.Module
 import dagger.Provides
@@ -30,6 +31,11 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideGson(): Gson = NetworkClient.createGson()
+
+    @Provides
+    @Singleton
+    fun provideSpotSearchDiagnostics(config: NetworkConfig): SpotSearchDiagnostics =
+        SpotSearchDiagnostics(if (config.debugLogging) NetworkLogger { Log.d("SportSpotSearch", it) } else null)
 
     @Provides
     @Singleton

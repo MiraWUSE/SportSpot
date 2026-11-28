@@ -14,6 +14,7 @@ import com.mirawuse.sportspot.domain.model.photo.PhotoError
 import com.mirawuse.sportspot.domain.model.photo.PhotoException
 import com.mirawuse.sportspot.domain.model.photo.PhotoSubmission
 import com.mirawuse.sportspot.domain.model.photo.PhotoTarget
+import com.mirawuse.sportspot.domain.model.photo.PhotoTargetType
 import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.UserPhotoRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -46,6 +47,7 @@ internal class PhotosViewModel
         @param:ApplicationContext private val context: Context,
         private val auth: AuthRepository,
         private val repository: UserPhotoRepository,
+        val spotCovers: SpotCoverLoader = SpotCoverLoader(repository),
     ) : ViewModel() {
         private var sessionOwner by mutableStateOf<String?>(null)
         private var draft by mutableStateOf(PhotoDraftState())
@@ -198,6 +200,7 @@ internal class PhotosViewModel
                 viewModelScope.launch {
                     try {
                         repository.remove(owner, photo.id)
+                        if (target.type == PhotoTargetType.SPOT) spotCovers.invalidate(target)
                         if (current(owner)) {
                             val previous = historyFor(owner, target)
                             history[target] = previous.copy(items = previous.items.filterNot { it.id == photo.id })
@@ -217,7 +220,8 @@ internal class PhotosViewModel
             owner: String?,
         ): ByteArray = repository.image(id, owner)
 
-        suspend fun gallery(target: PhotoTarget): List<String> = repository.gallery(target)
+        suspend fun gallery(target: PhotoTarget): List<String> =
+            if (target.type == PhotoTargetType.SPOT) spotCovers.gallery(target) else repository.gallery(target)
 
         suspend fun queue(
             owner: String,

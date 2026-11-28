@@ -46,6 +46,7 @@ import com.mirawuse.sportspot.presentation.ui.components.SpotPhotoImage
 import com.mirawuse.sportspot.presentation.ui.components.spotCardContainerColor
 import com.mirawuse.sportspot.presentation.ui.map.OsmMap
 import com.mirawuse.sportspot.presentation.ui.map.previewMapSpots
+import com.mirawuse.sportspot.presentation.ui.photos.SpotCoverLoader
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotPillShape
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
@@ -140,6 +141,8 @@ internal fun HomeSpotCard(
     isFavorite: Boolean = false,
     favoriteEnabled: Boolean = true,
     showPhotoLicense: Boolean = false,
+    coverLoader: SpotCoverLoader? = null,
+    showUnknownAddress: Boolean = false,
 ) {
     val colors = MaterialTheme.colorScheme
     Card(
@@ -158,8 +161,8 @@ internal fun HomeSpotCard(
                         .clickable(role = Role.Button, onClick = onClick)
                 if (stackPhoto) {
                     Column(detailsModifier, verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.sm)) {
-                        HomeSpotThumbnail(spot, showPhotoLicense)
-                        SpotCardSummary(spot, Modifier.padding(bottom = SportSpotSpacing.xs))
+                        HomeSpotThumbnail(spot, showPhotoLicense, coverLoader)
+                        SpotCardSummary(spot, Modifier.padding(bottom = SportSpotSpacing.xs), showUnknownAddress)
                     }
                 } else {
                     Row(
@@ -167,8 +170,8 @@ internal fun HomeSpotCard(
                         horizontalArrangement = Arrangement.spacedBy(SportSpotSpacing.md),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        HomeSpotThumbnail(spot, showPhotoLicense)
-                        SpotCardSummary(spot, Modifier.weight(1f).padding(vertical = SportSpotSpacing.xs))
+                        HomeSpotThumbnail(spot, showPhotoLicense, coverLoader)
+                        SpotCardSummary(spot, Modifier.weight(1f).padding(vertical = SportSpotSpacing.xs), showUnknownAddress)
                     }
                 }
                 IconButton(
@@ -191,12 +194,14 @@ internal fun HomeSpotCard(
 private fun HomeSpotThumbnail(
     spot: Spot,
     showPhotoLicense: Boolean,
+    coverLoader: SpotCoverLoader?,
 ) {
     Column(Modifier.width(104.dp)) {
         SpotPhotoImage(
             spot = spot,
             illustration = R.drawable.home_court,
             modifier = Modifier.fillMaxWidth().height(83.dp).clip(MaterialTheme.shapes.medium),
+            coverLoader = coverLoader,
         ) { photo ->
             if (showPhotoLicense) {
                 Text(

@@ -3,6 +3,7 @@ package com.mirawuse.sportspot.data.remote
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.Strictness
+import okhttp3.EventListener
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import java.util.concurrent.TimeUnit
@@ -32,7 +33,19 @@ object NetworkClient {
             .addInterceptor(ApiKeyInterceptor(config))
             .addInterceptor(AuthInterceptor(accessTokenProvider))
             .addInterceptor(SafeLoggingInterceptor(config.debugLogging, logger))
-            .build()
+            .apply {
+                if (config.debugLogging) {
+                    eventListenerFactory { call ->
+                        val request = call.request()
+                        val path = request.url.encodedPath
+                        if (request.method == "GET" && path in SafeLoggingInterceptor.PUBLIC_SPOT_PATHS) {
+                            SpotSearchBodyListener(path, logger)
+                        } else {
+                            EventListener.NONE
+                        }
+                    }
+                }
+            }.build()
 
     fun createRetrofit(
         config: NetworkConfig,

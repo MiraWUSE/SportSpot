@@ -10,9 +10,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.mirawuse.sportspot.domain.model.spot.Spot
+import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotPillShape
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
@@ -26,6 +28,7 @@ internal fun spotCardContainerColor(): Color {
 internal fun SpotCardSummary(
     spot: Spot,
     modifier: Modifier = Modifier,
+    showUnknownAddress: Boolean = false,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.xs)) {
         Text(
@@ -35,9 +38,9 @@ internal fun SpotCardSummary(
             overflow = TextOverflow.Ellipsis,
         )
         SpotSportTag(spot, maxLines = 2)
-        spot.address?.takeIf(String::isNotBlank)?.let { address ->
+        if (showUnknownAddress || !spot.address.isNullOrBlank()) {
             Text(
-                text = address,
+                text = spot.addressLabel(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 2,
@@ -46,6 +49,9 @@ internal fun SpotCardSummary(
         }
     }
 }
+
+@Composable
+internal fun Spot.addressLabel(): String = address?.takeIf(String::isNotBlank) ?: stringResource(R.string.spot_unknown_address)
 
 @Composable
 internal fun SpotSportTag(
