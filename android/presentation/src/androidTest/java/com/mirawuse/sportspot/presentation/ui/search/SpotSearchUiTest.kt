@@ -118,9 +118,10 @@ class SpotSearchUiTest {
                             onResetSearch = viewModel::resetSearchFilter,
                         )
                     } else {
+                        val location by viewModel.location.collectAsStateWithLifecycle()
                         HomeScreen(
                             state = state,
-                            location = viewModel.location.value,
+                            location = location,
                             onLocate = {},
                             onPermissionDenied = {},
                             onCancelLocation = {},
