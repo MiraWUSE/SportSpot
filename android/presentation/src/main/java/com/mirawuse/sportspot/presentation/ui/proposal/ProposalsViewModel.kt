@@ -13,6 +13,7 @@ import com.mirawuse.sportspot.domain.repository.SpotProposalRepository
 import com.mirawuse.sportspot.domain.result.DomainResult
 import com.mirawuse.sportspot.domain.usecase.proposal.CreateProposalUseCase
 import com.mirawuse.sportspot.domain.usecase.proposal.GetMyProposalsUseCase
+import com.mirawuse.sportspot.presentation.ui.forms.mayHaveApplied
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -66,6 +67,7 @@ internal class ProposalsViewModel
                     val result = create(name, sport, location, address, userId)
                     submission = userId to result
                     if (result is DomainResult.Success && owner == userId) load(userId)
+                    if (result is DomainResult.Failure && result.error.mayHaveApplied()) load(userId)
                 } finally {
                     submitting = false
                 }

@@ -29,14 +29,14 @@ class FavoriteDestinationTest {
         val map = MapRoute(spot.id.source, spot.id.value, favorite = true)
         val account = auth("owner")
         val state = saved.visibleFor(account)
-        assertEquals(HomeUiState.Content(listOf(spot)), favoriteDestinationState(state, details.spotId, "Ошибка"))
-        assertEquals(HomeUiState.Content(listOf(spot)), favoriteDestinationState(state, map.spotId, "Ошибка"))
+        assertEquals(HomeUiState.Content(listOf(spot)), favoriteDestinationState(state, details.spotId))
+        assertEquals(HomeUiState.Content(listOf(spot)), favoriteDestinationState(state, map.spotId))
     }
 
     @Test
     fun privateSnapshotIsHiddenIfTheGuestOrAnotherAccountRestoresTheRoute() {
-        assertEquals(HomeUiState.Empty, favoriteDestinationState(saved.visibleFor(AuthState.Guest), spot.id, "Ошибка"))
-        assertEquals(HomeUiState.Loading, favoriteDestinationState(saved.visibleFor(auth("other")), spot.id, "Ошибка"))
+        assertEquals(HomeUiState.Empty, favoriteDestinationState(saved.visibleFor(AuthState.Guest), spot.id))
+        assertEquals(HomeUiState.Loading, favoriteDestinationState(saved.visibleFor(auth("other")), spot.id))
     }
 
     @Test

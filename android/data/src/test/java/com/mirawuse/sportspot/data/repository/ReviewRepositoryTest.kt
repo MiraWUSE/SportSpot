@@ -4,6 +4,7 @@ import com.google.gson.JsonParser
 import com.mirawuse.sportspot.data.remote.api.ReviewApi
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.result.DomainError
+import com.mirawuse.sportspot.domain.result.NetworkIssue
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
@@ -73,12 +74,12 @@ class ReviewRepositoryTest {
         runBlocking {
             for (invalid in listOf(reviewRow(user = BOB_ID), reviewRow(id = "bad-id"), reviewRow(canonical = "osm:invalid"))) {
                 http.enqueue("[$invalid]")
-                assertEquals(DomainError.Unexpected, contentFailure { repo.getReviewsByUser(ALICE_ID) })
+                assertEquals(DomainError.Network(NetworkIssue.INVALID_RESPONSE), contentFailure { repo.getReviewsByUser(ALICE_ID) })
             }
             val stuck = List(100) { reviewRow() }.joinToString(",", "[", "]")
             http.enqueue(stuck)
             http.enqueue(stuck)
-            assertEquals(DomainError.Unexpected, contentFailure { repo.getReviewsByUser(ALICE_ID) })
+            assertEquals(DomainError.Network(NetworkIssue.INVALID_RESPONSE), contentFailure { repo.getReviewsByUser(ALICE_ID) })
             assertEquals(5, server.requestCount)
         }
 
@@ -92,7 +93,7 @@ class ReviewRepositoryTest {
             http.enqueue("{}", 403)
             assertEquals(DomainError.Forbidden, contentFailure { repo.getReviewsByUser(ALICE_ID) })
             http.online = false
-            assertEquals(DomainError.Unavailable, contentFailure { repo.getReviewsByUser(ALICE_ID) })
+            assertEquals(DomainError.Network(NetworkIssue.OFFLINE), contentFailure { repo.getReviewsByUser(ALICE_ID) })
         }
 
     @Test
@@ -132,7 +133,7 @@ class ReviewRepositoryTest {
             http.enqueue("{}", 400)
             assertTrue(contentFailure { repo.createReview(ALICE_ID, osm, 0, "Текст", null) } is DomainError.Validation)
             http.online = false
-            assertEquals(DomainError.Unavailable, contentFailure { repo.getReviewsBySpot(osm) })
+            assertEquals(DomainError.Network(NetworkIssue.OFFLINE), contentFailure { repo.getReviewsBySpot(osm) })
             http.auth.signOut()
             assertEquals(DomainError.Unauthorized, contentFailure { repo.deleteReview(ALICE_ID, ITEM_ID) })
             assertEquals(4, server.requestCount)

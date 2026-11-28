@@ -27,6 +27,7 @@ import com.mirawuse.sportspot.domain.model.photo.PhotoSubmission
 import com.mirawuse.sportspot.domain.model.photo.PhotoTargetType
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.forms.FormCard
+import com.mirawuse.sportspot.presentation.ui.forms.networkRetryReady
 import com.mirawuse.sportspot.presentation.ui.moderation.ModerationDecisionButtons
 import com.mirawuse.sportspot.presentation.ui.moderation.ModerationField
 import com.mirawuse.sportspot.presentation.ui.moderation.ModerationHeading
@@ -41,10 +42,14 @@ internal fun PhotoModeration(
     LaunchedEffect(owner, ready) { if (ready) model.loadModeration(owner) }
     val queue = model.moderationFor(owner)
     ModerationHeading(stringResource(R.string.moderation_photo_queue)) {
-        PhotoActionButton(R.string.photos_refresh, enabled = ready && !queue.loading) { model.loadModeration(owner) }
+        val error = queue.error
+        if (error == null || error.canRetryPhotoRead()) {
+            val label = if (error == null) R.string.photos_refresh else R.string.home_retry
+            PhotoActionButton(label, enabled = ready && !queue.loading && networkRetryReady(queue.detail)) { model.loadModeration(owner) }
+        }
     }
     if (!ready || queue.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-    queue.error?.let { PhotoErrorText(it) }
+    queue.error?.let { PhotoErrorText(it, queue.detail) }
     if (ready && !queue.loading && queue.items.isEmpty() && queue.error == null) {
         Text(stringResource(R.string.photos_queue_empty))
     }
@@ -151,8 +156,10 @@ internal fun ProposalPhotoEvidence(
                     when {
                         !expanded -> Unit
                         error != null -> {
-                            PhotoErrorText(error.error)
-                            PhotoActionButton(R.string.home_retry) { attempt++ }
+                            PhotoErrorText(error.error, error.detail)
+                            if (error.error.canRetryPhotoRead()) {
+                                PhotoActionButton(R.string.home_retry, enabled = networkRetryReady(error.detail)) { attempt++ }
+                            }
                         }
                         photos == null -> LinearProgressIndicator(Modifier.fillMaxWidth())
                         photos.isEmpty() -> Text(stringResource(R.string.moderation_no_attachments))

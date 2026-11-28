@@ -7,6 +7,7 @@ import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.proposal.ProposalStatus
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.result.DomainError
+import com.mirawuse.sportspot.domain.result.NetworkIssue
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
@@ -55,7 +56,7 @@ class SpotProposalRepositoryTest {
             assertEquals("Bearer access-$BOB_ID", request.getHeader("Authorization"))
             assertEquals("eq.$BOB_ID", request.requestUrl?.queryParameter("user_id"))
             http.enqueue(proposal())
-            assertEquals(DomainError.Unexpected, contentFailure { repo(other).getMyProposals(BOB_ID) })
+            assertEquals(DomainError.Network(NetworkIssue.INVALID_RESPONSE), contentFailure { repo(other).getMyProposals(BOB_ID) })
         }
 
     @Test
@@ -67,7 +68,7 @@ class SpotProposalRepositoryTest {
                 contentFailure { repo(guest).createProposal(ALICE_ID, "Корт", SportType.OTHER, point, null) },
             )
             http.online = false
-            assertEquals(DomainError.Unavailable, contentFailure { repo(http).getMyProposals(ALICE_ID) })
+            assertEquals(DomainError.Network(NetworkIssue.OFFLINE), contentFailure { repo(http).getMyProposals(ALICE_ID) })
             assertFalse(server.requestCount > 0)
         }
 
@@ -124,7 +125,7 @@ class SpotProposalRepositoryTest {
                     403 to DomainError.Forbidden,
                     404 to DomainError.NotFound,
                     409 to DomainError.Conflict,
-                    503 to DomainError.Unavailable,
+                    503 to DomainError.Network(NetworkIssue.SERVER),
                 )
             for ((status, failure) in failureCases) {
                 http.enqueue("{}", status)

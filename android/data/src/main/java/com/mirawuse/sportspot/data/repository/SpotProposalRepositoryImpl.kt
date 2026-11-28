@@ -40,7 +40,7 @@ internal class SpotProposalRepositoryImpl
             location: GeoPoint,
             address: String?,
         ): SpotProposal =
-            call.execute(userId) { session ->
+            call.execute(userId, retryUnauthorized = false) { session ->
                 val sport = if (sportType == SportType.OTHER) "other" else sportType.toApiSport()
                 val body = NewProposal(name, sport, location.latitude, location.longitude, address)
                 val proposal = network.body(api.create(body, session)).singleOrNull()?.toProposal() ?: invalidContent()
@@ -74,7 +74,7 @@ internal class SpotProposalRepositoryImpl
             decision: String,
             reason: String?,
         ): SpotProposal {
-            call.execute(userId) { session ->
+            call.execute(userId, retryUnauthorized = false) { session ->
                 require(proposalId.isCanonicalUuid())
                 val response = network.body(api.moderate(ProposalDecision(proposalId, decision, reason), session))
                 val expectedSpotId = if (decision == "approved") "community:$proposalId" else null

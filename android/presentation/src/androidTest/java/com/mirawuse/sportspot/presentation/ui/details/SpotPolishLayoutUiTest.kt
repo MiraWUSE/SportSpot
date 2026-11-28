@@ -37,6 +37,8 @@ import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.model.spot.SpotSport
+import com.mirawuse.sportspot.domain.result.DomainError
+import com.mirawuse.sportspot.domain.result.NetworkIssue
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.account.FavoritesUiState
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
@@ -164,8 +166,8 @@ class SpotPolishLayoutUiTest {
         }
         compose.onNodeWithText(spot.name).assertIsDisplayed().performClick()
         compose.onNodeWithText("Загружаем площадки…").assertIsDisplayed()
-        compose.runOnIdle { detailsState.value = HomeUiState.Error("Нет сети") }
-        compose.onNodeWithText("Нет сети").assertIsDisplayed()
+        compose.runOnIdle { detailsState.value = HomeUiState.Error(DomainError.Network(NetworkIssue.OFFLINE)) }
+        compose.onNodeWithText("Нет подключения к интернету.", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Повторить").performClick()
         compose.runOnIdle { detailsState.value = HomeUiState.Content(listOf(mapSpot)) }
         compose.onNodeWithText("Площадка не найдена").assertIsDisplayed()
@@ -189,7 +191,7 @@ class SpotPolishLayoutUiTest {
                 location = GeoPoint(56.39, 44.15),
             )
         val favorites = FavoritesUiState.Content(owner, FavoriteList(listOf(Favorite(owner, spot.id, "2026-11-25", spot))))
-        val state = favoriteDestinationState(favorites, spot.id, "Ошибка")
+        val state = favoriteDestinationState(favorites, spot.id)
         var opened: GeoPoint? = null
         compose.setContent {
             SportSpotTheme {

@@ -14,11 +14,12 @@ import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.FavoriteRepository
+import com.mirawuse.sportspot.domain.result.DomainError
 import com.mirawuse.sportspot.domain.result.DomainResult
+import com.mirawuse.sportspot.domain.result.NetworkIssue
 import com.mirawuse.sportspot.domain.usecase.favorite.AddFavoriteUseCase
 import com.mirawuse.sportspot.domain.usecase.favorite.GetFavoritesUseCase
 import com.mirawuse.sportspot.domain.usecase.favorite.RemoveFavoriteUseCase
-import com.mirawuse.sportspot.presentation.R
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -45,6 +46,7 @@ internal sealed interface FavoritesUiState {
     data class Error(
         override val owner: String,
         val reason: FavoriteFailure,
+        val error: DomainError = reason.asDomainError(),
     ) : FavoritesUiState
 }
 
@@ -70,7 +72,7 @@ internal class FavoritesViewModel
             private set
         var busySpot by mutableStateOf<SpotId?>(null)
             private set
-        var actionError by mutableStateOf<FavoriteFailure?>(null)
+        var actionError by mutableStateOf<DomainError?>(null)
             private set
 
         init {
@@ -98,9 +100,9 @@ internal class FavoritesViewModel
                             val list = get(owner).favoriteValue()
                             FavoritesUiState.Content(owner, list)
                         } catch (failure: FavoriteException) {
-                            FavoritesUiState.Error(owner, failure.failure)
-                        } catch (_: AuthException) {
-                            FavoritesUiState.Error(owner, FavoriteFailure.UNAVAILABLE)
+                            FavoritesUiState.Error(owner, failure.failure, failure.detail ?: failure.failure.asDomainError())
+                        } catch (failure: AuthException) {
+                            FavoritesUiState.Error(owner, FavoriteFailure.UNAVAILABLE, failure.detail ?: DomainError.Unauthorized)
                         }
                     if (state.owner == owner) state = loaded
                 }
@@ -142,9 +144,9 @@ internal class FavoritesViewModel
                         val list = action(current.owner, current.list)
                         if (state.owner == current.owner) state = current.copy(list = list)
                     } catch (failure: FavoriteException) {
-                        if (state.owner == current.owner) actionError = failure.failure
-                    } catch (_: AuthException) {
-                        if (state.owner == current.owner) actionError = FavoriteFailure.UNAVAILABLE
+                        if (state.owner == current.owner) actionError = failure.detail ?: failure.failure.asDomainError()
+                    } catch (failure: AuthException) {
+                        if (state.owner == current.owner) actionError = failure.detail ?: DomainError.Unauthorized
                     } finally {
                         if (state.owner == current.owner) busySpot = null
                     }
@@ -158,10 +160,10 @@ private fun <T> DomainResult<T>.favoriteValue(): T =
         is DomainResult.Failure -> throw FavoriteException(FavoriteFailure.SESSION_EXPIRED)
     }
 
-internal fun FavoriteFailure.labelRes(): Int =
+private fun FavoriteFailure.asDomainError(): DomainError =
     when (this) {
-        FavoriteFailure.OFFLINE -> R.string.favorites_offline_error
-        FavoriteFailure.RATE_LIMITED -> R.string.auth_rate_limited
-        FavoriteFailure.SESSION_EXPIRED -> R.string.auth_session_expired
-        FavoriteFailure.UNAVAILABLE -> R.string.favorites_load_error
+        FavoriteFailure.OFFLINE -> DomainError.Network(NetworkIssue.OFFLINE)
+        FavoriteFailure.RATE_LIMITED -> DomainError.Network(NetworkIssue.RATE_LIMITED)
+        FavoriteFailure.SESSION_EXPIRED -> DomainError.Unauthorized
+        FavoriteFailure.UNAVAILABLE -> DomainError.Unavailable
     }

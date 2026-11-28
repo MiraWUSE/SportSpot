@@ -16,6 +16,7 @@ import com.mirawuse.sportspot.domain.model.auth.AuthState
 import com.mirawuse.sportspot.domain.model.user.UserRole
 import com.mirawuse.sportspot.domain.result.DomainError
 import com.mirawuse.sportspot.domain.result.DomainResult
+import com.mirawuse.sportspot.domain.result.NetworkIssue
 import com.mirawuse.sportspot.domain.usecase.auth.SignUpUseCase
 import com.mirawuse.sportspot.domain.usecase.user.UpdateMyProfileUseCase
 import kotlinx.coroutines.CoroutineStart
@@ -216,9 +217,9 @@ class AuthRepositoryTest {
             assertEquals(2, server.requestCount)
             for ((body, expected) in listOf(
                 "[]" to DomainError.NotFound,
-                profileNameResponse("Новое имя", OTHER_UID) to DomainError.Unexpected,
-                profileNameResponse("Другое имя") to DomainError.Unexpected,
-                profileNameResponse(" ") to DomainError.Unexpected,
+                profileNameResponse("Новое имя", OTHER_UID) to DomainError.Network(NetworkIssue.INVALID_RESPONSE),
+                profileNameResponse("Другое имя") to DomainError.Network(NetworkIssue.INVALID_RESPONSE),
+                profileNameResponse(" ") to DomainError.Network(NetworkIssue.INVALID_RESPONSE),
             )) {
                 enqueue(body)
                 assertEquals(expected, contentFailure { repository.updateMyProfile(UID, "Новое имя") })
@@ -227,24 +228,32 @@ class AuthRepositoryTest {
             enqueue("{}", 403)
             assertEquals(DomainError.Forbidden, contentFailure { repository.updateMyProfile(UID, "Новое имя") })
             enqueue("{}", 503)
-            assertEquals(DomainError.Unavailable, contentFailure { repository.updateMyProfile(UID, "Новое имя") })
+            assertEquals(
+                DomainError.Network(NetworkIssue.SERVER),
+                contentFailure { repository.updateMyProfile(UID, "Новое имя") },
+            )
             online = false
-            assertEquals(DomainError.Unavailable, contentFailure { repository.updateMyProfile(UID, "Новое имя") })
+            assertEquals(
+                DomainError.Network(NetworkIssue.OFFLINE),
+                contentFailure { repository.updateMyProfile(UID, "Новое имя") },
+            )
             assertEquals(session, store.value)
             assertEquals(AuthState.Authenticated(session.profile), repository.authState.value)
         }
 
     @Test
-    fun expiredAccessTokenIsRefreshedAndThePatchKeepsTheRotatedTokens() =
+    fun expiredAccessTokenRefreshesTheSessionWithoutReplayingThePatch() =
         runBlocking {
             signInAndDrain()
             enqueue("{}", 401)
             enqueueSession(access = "access-two", refresh = "refresh-two")
             enqueue(profileNameResponse("Новое имя"))
 
-            assertEquals("Новое имя", repository.updateMyProfile(UID, "Новое имя").name)
+            assertEquals(DomainError.Unauthorized, contentFailure { repository.updateMyProfile(UID, "Новое имя") })
             assertEquals("Bearer access-one", next().getHeader("Authorization"))
             assertEquals("refresh_token", next().requestUrl?.queryParameter("grant_type"))
+            assertEquals(4, server.requestCount)
+            assertEquals("Новое имя", repository.updateMyProfile(UID, "Новое имя").name)
             assertEquals("Bearer access-two", next().getHeader("Authorization"))
             assertEquals("refresh-two", store.value?.refreshToken)
             assertEquals("access-two", store.value?.accessToken)

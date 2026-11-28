@@ -44,7 +44,7 @@ internal class ReviewRepositoryImpl
             text: String,
             title: String?,
         ): Review =
-            call.execute(userId) { session ->
+            call.execute(userId, retryUnauthorized = false) { session ->
                 val body = reviewBody(rating, text, title, spotId.toCanonicalId())
                 val review = network.body(api.create(body, session)).singleOrNull()?.toReview() ?: invalidContent()
                 if (review.authorId != userId || review.spotId != spotId) invalidContent()
@@ -58,7 +58,7 @@ internal class ReviewRepositoryImpl
             text: String,
             title: String?,
         ): Review =
-            call.execute(userId) { session ->
+            call.execute(userId, retryUnauthorized = false) { session ->
                 val rows = network.body(api.update(uuidFilter(reviewId), uuidFilter(userId), reviewBody(rating, text, title), session))
                 if (rows.isEmpty()) throw NetworkException(NetworkError.Http(404))
                 val review = rows.singleOrNull()?.toReview() ?: invalidContent()
@@ -70,7 +70,7 @@ internal class ReviewRepositoryImpl
             userId: String,
             reviewId: String,
         ) {
-            call.execute(userId) { session ->
+            call.execute(userId, retryUnauthorized = false) { session ->
                 val rows = network.body(api.delete(uuidFilter(reviewId), uuidFilter(userId), session))
                 if (rows.isEmpty()) throw NetworkException(NetworkError.Http(404))
                 if (rows.singleOrNull()?.id != reviewId) invalidContent()

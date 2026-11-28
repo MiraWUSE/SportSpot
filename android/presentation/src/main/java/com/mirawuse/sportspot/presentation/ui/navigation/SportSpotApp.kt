@@ -58,7 +58,6 @@ import com.mirawuse.sportspot.presentation.ui.account.FavoritesScreen
 import com.mirawuse.sportspot.presentation.ui.account.FavoritesUiState
 import com.mirawuse.sportspot.presentation.ui.account.FavoritesViewModel
 import com.mirawuse.sportspot.presentation.ui.account.ProfileScreen
-import com.mirawuse.sportspot.presentation.ui.account.labelRes
 import com.mirawuse.sportspot.presentation.ui.account.visibleFor
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButtonVariant
@@ -66,9 +65,11 @@ import com.mirawuse.sportspot.presentation.ui.components.SpotSearchLoading
 import com.mirawuse.sportspot.presentation.ui.components.sportLabel
 import com.mirawuse.sportspot.presentation.ui.details.SpotDetailsScreen
 import com.mirawuse.sportspot.presentation.ui.forms.FormScreen
+import com.mirawuse.sportspot.presentation.ui.forms.userMessage
 import com.mirawuse.sportspot.presentation.ui.home.HomeScreen
 import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
 import com.mirawuse.sportspot.presentation.ui.home.HomeViewModel
+import com.mirawuse.sportspot.presentation.ui.home.SpotBackgroundRefresh
 import com.mirawuse.sportspot.presentation.ui.map.MapAnchor
 import com.mirawuse.sportspot.presentation.ui.map.MapScreen
 import com.mirawuse.sportspot.presentation.ui.map.MapViewModel
@@ -174,7 +175,6 @@ fun SportSpotApp() {
     val favoriteList = (favoriteState as? FavoritesUiState.Content)?.list?.items.orEmpty()
     val savedIds = favoriteList.mapTo(mutableSetOf()) { it.spotId }
     val favoriteEnabled = !authViewModel.restoring && favoriteState !is FavoritesUiState.Loading && favorites.busySpot == null
-    val favoriteError = stringResource(R.string.favorites_load_error)
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
     val routeScope = rememberCoroutineScope()
@@ -186,7 +186,7 @@ fun SportSpotApp() {
                 onUnavailable = { routeScope.launch { snackbar.showSnackbar(routeError) } },
             )
         }
-    val failureMessage = favorites.actionError?.takeIf { favoriteState.owner != null }?.let { stringResource(it.labelRes()) }
+    val failureMessage = favorites.actionError?.takeIf { favoriteState.owner != null }?.userMessage()
     LaunchedEffect(failureMessage, favoriteState.owner) {
         if (failureMessage != null) {
             snackbar.showSnackbar(failureMessage)
@@ -250,6 +250,7 @@ fun SportSpotApp() {
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
                 val location by viewModel.location.collectAsStateWithLifecycle()
                 val filter by viewModel.searchFilter.collectAsStateWithLifecycle()
+                val backgroundStatus by viewModel.backgroundStatus.collectAsStateWithLifecycle()
                 HomeScreen(
                     state = state,
                     location = location,
@@ -270,6 +271,15 @@ fun SportSpotApp() {
                     onFavorite = favorites::toggle,
                     onOpenAuth = { navController.navigate(AUTH_ROUTE) },
                     coverLoader = photos.spotCovers,
+                    backgroundRefresh = {
+                        val area = backgroundStatus?.area
+                        SpotBackgroundRefresh(
+                            backgroundStatus,
+                            viewModel::scheduleBackgroundRefresh,
+                            viewModel::cancelBackgroundRefresh,
+                            matchesArea = area == null || (area.center == location.center && area.radiusMeters == filter.radiusMeters),
+                        )
+                    },
                 )
             }
             composable<MapRoute> { entry ->
@@ -290,7 +300,7 @@ fun SportSpotApp() {
                 val viewport = explored.takeIf { !route.favorite && it.anchor == anchor }
                 val seed =
                     if (route.favorite) {
-                        favoriteDestinationState(favoriteState, route.spotId, favoriteError)
+                        favoriteDestinationState(favoriteState, route.spotId)
                     } else if (needsMapSeed) {
                         val focus = route.spotId?.let { (state as? HomeUiState.Content)?.findSpot(it) } ?: openedMapSpot
                         HomeUiState.Loading.withOpenedMapSpot(route.spotId, focus)
@@ -502,7 +512,7 @@ fun SportSpotApp() {
                 val resources = LocalResources.current
                 val detailsState =
                     if (route.favorite) {
-                        favoriteDestinationState(favoriteState, route.spotId, favoriteError)
+                        favoriteDestinationState(favoriteState, route.spotId)
                     } else {
                         state.withOpenedMapSpot(route.spotId, openedMapSpot)
                     }
@@ -640,24 +650,23 @@ internal fun HomeUiState.withOpenedMapSpot(
 ): HomeUiState {
     val content = this as? HomeUiState.Content
     if (opened == null || opened.id != spotId || content?.findSpot(opened.id) != null) return this
-    return HomeUiState.Content(listOf(opened) + content?.spots.orEmpty())
+    return HomeUiState.Content(listOf(opened) + content?.spots.orEmpty(), content?.fallback)
 }
 
 internal fun favoriteDestinationState(
     state: FavoritesUiState,
     spotId: SpotId?,
-    errorMessage: String,
 ): HomeUiState =
     when (state) {
         FavoritesUiState.Guest -> HomeUiState.Empty
         is FavoritesUiState.Loading -> HomeUiState.Loading
-        is FavoritesUiState.Error -> HomeUiState.Error(errorMessage)
+        is FavoritesUiState.Error -> HomeUiState.Error(state.error)
         is FavoritesUiState.Content -> {
             val spot =
                 state.list.items
                     .firstOrNull { it.spotId == spotId }
                     ?.spot
-            if (spot == null) HomeUiState.Empty else HomeUiState.Content(listOf(spot))
+            if (spot == null) HomeUiState.Empty else HomeUiState.Content(listOf(spot), state.list.fallback)
         }
     }
 

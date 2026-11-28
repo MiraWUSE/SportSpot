@@ -32,7 +32,7 @@ import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButtonVariant
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchLoading
 import com.mirawuse.sportspot.presentation.ui.components.labelRes
-import com.mirawuse.sportspot.presentation.ui.forms.ContentErrorText
+import com.mirawuse.sportspot.presentation.ui.forms.ContentMutationError
 import com.mirawuse.sportspot.presentation.ui.forms.FormCard
 import com.mirawuse.sportspot.presentation.ui.forms.FormErrorText
 import com.mirawuse.sportspot.presentation.ui.forms.FormField
@@ -174,7 +174,7 @@ private fun ProposalFields(
                 )
             }
         }
-        error?.let { ContentErrorText(it) }
+        error?.let { ContentMutationError(it) }
         photoAttachments()
         SportSpotButton(
             text = stringResource(R.string.proposal_submit),

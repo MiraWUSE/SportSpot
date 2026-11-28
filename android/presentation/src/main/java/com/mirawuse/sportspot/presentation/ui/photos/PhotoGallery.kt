@@ -28,6 +28,7 @@ import com.mirawuse.sportspot.domain.model.photo.PhotoException
 import com.mirawuse.sportspot.domain.model.photo.PhotoTarget
 import com.mirawuse.sportspot.domain.model.photo.PhotoTargetType
 import com.mirawuse.sportspot.presentation.R
+import com.mirawuse.sportspot.presentation.ui.forms.networkRetryReady
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
 @Composable
@@ -80,7 +81,7 @@ private fun GalleryContent(
     Column(verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.sm)) {
         if (showTitle) Text(stringResource(R.string.photos_gallery), style = MaterialTheme.typography.titleMedium)
         when {
-            error != null -> PhotoErrorText(error.error)
+            error != null -> PhotoErrorText(error.error, error.detail)
             images == null -> LinearProgressIndicator(Modifier.fillMaxWidth())
             images.isEmpty() -> Text(stringResource(R.string.photos_empty_gallery))
             else ->
@@ -95,8 +96,19 @@ private fun GalleryContent(
                     }
                 }
         }
-        refreshButton(if (error != null) R.string.home_retry else R.string.photos_refresh, gallery != null) {
-            if (spotCovers != null) spotCovers.invalidate(target) else attempt++
+        if (error == null || error.error.canRetryPhotoRead()) {
+            refreshButton(
+                if (error !=
+                    null
+                ) {
+                    R.string.home_retry
+                } else {
+                    R.string.photos_refresh
+                },
+                gallery != null && networkRetryReady(error?.detail),
+            ) {
+                if (spotCovers != null) spotCovers.invalidate(target) else attempt++
+            }
         }
     }
     opened?.takeIf { images?.contains(it) == true }?.let { id ->

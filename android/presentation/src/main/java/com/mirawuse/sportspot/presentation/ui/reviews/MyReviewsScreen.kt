@@ -21,7 +21,7 @@ import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButtonVariant
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchLoading
-import com.mirawuse.sportspot.presentation.ui.forms.ContentErrorText
+import com.mirawuse.sportspot.presentation.ui.forms.ContentReadError
 import com.mirawuse.sportspot.presentation.ui.forms.FormCard
 import com.mirawuse.sportspot.presentation.ui.forms.FormScreen
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
@@ -59,13 +59,7 @@ internal fun MyReviewsScreen(
                 state == null -> item { SpotSearchLoading() }
                 state is DomainResult.Failure ->
                     item {
-                        ContentErrorText(state.error)
-                        SportSpotButton(
-                            stringResource(R.string.home_retry),
-                            { viewModel.load(owner) },
-                            Modifier.fillMaxWidth(),
-                            variant = SportSpotButtonVariant.SECONDARY,
-                        )
+                        ContentReadError(state.error) { viewModel.load(owner) }
                     }
                 state is DomainResult.Success && state.value.isEmpty() ->
                     item {

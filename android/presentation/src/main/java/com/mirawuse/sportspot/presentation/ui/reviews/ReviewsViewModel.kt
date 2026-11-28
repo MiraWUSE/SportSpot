@@ -11,14 +11,19 @@ import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.ReviewRepository
 import com.mirawuse.sportspot.domain.result.DomainError
-import com.mirawuse.sportspot.domain.result.DomainOperationException
 import com.mirawuse.sportspot.domain.result.DomainResult
 import com.mirawuse.sportspot.domain.usecase.review.CreateReviewUseCase
 import com.mirawuse.sportspot.domain.usecase.review.DeleteReviewUseCase
 import com.mirawuse.sportspot.domain.usecase.review.GetReviewsBySpotUseCase
 import com.mirawuse.sportspot.domain.usecase.review.UpdateReviewUseCase
+import com.mirawuse.sportspot.presentation.ui.forms.mayHaveApplied
+import com.mirawuse.sportspot.presentation.ui.forms.readError
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -55,18 +60,22 @@ internal class ReviewsViewModel
             spotId: SpotId,
             refresh: Boolean = false,
         ) {
-            if (!refresh && activeSpot == spotId) return
+            if (activeSpot == spotId && (!refresh || loadJob?.isActive == true)) return
             loadJob?.cancel()
             if (activeSpot != spotId || list !is ReviewsState.Content) list = ReviewsState.Loading
             activeSpot = spotId
             loadJob =
                 viewModelScope.launch {
-                    list =
+                    val result =
                         try {
                             ReviewsState.Content(getReviews(spotId))
-                        } catch (_: DomainOperationException) {
-                            (list as? ReviewsState.Content) ?: ReviewsState.Error
+                        } catch (failure: Exception) {
+                            if (failure is CancellationException && failure !is TimeoutCancellationException) throw failure
+                            val error = failure.readError()
+                            (list as? ReviewsState.Content)?.copy(error = error) ?: ReviewsState.Error(error)
                         }
+                    currentCoroutineContext().ensureActive()
+                    if (activeSpot == spotId) list = result
                 }
         }
 
@@ -117,7 +126,7 @@ internal class ReviewsViewModel
             onSuccess: (T) -> Unit,
             operation: suspend () -> DomainResult<T>,
         ) {
-            if (busy) return
+            if (busy || loadJob?.isActive == true) return
             busy = true
             clearError()
             viewModelScope.launch {
@@ -129,7 +138,9 @@ internal class ReviewsViewModel
                         }
                         is DomainResult.Failure -> {
                             actionError = owner to result.error
-                            if (activeSpot == spotId && result.error in setOf(DomainError.Conflict, DomainError.NotFound)) {
+                            if (activeSpot == spotId &&
+                                (result.error.mayHaveApplied() || result.error in setOf(DomainError.Conflict, DomainError.NotFound))
+                            ) {
                                 load(spotId, refresh = true)
                             }
                         }
@@ -144,9 +155,12 @@ internal class ReviewsViewModel
 internal sealed interface ReviewsState {
     data object Loading : ReviewsState
 
-    data object Error : ReviewsState
+    data class Error(
+        val error: DomainError,
+    ) : ReviewsState
 
     data class Content(
         val items: List<Review>,
+        val error: DomainError? = null,
     ) : ReviewsState
 }

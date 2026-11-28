@@ -4,6 +4,12 @@ import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
+import com.mirawuse.sportspot.domain.result.DomainError
+
+data class NearbySpots(
+    val spots: List<Spot>,
+    val fallback: DomainError? = null,
+)
 
 interface SpotRepository {
     suspend fun getSpots(): List<Spot>
@@ -23,6 +29,17 @@ interface SpotRepository {
         radiusMeters: Int,
         sportType: SportType?,
     ): List<Spot> = searchNearby(center, radiusMeters, sportType)
+
+    suspend fun nearbyWithStatus(
+        center: GeoPoint,
+        radiusMeters: Int,
+        refresh: Boolean,
+    ): NearbySpots = NearbySpots(if (refresh) refreshNearby(center, radiusMeters, null) else searchNearby(center, radiusMeters))
+
+    /** Completes only after a successful remote search has been committed to local storage. */
+    suspend fun refreshStoredSearch(area: SpotRefreshArea): Unit = throw UnsupportedOperationException("Background refresh is unavailable")
+
+    suspend fun readStoredSearch(area: SpotRefreshArea): List<Spot>? = null
 
     /** The callback is consulted before a network attempt, after checking local data. */
     suspend fun searchViewport(

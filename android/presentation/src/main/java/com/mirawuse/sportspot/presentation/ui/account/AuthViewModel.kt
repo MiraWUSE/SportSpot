@@ -42,7 +42,9 @@ internal class AuthViewModel
             private set
         var confirmationPending by mutableStateOf(false)
             private set
-        var error by mutableStateOf<AuthFailure?>(null)
+        var error by mutableStateOf<AuthException?>(null)
+            private set
+        var restoreFailed by mutableStateOf(false)
             private set
 
         init {
@@ -50,13 +52,17 @@ internal class AuthViewModel
         }
 
         fun restore() {
-            if (restoreJob?.isActive == true) return
+            if (restoreJob?.isActive == true || submitting) return
+            restoring = true
+            restoreFailed = false
+            error = null
             restoreJob =
                 viewModelScope.launch {
                     try {
                         getAuthState()
                     } catch (failure: AuthException) {
-                        error = failure.failure
+                        error = failure
+                        restoreFailed = true
                     } finally {
                         restoring = false
                     }
@@ -66,6 +72,7 @@ internal class AuthViewModel
         fun clearNotice() {
             confirmationPending = false
             error = null
+            restoreFailed = false
         }
 
         fun submit(
@@ -75,7 +82,7 @@ internal class AuthViewModel
         ) = runOperation {
             val result = if (name == null) signIn(email, password) else signUp(name, email, password)
             if (result is DomainResult.Failure) {
-                error = AuthFailure.UNAVAILABLE
+                error = AuthException(AuthFailure.UNAVAILABLE, result.error)
             } else if (name != null) {
                 confirmationPending = getAuthState() == AuthState.Guest
             }
@@ -91,7 +98,7 @@ internal class AuthViewModel
                 try {
                     operation()
                 } catch (failure: AuthException) {
-                    error = failure.failure
+                    error = failure
                 } finally {
                     submitting = false
                 }

@@ -80,7 +80,8 @@ internal fun SpotSearchLoading() {
 internal fun SpotSearchMessage(
     title: String,
     message: String,
-    onRetry: () -> Unit,
+    onRetry: (() -> Unit)?,
+    retryEnabled: Boolean = true,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -99,7 +100,7 @@ internal fun SpotSearchMessage(
                 textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.bodyMedium,
             )
-            SportSpotButton(text = stringResource(R.string.home_retry), onClick = onRetry)
+            if (onRetry != null) SportSpotButton(text = stringResource(R.string.home_retry), onClick = onRetry, enabled = retryEnabled)
         }
     }
 }

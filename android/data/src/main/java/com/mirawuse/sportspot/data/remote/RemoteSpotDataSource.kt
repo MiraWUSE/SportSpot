@@ -11,7 +11,7 @@ import javax.inject.Inject
 
 class RemoteSpotDataSource
     @Inject
-    constructor(
+    internal constructor(
         private val api: SpotApi,
         private val calls: NetworkCall,
         private val diagnostics: SpotSearchDiagnostics = SpotSearchDiagnostics(),
@@ -41,25 +41,32 @@ class RemoteSpotDataSource
                 spot
             }
 
-        internal suspend fun searchNearby(request: SpotSearchRequest): List<Spot> =
+        internal suspend fun searchNearby(
+            request: SpotSearchRequest,
+            publicOnly: Boolean = false,
+        ): List<Spot> =
             calls.execute {
+                val session = if (publicOnly) RequestSession(null) else null
                 val payload =
                     diagnostics.stage("function.decode") {
-                        calls.body(api.searchSpots(request.latitude, request.longitude, request.radiusMeters, request.sport))
+                        calls.body(api.searchSpots(request.latitude, request.longitude, request.radiusMeters, request.sport, session))
                     }
                 val osm = diagnostics.stage("function.map") { payload.toDomain() }
-                val community = diagnostics.stage("community") { getCommunitySpots(request) }
+                val community = diagnostics.stage("community") { getCommunitySpots(request, session) }
                 (osm + community).distinctBy(Spot::id)
             }
 
-        private suspend fun getCommunitySpots(request: SpotSearchRequest): List<Spot> {
+        private suspend fun getCommunitySpots(
+            request: SpotSearchRequest,
+            session: RequestSession?,
+        ): List<Spot> {
             val area = CommunitySearchArea(request)
             val filter = request.sport.takeUnless { it == "all" }?.let { "eq.$it" }
             val result = mutableListOf<Spot>()
             val ids = mutableSetOf<SpotId>()
             var offset = 0
             do {
-                val rows = calls.body(api.getCommunitySpots(area.bounds, area.wrappedLongitudes, filter, PAGE_SIZE, offset))
+                val rows = calls.body(api.getCommunitySpots(area.bounds, area.wrappedLongitudes, filter, PAGE_SIZE, offset, session))
                 if (rows.size > PAGE_SIZE) throw SpotMappingException()
                 val previousSize = ids.size
                 rows.forEach { row ->
