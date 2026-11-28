@@ -37,6 +37,9 @@ import com.mirawuse.sportspot.presentation.ui.components.SportSpotButtonVariant
 import com.mirawuse.sportspot.presentation.ui.forms.FormCard
 import com.mirawuse.sportspot.presentation.ui.forms.FormField
 import com.mirawuse.sportspot.presentation.ui.forms.FormScreen
+import com.mirawuse.sportspot.presentation.ui.forms.canRetryRead
+import com.mirawuse.sportspot.presentation.ui.forms.networkRetryReady
+import com.mirawuse.sportspot.presentation.ui.forms.userMessage
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
 @Composable
@@ -139,12 +142,13 @@ internal fun AuthScreen(
                 }
             },
             modifier = Modifier.fillMaxWidth(),
-            enabled = !viewModel.restoring,
+            enabled = !viewModel.restoring && networkRetryReady(viewModel.error?.detail),
             isLoading = viewModel.submitting,
         )
-        val notice = if (attempted && weakPassword) R.string.auth_weak_password else viewModel.error?.labelRes()
-        notice?.let {
-            Text(stringResource(it), color = colors.error, style = MaterialTheme.typography.bodyMedium)
+        if (attempted && weakPassword) {
+            Text(stringResource(R.string.auth_weak_password), color = colors.error, style = MaterialTheme.typography.bodyMedium)
+        } else {
+            AuthErrorNotice(viewModel)
         }
         SportSpotButton(
             text = stringResource(R.string.auth_continue_guest),
@@ -190,6 +194,7 @@ internal fun ProfileScreen(
                 variant = SportSpotButtonVariant.SECONDARY,
             )
         }
+        AuthErrorNotice(viewModel)
         SportSpotButton(
             text = stringResource(if (profile == null) R.string.auth_open else R.string.auth_sign_out),
             onClick = if (profile == null) onOpenAuth else viewModel::logout,
@@ -230,5 +235,23 @@ internal fun ProfileScreen(
         FormCard(stringResource(R.string.profile_settings)) {
             Text(stringResource(R.string.profile_theme_setting), style = MaterialTheme.typography.bodyMedium)
         }
+    }
+}
+
+@Composable
+private fun AuthErrorNotice(viewModel: AuthViewModel) {
+    val error = viewModel.error ?: return
+    Text(
+        error.detail?.userMessage() ?: stringResource(error.failure.labelRes()),
+        color = MaterialTheme.colorScheme.error,
+        style = MaterialTheme.typography.bodyMedium,
+    )
+    if (viewModel.restoreFailed && error.detail?.canRetryRead() != false) {
+        SportSpotButton(
+            text = stringResource(R.string.home_retry),
+            onClick = viewModel::restore,
+            enabled = networkRetryReady(error.detail),
+            variant = SportSpotButtonVariant.SECONDARY,
+        )
     }
 }

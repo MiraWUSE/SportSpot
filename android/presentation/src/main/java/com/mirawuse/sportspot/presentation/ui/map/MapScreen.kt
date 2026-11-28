@@ -41,8 +41,12 @@ import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
+import com.mirawuse.sportspot.presentation.ui.components.SportSpotButtonVariant
 import com.mirawuse.sportspot.presentation.ui.components.SpotSummary
 import com.mirawuse.sportspot.presentation.ui.components.labelRes
+import com.mirawuse.sportspot.presentation.ui.forms.canRetryRead
+import com.mirawuse.sportspot.presentation.ui.forms.networkRetryReady
+import com.mirawuse.sportspot.presentation.ui.forms.userMessage
 import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
 import com.mirawuse.sportspot.presentation.ui.navigation.WalkingRouteButton
 import com.mirawuse.sportspot.presentation.ui.search.SearchFilterState
@@ -123,10 +127,18 @@ internal fun MapScreen(
     }
     val status = viewport?.status ?: MapSearchStatus.INITIAL
     val loading = status == MapSearchStatus.LOADING || (status == MapSearchStatus.INITIAL && state == HomeUiState.Loading)
+    val errorType =
+        when (status) {
+            MapSearchStatus.INITIAL -> (state as? HomeUiState.Error)?.error ?: initial?.fallback
+            MapSearchStatus.ERROR, MapSearchStatus.READY -> viewport?.error
+            else -> null
+        }
     val error =
         when {
+            errorType != null && (status == MapSearchStatus.READY || status == MapSearchStatus.INITIAL && initial?.fallback != null) ->
+                stringResource(R.string.network_saved_spots, errorType.userMessage())
+            errorType != null -> errorType.userMessage()
             status == MapSearchStatus.ERROR -> stringResource(R.string.map_search_error)
-            status == MapSearchStatus.INITIAL && state is HomeUiState.Error -> state.message
             else -> null
         }
     val empty =
@@ -279,8 +291,13 @@ internal fun MapScreen(
                             }
                         }
                     }
-                    if (error != null || status == MapSearchStatus.RATE_LIMITED) {
-                        TextButton(onClick = onRetry) { Text(stringResource(R.string.map_search_retry)) }
+                    if (errorType?.canRetryRead() == true || status == MapSearchStatus.RATE_LIMITED) {
+                        SportSpotButton(
+                            text = stringResource(R.string.map_search_retry),
+                            onClick = onRetry,
+                            enabled = networkRetryReady(errorType),
+                            variant = SportSpotButtonVariant.SECONDARY,
+                        )
                     }
                     if (noMatches) {
                         SpotFilterEmpty(stringResource(R.string.home_no_matches), onResetSearch)

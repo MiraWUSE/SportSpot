@@ -44,6 +44,7 @@ internal class ModerationViewModel
             userId: String?,
             clearError: Boolean = true,
         ) {
+            if (owner == userId && loadJob?.isActive == true) return
             loadJob?.cancel()
             owner = userId
             pending = null

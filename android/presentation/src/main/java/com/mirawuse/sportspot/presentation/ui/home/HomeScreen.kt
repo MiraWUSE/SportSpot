@@ -43,6 +43,9 @@ import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchLoading
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchMessage
 import com.mirawuse.sportspot.presentation.ui.components.labelRes
+import com.mirawuse.sportspot.presentation.ui.forms.canRetryRead
+import com.mirawuse.sportspot.presentation.ui.forms.networkRetryReady
+import com.mirawuse.sportspot.presentation.ui.forms.userMessage
 import com.mirawuse.sportspot.presentation.ui.photos.SpotCoverLoader
 import com.mirawuse.sportspot.presentation.ui.search.SearchFilterState
 import com.mirawuse.sportspot.presentation.ui.search.SpotFilterEmpty
@@ -109,9 +112,24 @@ internal fun HomeScreen(
                 }
             is HomeUiState.Error ->
                 item {
-                    SpotSearchMessage(stringResource(R.string.home_error_title), state.message, onRetry)
+                    SpotSearchMessage(
+                        stringResource(R.string.home_error_title),
+                        state.error.userMessage(),
+                        onRetry.takeIf { state.error.canRetryRead() },
+                        retryEnabled = networkRetryReady(state.error),
+                    )
                 }
             is HomeUiState.Content -> {
+                state.fallback?.let { error ->
+                    item {
+                        SpotSearchMessage(
+                            stringResource(R.string.network_cached_title),
+                            error.userMessage(),
+                            onRetry.takeIf { error.canRetryRead() },
+                            retryEnabled = networkRetryReady(error),
+                        )
+                    }
+                }
                 item { HomeMapPreview(filtered.orEmpty(), location.center, resultsPending = filtered == null, onOpenMap = onOpenMap) }
                 item {
                     Row(
@@ -131,8 +149,10 @@ internal fun HomeScreen(
                                 style = MaterialTheme.typography.labelSmall,
                             )
                         }
-                        TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = SportSpotSpacing.xs)) {
-                            Text(stringResource(R.string.content_refresh), style = MaterialTheme.typography.labelSmall)
+                        if (state.fallback == null) {
+                            TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = SportSpotSpacing.xs)) {
+                                Text(stringResource(R.string.content_refresh), style = MaterialTheme.typography.labelSmall)
+                            }
                         }
                     }
                 }
@@ -140,7 +160,11 @@ internal fun HomeScreen(
                     item { Text(stringResource(R.string.search_filters_updating), style = MaterialTheme.typography.bodyMedium) }
                 } else if (filtered.isEmpty()) {
                     item {
-                        SpotFilterEmpty(stringResource(R.string.home_no_matches), onResetSearch)
+                        if (state.spots.isEmpty()) {
+                            Text(stringResource(R.string.home_empty_message))
+                        } else {
+                            SpotFilterEmpty(stringResource(R.string.home_no_matches), onResetSearch)
+                        }
                     }
                 }
                 items(sorted.orEmpty(), key = { "${it.id.source.length}:${it.id.source}${it.id.value}" }) { spot ->

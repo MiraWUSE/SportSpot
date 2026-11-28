@@ -2,7 +2,10 @@ package com.mirawuse.sportspot.domain.result
 
 class DomainOperationException(
     val error: DomainError,
-) : RuntimeException()
+) : RuntimeException(),
+    DomainFailure {
+    override val domainError: DomainError get() = error
+}
 
 internal suspend fun <T> contentResult(block: suspend () -> T): DomainResult<T> =
     try {

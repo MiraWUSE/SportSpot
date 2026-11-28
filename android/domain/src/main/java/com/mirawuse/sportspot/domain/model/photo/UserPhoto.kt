@@ -1,6 +1,7 @@
 package com.mirawuse.sportspot.domain.model.photo
 
 import com.mirawuse.sportspot.domain.model.spot.SpotId
+import com.mirawuse.sportspot.domain.result.DomainError
 
 const val MAX_USER_PHOTO_BYTES = 5 * 1024 * 1024
 private val uuid = Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
@@ -70,4 +71,5 @@ enum class PhotoError { INVALID, TOO_LARGE, OFFLINE, UNAUTHORIZED, FORBIDDEN, NO
 
 class PhotoException(
     val error: PhotoError,
+    val detail: DomainError? = null,
 ) : Exception(error.name)

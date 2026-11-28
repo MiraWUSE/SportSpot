@@ -10,6 +10,8 @@ import com.mirawuse.sportspot.data.remote.NetworkConfig
 import com.mirawuse.sportspot.data.remote.api.SpotApi
 import com.mirawuse.sportspot.data.remote.connectivity.NetworkMonitor
 import com.mirawuse.sportspot.data.remote.dto.SpotDto
+import com.mirawuse.sportspot.domain.result.DomainError
+import com.mirawuse.sportspot.domain.result.NetworkIssue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
@@ -61,12 +63,21 @@ class NetworkCallTest {
     @Test
     fun `HTTP statuses remain distinguishable even without error JSON`() =
         runBlocking {
-            listOf(400, 401, 403, 404, 409, 429, 500, 503).forEach { status ->
+            listOf(400, 401, 403, 404, 409, 422, 429, 500, 503).forEach { status ->
                 server.enqueue(MockResponse().setResponseCode(status))
 
                 val failure = failure { calls.body(api.getSpots()) }
 
                 assertEquals(NetworkError.Http(status), failure.error)
+                when (status) {
+                    400, 422 -> assertTrue(failure.domainError is DomainError.Validation)
+                    401 -> assertEquals(DomainError.Unauthorized, failure.domainError)
+                    403 -> assertEquals(DomainError.Forbidden, failure.domainError)
+                    404 -> assertEquals(DomainError.NotFound, failure.domainError)
+                    409 -> assertEquals(DomainError.Conflict, failure.domainError)
+                    429 -> assertEquals(NetworkIssue.RATE_LIMITED, (failure.domainError as DomainError.Network).issue)
+                    500, 503 -> assertEquals(DomainError.Network(NetworkIssue.SERVER), failure.domainError)
+                }
                 assertRestRequest()
             }
         }
@@ -88,6 +99,7 @@ class NetworkCallTest {
             val failure = failure { calls.body(api.getSpots()) }
 
             assertEquals(NetworkError.Http(429, "RATE_LIMITED", 60L), failure.error)
+            assertTrue((failure.domainError as DomainError.Network).retryAtMillis > System.currentTimeMillis())
             assertFalse(failure.message.orEmpty().contains("sensitive-server-message"))
             assertFalse(failure.toString().contains("4c59e8fc-1342-4f15-aa3f-4ecc97f0d1c2"))
             assertRestRequest()
@@ -171,6 +183,7 @@ class NetworkCallTest {
                 }
 
             assertEquals(NetworkError.Offline, failure.error)
+            assertEquals(DomainError.Network(NetworkIssue.OFFLINE), failure.domainError)
             assertFalse(invoked)
             assertEquals(0, server.requestCount)
         }

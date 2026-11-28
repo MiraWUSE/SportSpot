@@ -14,12 +14,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.mirawuse.sportspot.domain.model.spot.SpotId
+import com.mirawuse.sportspot.domain.result.DomainError
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchLoading
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchMessage
 import com.mirawuse.sportspot.presentation.ui.forms.FormCard
 import com.mirawuse.sportspot.presentation.ui.forms.FormScreen
+import com.mirawuse.sportspot.presentation.ui.forms.canRetryRead
+import com.mirawuse.sportspot.presentation.ui.forms.networkRetryReady
+import com.mirawuse.sportspot.presentation.ui.forms.userMessage
 import com.mirawuse.sportspot.presentation.ui.home.HomeSpotCard
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
@@ -64,13 +68,26 @@ internal fun FavoritesScreen(
         when (state) {
             is FavoritesUiState.Error ->
                 item {
-                    SpotSearchMessage(stringResource(R.string.home_error_title), stringResource(state.reason.labelRes()), onRetry)
+                    SpotSearchMessage(
+                        stringResource(R.string.favorites_load_error),
+                        state.error.userMessage(),
+                        onRetry.takeIf { state.error.canRetryRead() },
+                        retryEnabled = !busy && networkRetryReady(state.error),
+                    )
+                    if (state.error == DomainError.Unauthorized) {
+                        SportSpotButton(text = stringResource(R.string.auth_open), onClick = onOpenAuth)
+                    }
                 }
             is FavoritesUiState.Content -> {
                 if (state.list.fromCache) {
                     item {
                         Text(stringResource(R.string.favorites_cached), style = MaterialTheme.typography.bodyMedium)
-                        TextButton(onClick = onRetry, enabled = !busy) { Text(stringResource(R.string.home_retry)) }
+                        state.list.fallback?.let { Text(it.userMessage(), style = MaterialTheme.typography.bodyMedium) }
+                        SportSpotButton(
+                            text = stringResource(R.string.home_retry),
+                            onClick = onRetry,
+                            enabled = !busy && networkRetryReady(state.list.fallback),
+                        )
                     }
                 }
                 if (state.list.items.isEmpty()) item { Text(stringResource(R.string.favorites_empty)) }

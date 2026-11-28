@@ -7,8 +7,10 @@ import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.repository.DeviceLocationProvider
+import com.mirawuse.sportspot.domain.result.DomainError
 import com.mirawuse.sportspot.domain.usecase.spot.SearchNearbySpotsUseCase
 import com.mirawuse.sportspot.presentation.R
+import com.mirawuse.sportspot.presentation.ui.forms.readError
 import com.mirawuse.sportspot.presentation.ui.search.LightingFilter
 import com.mirawuse.sportspot.presentation.ui.search.SearchFilterState
 import com.mirawuse.sportspot.presentation.ui.search.SpotSort
@@ -18,6 +20,7 @@ import com.mirawuse.sportspot.presentation.ui.search.withoutConflicts
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -106,6 +109,9 @@ class HomeViewModel
 
         fun retry() {
             if (_uiState.value == HomeUiState.Loading) return
+            val result = _uiState.value
+            val error = (result as? HomeUiState.Error)?.error ?: (result as? HomeUiState.Content)?.fallback
+            if (error is DomainError.Network && error.retryAtMillis > System.currentTimeMillis()) return
             refresh()
         }
 
@@ -161,14 +167,21 @@ class HomeViewModel
             searchJob =
                 viewModelScope.launch {
                     try {
-                        val spots = searchNearbySpots(center = center, radiusMeters = radius, refresh = refresh)
+                        val result = searchNearbySpots.withStatus(center = center, radiusMeters = radius, refresh = refresh)
                         currentCoroutineContext().ensureActive()
-                        _uiState.value = if (spots.isEmpty()) HomeUiState.Empty else HomeUiState.Content(spots)
+                        _uiState.value =
+                            if (result.spots.isEmpty() && result.fallback == null) {
+                                HomeUiState.Empty
+                            } else {
+                                HomeUiState.Content(result.spots, result.fallback)
+                            }
                     } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (_: Exception) {
+                        if (cancelled !is TimeoutCancellationException) throw cancelled
                         currentCoroutineContext().ensureActive()
-                        _uiState.value = HomeUiState.Error("Не удалось загрузить площадки. Проверьте соединение и попробуйте снова.")
+                        _uiState.value = HomeUiState.Error(cancelled.readError())
+                    } catch (failure: Exception) {
+                        currentCoroutineContext().ensureActive()
+                        _uiState.value = HomeUiState.Error(failure.readError())
                     }
                 }
         }

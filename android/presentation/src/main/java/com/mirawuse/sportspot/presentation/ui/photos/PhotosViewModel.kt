@@ -17,6 +17,7 @@ import com.mirawuse.sportspot.domain.model.photo.PhotoTarget
 import com.mirawuse.sportspot.domain.model.photo.PhotoTargetType
 import com.mirawuse.sportspot.domain.repository.AuthRepository
 import com.mirawuse.sportspot.domain.repository.UserPhotoRepository
+import com.mirawuse.sportspot.domain.result.DomainError
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -27,6 +28,7 @@ internal data class PhotoHistoryState(
     val items: List<PhotoSubmission> = emptyList(),
     val loading: Boolean = false,
     val error: PhotoError? = null,
+    val detail: DomainError? = null,
 )
 
 internal data class PhotoDraftState(
@@ -36,6 +38,7 @@ internal data class PhotoDraftState(
     val completed: Int = 0,
     val total: Int = 0,
     val error: PhotoError? = null,
+    val detail: DomainError? = null,
 ) {
     val busy: Boolean get() = preparing || sending
 }
@@ -96,14 +99,14 @@ internal class PhotosViewModel
         ) {
             if (!current(owner) || reads[target]?.isActive == true) return
             val previous = historyFor(owner, target)
-            history[target] = previous.copy(loading = true, error = null)
+            history[target] = previous.copy(loading = true, error = null, detail = null)
             reads[target] =
                 viewModelScope.launch {
                     try {
                         val items = repository.mine(owner, target)
                         if (current(owner)) history[target] = PhotoHistoryState(items)
                     } catch (error: PhotoException) {
-                        if (current(owner)) history[target] = previous.copy(loading = false, error = error.error)
+                        if (current(owner)) history[target] = previous.copy(loading = false, error = error.error, detail = error.detail)
                     }
                 }
         }
@@ -115,10 +118,10 @@ internal class PhotosViewModel
         ) {
             if (!current(owner) || draft.busy || uris.isEmpty()) return
             if (draft.attachments.size + uris.size > limit) {
-                draft = draft.copy(error = PhotoError.LIMIT)
+                draft = draft.copy(error = PhotoError.LIMIT, detail = null)
                 return
             }
-            draft = draft.copy(preparing = true, error = null)
+            draft = draft.copy(preparing = true, error = null, detail = null)
             work =
                 viewModelScope.launch {
                     try {
@@ -128,7 +131,7 @@ internal class PhotosViewModel
                             draft = draft.copy(attachments = draft.attachments + prepared)
                         }
                     } catch (error: PhotoException) {
-                        if (current(owner)) draft = draft.copy(error = error.error)
+                        if (current(owner)) draft = draft.copy(error = error.error, detail = error.detail)
                     } finally {
                         if (current(owner)) draft = draft.copy(preparing = false)
                     }
@@ -165,7 +168,7 @@ internal class PhotosViewModel
         ) {
             if (!current(owner) || draft.busy || draft.attachments.isEmpty()) return
             val batch = draft.attachments
-            draft = draft.copy(sending = true, completed = 0, total = batch.size, error = null)
+            draft = draft.copy(sending = true, completed = 0, total = batch.size, error = null, detail = null)
             work =
                 viewModelScope.launch {
                     try {
@@ -178,7 +181,7 @@ internal class PhotosViewModel
                                 draft.copy(attachments = draft.attachments.filterNot { it.id == added.id }, completed = draft.completed + 1)
                         }
                     } catch (error: PhotoException) {
-                        if (current(owner)) draft = draft.copy(error = error.error)
+                        if (current(owner)) draft = draft.copy(error = error.error, detail = error.detail)
                     } finally {
                         if (current(owner)) {
                             draft = draft.copy(sending = false)
@@ -195,7 +198,7 @@ internal class PhotosViewModel
             photo: PhotoSubmission,
         ) {
             if (!current(owner) || draft.busy || photo.ownerId != owner || photo.target != target) return
-            draft = draft.copy(sending = true, error = null, total = 0)
+            draft = draft.copy(sending = true, error = null, detail = null, total = 0)
             work =
                 viewModelScope.launch {
                     try {
@@ -208,7 +211,7 @@ internal class PhotosViewModel
                             load(owner, target)
                         }
                     } catch (error: PhotoException) {
-                        if (current(owner)) draft = draft.copy(error = error.error)
+                        if (current(owner)) draft = draft.copy(error = error.error, detail = error.detail)
                     } finally {
                         if (current(owner)) draft = draft.copy(sending = false)
                     }
@@ -244,7 +247,7 @@ internal class PhotosViewModel
             reason: String? = null,
         ) {
             if (!current(owner) || moderationJob?.isActive == true) return
-            moderation = moderation.copy(loading = true, error = null)
+            moderation = moderation.copy(loading = true, error = null, detail = null)
             moderationJob =
                 viewModelScope.launch {
                     try {
@@ -256,7 +259,7 @@ internal class PhotosViewModel
                         val items = repository.queue(owner, null)
                         if (current(owner)) moderation = PhotoHistoryState(items)
                     } catch (error: PhotoException) {
-                        if (current(owner)) moderation = moderation.copy(loading = false, error = error.error)
+                        if (current(owner)) moderation = moderation.copy(loading = false, error = error.error, detail = error.detail)
                     }
                 }
         }

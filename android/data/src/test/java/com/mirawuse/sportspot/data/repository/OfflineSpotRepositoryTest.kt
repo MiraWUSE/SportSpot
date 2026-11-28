@@ -24,6 +24,8 @@ import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.model.spot.SpotSport
 import com.mirawuse.sportspot.domain.repository.ViewportSearchResult
+import com.mirawuse.sportspot.domain.result.DomainError
+import com.mirawuse.sportspot.domain.result.NetworkIssue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -155,7 +157,10 @@ class OfflineSpotRepositoryTest {
             assertEquals(2, server.requestCount)
 
             online = false
-            assertEquals(saved, repository.searchViewport(center, 1000, false) { error("Offline Room hit") })
+            assertEquals(
+                saved.copy(fallback = DomainError.Network(NetworkIssue.OFFLINE)),
+                repository.searchViewport(center, 1000, false) { error("Offline Room hit") },
+            )
             assertEquals(2, server.requestCount)
         }
 

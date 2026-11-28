@@ -48,7 +48,7 @@ internal class AuthRepositoryImpl
         private var session: AuthSession? = null
         private var restored = false
         private var accountGeneration = 0L
-        private var refreshFailure: Pair<Long, AuthFailure>? = null
+        private var refreshFailure: Pair<Long, AuthException>? = null
 
         fun currentAccessToken(): String? = session?.takeIf { it.expiresAtMillis > store.nowMillis() }?.accessToken
 
@@ -56,11 +56,13 @@ internal class AuthRepositoryImpl
 
         suspend fun <T> withAccount(
             userId: String,
+            retryUnauthorized: Boolean = true,
             request: suspend (RequestSession) -> T,
-        ): T = withAccount(userId, request) { _, response -> response }
+        ): T = withAccount(userId, retryUnauthorized, request) { _, response -> response }
 
         private suspend fun <T, R> withAccount(
             userId: String,
+            retryUnauthorized: Boolean,
             request: suspend (RequestSession) -> T,
             complete: (AuthSession, T) -> R,
         ): R =
@@ -81,6 +83,7 @@ internal class AuthRepositoryImpl
                                 val current = requireAccount(userId, start.generation)
                                 if (current.accessToken != start.token) current.accessToken else refresh(current).accessToken
                             }
+                        if (!retryUnauthorized) throw error
                         request(RequestSession(token))
                     }
                 mutex.withLock { complete(requireAccount(userId, start.generation), result) }
@@ -121,6 +124,7 @@ internal class AuthRepositoryImpl
                 val body = JsonObject().apply { addProperty("name", name) }
                 withAccount(
                     uid,
+                    retryUnauthorized = false,
                     request = { requestSession ->
                         network.execute {
                             val rows = network.body(api.updateProfileName("eq.$uid", body, requestSession))
@@ -226,8 +230,8 @@ internal class AuthRepositoryImpl
             if (current.expiresAtMillis - store.nowMillis() > REFRESH_MARGIN_MILLIS) current else refresh(current)
 
         private suspend fun refresh(current: AuthSession): AuthSession {
-            refreshFailure?.let { (retryAt, reason) ->
-                if (store.nowMillis() < retryAt) throw AuthException(reason)
+            refreshFailure?.let { (retryAt, error) ->
+                if (store.nowMillis() < retryAt) throw error
             }
             val response =
                 try {
@@ -241,10 +245,13 @@ internal class AuthRepositoryImpl
                         save(null)
                         throw AuthException(AuthFailure.SESSION_EXPIRED)
                     }
-                    val reason = error.error.authFailure()
+                    val failure = error.toAuthException()
                     // Coalesce failures as well as success when several protected calls arrive together.
-                    refreshFailure = (store.nowMillis() + REFRESH_BACKOFF_MILLIS) to reason
-                    throw AuthException(reason)
+                    refreshFailure = maxOf(
+                        store.nowMillis() + REFRESH_BACKOFF_MILLIS,
+                        (failure.detail as? DomainError.Network)?.retryAtMillis ?: 0L,
+                    ) to failure
+                    throw failure
                 }
             val uid = canonicalUid(response.user?.id)
             if (uid != current.profile.id) unavailable()
@@ -280,7 +287,7 @@ internal class AuthRepositoryImpl
             try {
                 network.execute(block)
             } catch (error: NetworkException) {
-                throw AuthException(error.error.authFailure())
+                throw error.toAuthException()
             }
 
         private fun expiresAt(response: AuthResponse): Long {
@@ -321,6 +328,12 @@ internal class AuthRepositoryImpl
             val INVALID_SESSIONS = setOf("REFRESH_TOKEN_NOT_FOUND", "REFRESH_TOKEN_ALREADY_USED", "SESSION_NOT_FOUND", "SESSION_EXPIRED")
         }
     }
+
+private fun NetworkException.toAuthException(): AuthException {
+    val reason = error.authFailure()
+    val detail = domainError.takeIf { it is DomainError.Network || reason == AuthFailure.UNAVAILABLE }
+    return AuthException(reason, detail)
+}
 
 private fun NetworkError.authFailure(): AuthFailure =
     when (this) {

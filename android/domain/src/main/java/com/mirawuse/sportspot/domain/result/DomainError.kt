@@ -17,4 +17,15 @@ sealed interface DomainError {
     data object Unavailable : DomainError
 
     data object Unexpected : DomainError
+
+    data class Network(
+        val issue: NetworkIssue,
+        val retryAtMillis: Long = 0,
+    ) : DomainError
+}
+
+enum class NetworkIssue { OFFLINE, CONNECTION, TIMEOUT, SERVER, RATE_LIMITED, INVALID_RESPONSE }
+
+interface DomainFailure {
+    val domainError: DomainError
 }

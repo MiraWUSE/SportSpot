@@ -3,6 +3,7 @@ package com.mirawuse.sportspot.domain.usecase.spot
 import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
+import com.mirawuse.sportspot.domain.repository.NearbySpots
 import com.mirawuse.sportspot.domain.repository.SpotRepository
 import com.mirawuse.sportspot.domain.repository.ViewportSearchResult
 
@@ -22,6 +23,15 @@ class SearchNearbySpotsUseCase(
         } else {
             repository.searchNearby(center, radiusMeters, sportType)
         }
+    }
+
+    suspend fun withStatus(
+        center: GeoPoint,
+        radiusMeters: Int,
+        refresh: Boolean,
+    ): NearbySpots {
+        validateRadius(radiusMeters)
+        return repository.nearbyWithStatus(center, radiusMeters, refresh)
     }
 
     suspend fun forViewport(

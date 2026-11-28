@@ -3,7 +3,6 @@ package com.mirawuse.sportspot.presentation.ui.proposal
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -16,7 +15,7 @@ import com.mirawuse.sportspot.presentation.ui.components.SportSpotButtonVariant
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotStatusBadge
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchLoading
 import com.mirawuse.sportspot.presentation.ui.components.StatusTone
-import com.mirawuse.sportspot.presentation.ui.forms.ContentErrorText
+import com.mirawuse.sportspot.presentation.ui.forms.ContentReadError
 import com.mirawuse.sportspot.presentation.ui.forms.FormCard
 import com.mirawuse.sportspot.presentation.ui.forms.FormScreen
 
@@ -39,8 +38,7 @@ internal fun MyProposalsScreen(
             }
             state == null -> SpotSearchLoading()
             state is DomainResult.Failure -> {
-                ContentErrorText(state.error)
-                TextButton(onClick = onRetry) { Text(stringResource(R.string.home_retry)) }
+                ContentReadError(state.error, onRetry)
             }
             state is DomainResult.Success -> {
                 if (state.value.isEmpty()) Text(stringResource(R.string.proposals_empty))

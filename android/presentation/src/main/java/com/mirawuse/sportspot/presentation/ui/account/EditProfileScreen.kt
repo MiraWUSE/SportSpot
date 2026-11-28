@@ -16,9 +16,10 @@ import com.mirawuse.sportspot.domain.validation.FormValidation
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButtonVariant
-import com.mirawuse.sportspot.presentation.ui.forms.ContentErrorText
+import com.mirawuse.sportspot.presentation.ui.forms.ContentMutationError
 import com.mirawuse.sportspot.presentation.ui.forms.FormField
 import com.mirawuse.sportspot.presentation.ui.forms.FormScreen
+import com.mirawuse.sportspot.presentation.ui.forms.networkRetryReady
 
 @Composable
 internal fun EditProfileScreen(
@@ -40,7 +41,7 @@ internal fun EditProfileScreen(
         )
         Text(stringResource(R.string.auth_email), style = MaterialTheme.typography.labelMedium)
         Text(profile.email, style = MaterialTheme.typography.bodyMedium)
-        viewModel.error?.let { ContentErrorText(it) }
+        viewModel.error?.let { ContentMutationError(it) }
         SportSpotButton(
             text = stringResource(R.string.content_save),
             onClick = {
@@ -49,6 +50,7 @@ internal fun EditProfileScreen(
             },
             modifier = Modifier.fillMaxWidth(),
             isLoading = viewModel.saving,
+            enabled = networkRetryReady(viewModel.error),
         )
         SportSpotButton(
             text = stringResource(R.string.content_cancel),

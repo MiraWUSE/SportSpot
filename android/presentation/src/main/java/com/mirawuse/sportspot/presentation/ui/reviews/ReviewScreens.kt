@@ -26,11 +26,13 @@ import com.mirawuse.sportspot.domain.validation.FormValidation
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchLoading
-import com.mirawuse.sportspot.presentation.ui.forms.ContentErrorText
+import com.mirawuse.sportspot.presentation.ui.forms.ContentMutationError
+import com.mirawuse.sportspot.presentation.ui.forms.ContentReadError
 import com.mirawuse.sportspot.presentation.ui.forms.FormCard
 import com.mirawuse.sportspot.presentation.ui.forms.FormErrorText
 import com.mirawuse.sportspot.presentation.ui.forms.FormField
 import com.mirawuse.sportspot.presentation.ui.forms.FormScreen
+import com.mirawuse.sportspot.presentation.ui.forms.networkRetryReady
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotDarkColors
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotLightColors
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
@@ -51,11 +53,12 @@ internal fun ReviewsScreen(
     var confirmDelete by rememberSaveable(owner) { mutableStateOf(false) }
     FormScreen(stringResource(R.string.reviews_title), onBack) {
         spotName?.let { Text(it, style = MaterialTheme.typography.titleLarge) }
-        error?.let { ContentErrorText(it) }
+        error?.let { ContentMutationError(it) }
         when (state) {
             ReviewsState.Loading -> SpotSearchLoading()
-            ReviewsState.Error -> ReviewLoadError(onRetry)
+            is ReviewsState.Error -> ContentReadError(state.error, onRetry)
             is ReviewsState.Content -> {
+                state.error?.let { ContentReadError(it, onRetry) }
                 val ownReview = state.items.firstOrNull { it.authorId == owner }
                 if (state.items.isEmpty()) {
                     FormCard(stringResource(R.string.reviews_none)) { }
@@ -84,7 +87,7 @@ internal fun ReviewsScreen(
                 SportSpotButton(
                     text = stringResource(if (ownReview == null) R.string.reviews_write else R.string.review_edit),
                     onClick = onWrite,
-                    enabled = !busy,
+                    enabled = !busy && networkRetryReady(error),
                     modifier = Modifier.fillMaxWidth(),
                 )
                 if (ownReview != null) {
@@ -138,8 +141,11 @@ internal fun ReviewFormScreen(
                 SportSpotButton(stringResource(R.string.content_open_auth), onOpenAuth, Modifier.fillMaxWidth())
             }
             state is ReviewsState.Loading -> SpotSearchLoading()
-            state is ReviewsState.Error -> ReviewLoadError(onRetry)
-            else -> key(owner) { ReviewFields(owner, existing, busy, error, onSubmit, photoAttachments) }
+            state is ReviewsState.Error -> ContentReadError(state.error, onRetry)
+            else -> {
+                (state as? ReviewsState.Content)?.error?.let { ContentReadError(it, onRetry) }
+                key(owner) { ReviewFields(owner, existing, busy, error, onSubmit, photoAttachments) }
+            }
         }
     }
 }
@@ -193,7 +199,7 @@ private fun ReviewFields(
         hint = stringResource(R.string.review_comment_hint),
         singleLine = false,
     )
-    error?.let { ContentErrorText(it) }
+    error?.let { ContentMutationError(it) }
     photoAttachments(existing)
     SportSpotButton(
         text = stringResource(if (existing == null) R.string.review_publish else R.string.content_save),
@@ -215,12 +221,6 @@ internal fun ReviewScore(reviews: List<Review>) {
             stringResource(R.string.review_score, reviews.map { it.rating }.average(), reviews.size)
         }
     Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-}
-
-@Composable
-private fun ReviewLoadError(onRetry: () -> Unit) {
-    ContentErrorText(DomainError.Unavailable)
-    TextButton(onClick = onRetry) { Text(stringResource(R.string.home_retry)) }
 }
 
 @Composable

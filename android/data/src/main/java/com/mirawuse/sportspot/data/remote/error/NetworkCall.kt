@@ -16,6 +16,8 @@ import java.io.IOException
 import java.io.InterruptedIOException
 import java.io.Reader
 import java.net.UnknownHostException
+import java.text.SimpleDateFormat
+import java.util.Locale
 import javax.inject.Inject
 
 class NetworkCall
@@ -55,8 +57,17 @@ class NetworkCall
 
         private fun httpFailure(response: Response<*>): NetworkException {
             val serverCode = readServerCode(response.errorBody())
-            val retryAfterSeconds = response.headers()["Retry-After"]?.toLongOrNull()?.takeIf { it >= 0 }
+            val retryAfterSeconds = response.headers()["Retry-After"]?.let(::retryAfterSeconds)
             return NetworkException(NetworkError.Http(response.code(), serverCode, retryAfterSeconds))
+        }
+
+        private fun retryAfterSeconds(header: String): Long? {
+            header.toLongOrNull()?.let { return it.takeIf { seconds -> seconds >= 0 } }
+            val date =
+                runCatching {
+                    SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US).apply { isLenient = false }.parse(header)
+                }.getOrNull() ?: return null
+            return ((date.time - System.currentTimeMillis()).coerceAtLeast(0L) + 999L) / 1000L
         }
 
         private fun readServerCode(body: ResponseBody?): String? {

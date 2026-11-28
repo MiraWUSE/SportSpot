@@ -1,5 +1,7 @@
 package com.mirawuse.sportspot.domain.model.auth
 
+import com.mirawuse.sportspot.domain.result.DomainError
+
 enum class AuthFailure {
     INVALID_CREDENTIALS,
     EMAIL_UNCONFIRMED,
@@ -12,4 +14,5 @@ enum class AuthFailure {
 
 class AuthException(
     val failure: AuthFailure,
+    val detail: DomainError? = null,
 ) : Exception(failure.name)

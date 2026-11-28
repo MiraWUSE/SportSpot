@@ -39,12 +39,15 @@ import com.mirawuse.sportspot.domain.model.photo.PhotoError
 import com.mirawuse.sportspot.domain.model.photo.PhotoException
 import com.mirawuse.sportspot.domain.model.photo.PhotoStatus
 import com.mirawuse.sportspot.domain.model.photo.PhotoTarget
+import com.mirawuse.sportspot.domain.result.DomainError
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButton
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotButtonVariant
 import com.mirawuse.sportspot.presentation.ui.components.SportSpotStatusBadge
 import com.mirawuse.sportspot.presentation.ui.components.StatusTone
 import com.mirawuse.sportspot.presentation.ui.forms.FormCard
+import com.mirawuse.sportspot.presentation.ui.forms.networkRetryReady
+import com.mirawuse.sportspot.presentation.ui.forms.userMessage
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -104,7 +107,7 @@ internal fun PhotoEditor(
         if (state.busy && state.total != 0 || state.preparing) {
             PhotoActionButton(R.string.content_cancel) { model.cancel(owner) }
         }
-        state.error?.let { PhotoErrorText(it) }
+        state.error?.let { PhotoErrorText(it, state.detail) }
         if (!insideSpotDetails) choose()
         if (target != null && allowUpload && state.attachments.isNotEmpty()) {
             SportSpotButton(
@@ -131,7 +134,7 @@ internal fun PhotoHistory(
     if (history.items.isNotEmpty() || history.loading || history.error != null) {
         if (!insideSpotDetails) Text(stringResource(R.string.photos_mine), style = MaterialTheme.typography.titleMedium)
         if (history.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-        history.error?.let { PhotoErrorText(it) }
+        history.error?.let { PhotoErrorText(it, history.detail) }
         for ((index, item) in history.items.withIndex()) {
             key(owner, item.id) {
                 var preview by remember { mutableStateOf(false) }
@@ -188,8 +191,10 @@ internal fun RemotePhoto(
             bytes != null -> PhotoBitmap(bytes, modifier, scale)
             error != null ->
                 Column {
-                    PhotoErrorText(error.error)
-                    PhotoActionButton(R.string.home_retry) { attempt++ }
+                    PhotoErrorText(error.error, error.detail)
+                    if (error.error.canRetryPhotoRead()) {
+                        PhotoActionButton(R.string.home_retry, enabled = networkRetryReady(error.detail)) { attempt++ }
+                    }
                 }
             else -> Box(modifier, contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp)) }
         }
@@ -247,9 +252,15 @@ internal fun PhotoVisibilityButton(
 }
 
 @Composable
-internal fun PhotoErrorText(error: PhotoError) {
-    Text(stringResource(error.labelRes()), color = MaterialTheme.colorScheme.error)
+internal fun PhotoErrorText(
+    error: PhotoError,
+    detail: DomainError? = null,
+) {
+    Text((detail as? DomainError.Network)?.userMessage() ?: stringResource(error.labelRes()), color = MaterialTheme.colorScheme.error)
 }
+
+internal fun PhotoError.canRetryPhotoRead(): Boolean =
+    this == PhotoError.OFFLINE || this == PhotoError.UNAVAILABLE || this == PhotoError.RATE_LIMITED
 
 @Composable
 internal fun PhotoStatusBadge(status: PhotoStatus) {

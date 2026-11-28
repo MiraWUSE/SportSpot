@@ -6,6 +6,8 @@ import com.mirawuse.sportspot.domain.model.spot.SportType
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.repository.SpotRepository
+import com.mirawuse.sportspot.domain.result.DomainError
+import com.mirawuse.sportspot.domain.result.NetworkIssue
 import com.mirawuse.sportspot.domain.usecase.spot.SearchNearbySpotsUseCase
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.search.LightingFilter
@@ -251,7 +253,7 @@ class HomeViewModelTest {
             advanceUntilIdle()
 
             assertEquals(
-                HomeUiState.Error("Не удалось загрузить площадки. Проверьте соединение и попробуйте снова."),
+                HomeUiState.Error(DomainError.Unexpected),
                 viewModel.uiState.value,
             )
         }
@@ -269,7 +271,7 @@ class HomeViewModelTest {
             val viewModel = HomeViewModel(SearchNearbySpotsUseCase(repository), FakeDeviceLocationProvider())
             advanceUntilIdle()
             assertEquals(
-                HomeUiState.Error("Не удалось загрузить площадки. Проверьте соединение и попробуйте снова."),
+                HomeUiState.Error(DomainError.Network(NetworkIssue.TIMEOUT)),
                 viewModel.uiState.value,
             )
 
@@ -479,14 +481,14 @@ class HomeViewModelTest {
             advanceUntilIdle()
             assertEquals(point, viewModel.location.value.center)
             assertEquals(
-                HomeUiState.Error("Не удалось загрузить площадки. Проверьте соединение и попробуйте снова."),
+                HomeUiState.Error(DomainError.Unexpected),
                 viewModel.uiState.value,
             )
             viewModel.retry()
             advanceUntilIdle()
             assertEquals(point, viewModel.location.value.center)
             assertEquals(
-                HomeUiState.Error("Не удалось загрузить площадки. Проверьте соединение и попробуйте снова."),
+                HomeUiState.Error(DomainError.Unexpected),
                 viewModel.uiState.value,
             )
             viewModel.retry()

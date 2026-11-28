@@ -52,7 +52,7 @@ internal class FavoriteRepositoryImpl
                         } catch (error: FavoriteException) {
                             if (!auth.ownsSession(userId) || error.failure !in CACHE_FALLBACK) throw error
                             val cached = cache.read(userId) ?: throw error
-                            return@withLock FavoriteList(cached.map { it.toFavorite(userId) }, fromCache = true)
+                            return@withLock FavoriteList(cached.map { it.toFavorite(userId) }, fromCache = true, fallback = error.detail)
                         }
                     val entries = rows.map { row -> row.toFavorite(userId) to row }.distinctBy { it.first.spotId }
                     val favorites =
@@ -95,7 +95,7 @@ internal class FavoriteRepositoryImpl
                             add("spot_snapshot", snapshot)
                         }
                     val row =
-                        request(userId) { session ->
+                        request(userId, retryUnauthorized = false) { session ->
                             network.body(api.add(body, session)).let { rows ->
                                 if (rows.isEmpty()) {
                                     network.body(api.list(1, 0, "eq.$id", session)).singleOrNull()
@@ -125,7 +125,7 @@ internal class FavoriteRepositoryImpl
                         } catch (_: IllegalArgumentException) {
                             unavailable()
                         }
-                    request(userId) { session ->
+                    request(userId, retryUnauthorized = false) { session ->
                         val response = api.remove("eq.$id", session)
                         if (!response.isSuccessful) network.body(response)
                     }
@@ -173,12 +173,13 @@ internal class FavoriteRepositoryImpl
 
         private suspend fun <T> request(
             userId: String,
+            retryUnauthorized: Boolean = true,
             block: suspend (RequestSession) -> T,
         ): T =
             try {
-                auth.withAccount(userId) { session -> network.execute { block(session) } }
+                auth.withAccount(userId, retryUnauthorized) { session -> network.execute { block(session) } }
             } catch (failure: NetworkException) {
-                throw FavoriteException(failure.error.favoriteFailure())
+                throw FavoriteException(failure.error.favoriteFailure(), failure.domainError)
             } catch (failure: AuthException) {
                 throw FavoriteException(
                     when (failure.failure) {
@@ -187,6 +188,7 @@ internal class FavoriteRepositoryImpl
                         AuthFailure.RATE_LIMITED -> FavoriteFailure.RATE_LIMITED
                         else -> FavoriteFailure.UNAVAILABLE
                     },
+                    failure.detail,
                 )
             }
 

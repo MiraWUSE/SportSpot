@@ -34,7 +34,7 @@ internal class UserPhotoRepositoryImpl
             target: PhotoTarget,
             attachment: PhotoAttachment,
         ): PhotoSubmission =
-            call(ownerId) { session ->
+            call(ownerId, retryUnauthorized = false) { session ->
                 network
                     .body(api.upload(attachment.id, target.type.value, target.id, attachment.jpeg.toRequestBody(jpeg), session))
                     .toDomain()
@@ -100,23 +100,25 @@ internal class UserPhotoRepositoryImpl
             action: String,
             payload: Map<String, String> = emptyMap(),
         ) {
-            call(owner) { session -> network.body(api.mutate(action, id, payload, session)).close() }
+            call(owner, retryUnauthorized = false) { session -> network.body(api.mutate(action, id, payload, session)).close() }
         }
 
         private suspend fun <T> call(
             owner: String? = null,
+            retryUnauthorized: Boolean = true,
             block: suspend (RequestSession) -> T,
         ): T =
             try {
                 if (owner == null) {
                     withContext(Dispatchers.IO) { network.execute { block(RequestSession(null)) } }
                 } else {
-                    auth.withAccount(owner) { session -> network.execute { block(session) } }
+                    auth.withAccount(owner, retryUnauthorized) { session -> network.execute { block(session) } }
                 }
-            } catch (_: AuthException) {
-                throw PhotoException(PhotoError.UNAUTHORIZED)
+            } catch (failure: AuthException) {
+                throw PhotoException(PhotoError.UNAUTHORIZED, failure.detail)
             } catch (failure: NetworkException) {
-                throw PhotoException((failure.cause as? PhotoException)?.error ?: failure.error.toPhotoError())
+                val localError = failure.cause as? PhotoException
+                throw localError ?: PhotoException(failure.error.toPhotoError(), failure.domainError)
             }
 
         private companion object {

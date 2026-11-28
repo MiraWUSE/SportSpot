@@ -27,10 +27,12 @@ import com.mirawuse.sportspot.presentation.ui.components.SportSpotButtonVariant
 import com.mirawuse.sportspot.presentation.ui.components.SpotSearchLoading
 import com.mirawuse.sportspot.presentation.ui.components.labelRes
 import com.mirawuse.sportspot.presentation.ui.details.lightingLabelRes
-import com.mirawuse.sportspot.presentation.ui.forms.ContentErrorText
+import com.mirawuse.sportspot.presentation.ui.forms.ContentMutationError
+import com.mirawuse.sportspot.presentation.ui.forms.ContentReadError
 import com.mirawuse.sportspot.presentation.ui.forms.FormCard
 import com.mirawuse.sportspot.presentation.ui.forms.FormField
 import com.mirawuse.sportspot.presentation.ui.forms.FormScreen
+import com.mirawuse.sportspot.presentation.ui.forms.networkRetryReady
 import com.mirawuse.sportspot.presentation.ui.proposal.ProposalStatusBadge
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
@@ -75,21 +77,21 @@ internal fun ModerationScreen(
                         onClick = onRetry,
                         variant = SportSpotButtonVariant.SECONDARY,
                         icon = R.drawable.ic_action_refresh,
-                        enabled = !busy && pending != null,
+                        enabled = !busy && pending is DomainResult.Success && networkRetryReady(actionError),
                     )
                 }
                 if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                actionError?.let { ContentErrorText(it) }
+                actionError?.let { ContentMutationError(it) }
                 when (pending) {
                     null -> SpotSearchLoading()
                     is DomainResult.Failure -> {
-                        ContentErrorText(pending.error)
+                        ContentReadError(pending.error, onRetry)
                     }
                     is DomainResult.Success -> {
                         if (pending.value.isEmpty()) Text(stringResource(R.string.moderation_queue_empty))
                         pending.value.forEach { proposal ->
                             key(account, proposal.id) {
-                                ModerationProposal(proposal, busy, onApprove, onReject, proposalPhotos)
+                                ModerationProposal(proposal, busy || !networkRetryReady(actionError), onApprove, onReject, proposalPhotos)
                             }
                         }
                     }

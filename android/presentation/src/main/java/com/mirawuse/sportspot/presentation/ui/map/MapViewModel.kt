@@ -7,10 +7,13 @@ import com.mirawuse.sportspot.domain.model.location.GeoPoint
 import com.mirawuse.sportspot.domain.model.spot.Spot
 import com.mirawuse.sportspot.domain.model.spot.SpotId
 import com.mirawuse.sportspot.domain.repository.ViewportSearchResult
+import com.mirawuse.sportspot.domain.result.DomainError
 import com.mirawuse.sportspot.domain.usecase.spot.SearchNearbySpotsUseCase
+import com.mirawuse.sportspot.presentation.ui.forms.readError
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -32,6 +35,7 @@ internal data class MapViewportState(
     val spots: List<Spot>? = null,
     val status: MapSearchStatus = MapSearchStatus.INITIAL,
     val limited: Boolean = false,
+    val error: DomainError? = null,
 )
 
 @HiltViewModel
@@ -125,6 +129,7 @@ internal class MapViewModel(
             it.copy(
                 status = if (pending) waitingStatus() else MapSearchStatus.ZOOM_IN,
                 limited = viewport.limited,
+                error = null,
             )
         }
         if (pending) start()
@@ -138,12 +143,11 @@ internal class MapViewModel(
                 if (!forceRefresh) delay(DEBOUNCE_MILLIS)
                 try {
                     load(request, forceRefresh)
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
+                } catch (failure: Exception) {
+                    if (failure is CancellationException && failure !is TimeoutCancellationException) throw failure
                     currentCoroutineContext().ensureActive()
                     pending = false
-                    _state.update { it.copy(status = MapSearchStatus.ERROR) }
+                    _state.update { it.copy(status = MapSearchStatus.ERROR, error = failure.readError()) }
                 }
             }
     }
@@ -167,7 +171,9 @@ internal class MapViewModel(
                 }
                 is ViewportSearchResult.Available -> {
                     pending = false
-                    _state.update { it.copy(spots = result.spots.distinctBy(Spot::id), status = MapSearchStatus.READY) }
+                    _state.update {
+                        it.copy(spots = result.spots.distinctBy(Spot::id), status = MapSearchStatus.READY, error = result.fallback)
+                    }
                     return
                 }
                 is ViewportSearchResult.RateLimited -> {

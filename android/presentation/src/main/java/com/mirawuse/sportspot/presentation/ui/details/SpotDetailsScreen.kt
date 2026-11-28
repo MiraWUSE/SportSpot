@@ -37,6 +37,9 @@ import com.mirawuse.sportspot.presentation.ui.components.SpotSearchMessage
 import com.mirawuse.sportspot.presentation.ui.components.SpotSportTag
 import com.mirawuse.sportspot.presentation.ui.components.addressLabel
 import com.mirawuse.sportspot.presentation.ui.components.spotCardContainerColor
+import com.mirawuse.sportspot.presentation.ui.forms.canRetryRead
+import com.mirawuse.sportspot.presentation.ui.forms.networkRetryReady
+import com.mirawuse.sportspot.presentation.ui.forms.userMessage
 import com.mirawuse.sportspot.presentation.ui.home.HomeUiState
 import com.mirawuse.sportspot.presentation.ui.navigation.WalkingRouteButton
 import com.mirawuse.sportspot.presentation.ui.photos.SpotCoverLoader
@@ -84,9 +87,23 @@ internal fun SpotDetailsScreen(
             when {
                 state is HomeUiState.Loading -> SpotSearchLoading()
                 state is HomeUiState.Error ->
-                    SpotSearchMessage(stringResource(R.string.home_error_title), state.message, onRetry)
-                spot != null ->
+                    SpotSearchMessage(
+                        stringResource(R.string.home_error_title),
+                        state.error.userMessage(),
+                        onRetry.takeIf { state.error.canRetryRead() },
+                        retryEnabled = networkRetryReady(state.error),
+                    )
+                spot != null -> {
+                    (state as? HomeUiState.Content)?.fallback?.let { error ->
+                        SpotSearchMessage(
+                            stringResource(R.string.network_cached_title),
+                            error.userMessage(),
+                            onRetry.takeIf { error.canRetryRead() },
+                            retryEnabled = networkRetryReady(error),
+                        )
+                    }
                     DetailsContent(spot, onShowMap, onOpenReviews, favoriteAction, reviewSummary, userPhotos, onBuildRoute, coverLoader)
+                }
                 else ->
                     SpotSearchMessage(
                         title = stringResource(R.string.details_not_found),
