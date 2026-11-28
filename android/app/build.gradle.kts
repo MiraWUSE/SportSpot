@@ -42,6 +42,14 @@ android {
     }
 }
 
+tasks.withType<Test>().configureEach {
+    inputs.files(
+        "src/main/AndroidManifest.xml",
+        "src/main/res/xml/backup_rules.xml",
+        "src/main/res/xml/data_extraction_rules.xml",
+    )
+}
+
 dependencies {
     implementation(project(":domain"))
     implementation(project(":data"))
