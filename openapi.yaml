@@ -32,12 +32,14 @@ paths:
       operationId: searchSpots
       security: []
       description: >-
-        Опубликованная публичная Supabase Edge Function (Verify JWT отключён).
+        Публичная Supabase Edge Function (Verify JWT отключён).
         Для успешного запроса обязательны параметры lat и lon. Параметры radius
         и sport необязательны. Неизвестные и повторяющиеся параметры запрещены.
         Результаты кешируются на один час. Ответ может содержать до 100 объектов
         OpenStreetMap. Постраничной навигации у этой функции нет.
         Поиск зависит от доступности внешнего Overpass.ch и ограничений вызовов.
+        Попадания и промахи кеша имеют отдельные проектные лимиты.
+        Все ответы имеют Cache-Control: no-store и X-Request-Id.
       parameters:
         - name: lat
           in: query
@@ -131,10 +133,10 @@ paths:
                   message: Use GET
                   request_id: 4c59e8fc-1342-4f15-aa3f-4ecc97f0d1c2
         '429':
-          description: Превышен лимит запросов
+          description: Исчерпан проектный бюджет SportSpot или лимит Overpass.ch
           headers:
             Retry-After:
-              description: Время ожидания в секундах
+              description: Целое положительное число секунд до рекомендуемого повтора
               schema:
                 type: string
           content:
@@ -161,7 +163,7 @@ paths:
           description: Внешний Overpass API или серверные зависимости временно недоступны
           headers:
             Retry-After:
-              description: Повторить запрос через заданное число секунд
+              description: Целое положительное число секунд до рекомендуемого повтора
               schema:
                 type: string
           content:

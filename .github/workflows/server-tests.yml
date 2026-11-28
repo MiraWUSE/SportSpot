@@ -23,6 +23,17 @@ jobs:
   unit-tests:
     name: Deno unit tests
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: sportspot_search_test
+          POSTGRES_HOST_AUTH_METHOD: trust  # Disposable service, no host port.
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sportspot_search_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
 
     steps:
       - name: Checkout repository
@@ -42,6 +53,12 @@ jobs:
       - name: Run unit tests
         run: deno test server/tests/
 
+      - name: Check new search files formatting
+        run: >-
+          deno fmt --check backend/supabase/functions/search-sports-spots-v1/index.ts
+          backend/supabase/functions/search-sports-spots-v1/search-handler.ts
+          server/tests/search-handler.test.ts backend/sql/tests/search-cache-quota.ts
+
       - name: Check SQL integration test formatting
         run: >-
           deno fmt --check backend/sql/tests/reviews-osm-title.ts backend/sql/tests/proposals-moderation.ts
@@ -52,7 +69,8 @@ jobs:
           DENO_DIR: ${{ runner.temp }}/sportspot-deno
         run: >-
           deno check --no-config --no-lock backend/sql/tests/reviews-osm-title.ts backend/sql/tests/proposals-moderation.ts
-          backend/sql/tests/photo-submissions.ts backend/supabase/functions/user-photos-v1/index.ts
+          backend/sql/tests/photo-submissions.ts backend/sql/tests/search-cache-quota.ts
+          backend/supabase/functions/user-photos-v1/index.ts
 
       - name: Run reviews migration SQL integration test
         env:
@@ -78,6 +96,19 @@ jobs:
           deno run --no-config --no-lock --no-prompt
           "--allow-read=backend/setup.sql,backend/sql/SportSpotReviewsOsmTitle.sql,backend/supabase/migrations/20261124181925_moderated_user_photos.sql,$DENO_DIR/npm/registry.npmjs.org/@electric-sql/pglite"
           backend/sql/tests/photo-submissions.ts
+
+      - name: Run search cache and quotas SQL integration test
+        env:
+          DENO_DIR: ${{ runner.temp }}/sportspot-deno
+        run: >-
+          deno run --no-config --no-lock --no-prompt
+          "--allow-read=backend/sql/10_overpass_integration.sql,backend/supabase/migrations/20261128163136_search_cache_retention_and_quota.sql,$DENO_DIR/npm/registry.npmjs.org/@electric-sql/pglite"
+          backend/sql/tests/search-cache-quota.ts
+
+      - name: Verify concurrent search quotas in PostgreSQL
+        env:
+          TEST_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: bash backend/sql/tests/search-quota-concurrency.sh "$TEST_POSTGRES_CONTAINER"
 
       - name: Validate Postman collection JSON
         run: python3 -m json.tool backend/postman/SportSpot.postman_collection.json > /dev/null
