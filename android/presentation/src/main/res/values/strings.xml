@@ -72,7 +72,7 @@
     <string name="details_not_found_message">В текущих результатах поиска этой площадки нет.</string>
     <string name="details_traits">Характеристики</string>
     <string name="details_traits_missing">Характеристики не указаны</string>
-    <string name="details_no_address">Адрес не указан</string>
+    <string name="spot_unknown_address">Адрес неизвестен</string>
     <string name="details_surface">Покрытие: %1$s</string>
     <string name="details_surface_asphalt">асфальт</string>
     <string name="details_surface_concrete">бетон</string>
@@ -92,6 +92,7 @@
     <string name="spot_build_route">Построить маршрут</string>
     <string name="spot_route_unavailable">Не удалось открыть маршрут. Проверьте, что доступно приложение карт или браузер.</string>
     <string name="spot_photo_description">Фото площадки «%1$s»</string>
+    <string name="spot_user_photo_description">Фото площадки «%1$s», добавленное пользователем</string>
     <string name="spot_photo_credit">Фото: %1$s · %2$s</string>
     <string name="spot_photo_crop_notice">Кадрировано для отображения</string>
     <string name="spot_photo_source">Источник фото на Wikimedia Commons</string>

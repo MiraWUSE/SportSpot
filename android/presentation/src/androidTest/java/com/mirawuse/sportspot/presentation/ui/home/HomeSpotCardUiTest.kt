@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -29,7 +30,7 @@ class HomeSpotCardUiTest {
     val compose = createComposeRule()
 
     @Test
-    fun cardAndHeartHaveSeparateTouchTargetsAndAddressIsOptional() {
+    fun cardAndHeartHaveSeparateTouchTargetsAndUnknownAddressIsPlainText() {
         val spot =
             Spot(
                 id = SpotId("osm", "node:9"),
@@ -55,6 +56,7 @@ class HomeSpotCardUiTest {
                         },
                         isFavorite = saved.value,
                         favoriteEnabled = enabled.value,
+                        showUnknownAddress = true,
                     )
                 }
             }
@@ -74,7 +76,7 @@ class HomeSpotCardUiTest {
             enabled.value = false
         }
         compose.onNodeWithText("Школьная улица, 12").assertDoesNotExist()
-        compose.onNodeWithText("Адрес не указан").assertDoesNotExist()
+        compose.onNodeWithText("Адрес неизвестен", useUnmergedTree = true).assertIsDisplayed().assertHasNoClickAction()
         compose.onNodeWithContentDescription("Фото площадки «${spot.name}»").assertDoesNotExist()
         compose.onNodeWithContentDescription("Удалить из избранного").assertIsNotEnabled()
         compose.onNodeWithText(spot.name).performTouchInput { click() }

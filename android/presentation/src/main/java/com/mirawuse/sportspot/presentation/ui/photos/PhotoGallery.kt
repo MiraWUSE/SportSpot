@@ -26,6 +26,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.mirawuse.sportspot.domain.model.photo.PhotoException
 import com.mirawuse.sportspot.domain.model.photo.PhotoTarget
+import com.mirawuse.sportspot.domain.model.photo.PhotoTargetType
 import com.mirawuse.sportspot.presentation.R
 import com.mirawuse.sportspot.presentation.ui.theme.SportSpotSpacing
 
@@ -61,15 +62,19 @@ private fun GalleryContent(
 ) {
     var attempt by rememberSaveable { mutableIntStateOf(0) }
     var opened by rememberSaveable { mutableStateOf<String?>(null) }
-    val gallery by produceState<Result<List<String>>?>(null, attempt) {
-        value = null
-        value =
-            try {
-                Result.success(model.gallery(target))
-            } catch (error: PhotoException) {
-                Result.failure(error)
+    val spotCovers = model.spotCovers.takeIf { target.type == PhotoTargetType.SPOT }
+    val gallery =
+        key(attempt, spotCovers?.revision(target)) {
+            val result by produceState<Result<List<String>>?>(null) {
+                value =
+                    try {
+                        Result.success(model.gallery(target))
+                    } catch (error: PhotoException) {
+                        Result.failure(error)
+                    }
             }
-    }
+            result
+        }
     val images = gallery?.getOrNull()
     val error = gallery?.exceptionOrNull() as? PhotoException
     Column(verticalArrangement = Arrangement.spacedBy(SportSpotSpacing.sm)) {
@@ -90,7 +95,9 @@ private fun GalleryContent(
                     }
                 }
         }
-        refreshButton(if (error != null) R.string.home_retry else R.string.photos_refresh, gallery != null) { attempt++ }
+        refreshButton(if (error != null) R.string.home_retry else R.string.photos_refresh, gallery != null) {
+            if (spotCovers != null) spotCovers.invalidate(target) else attempt++
+        }
     }
     opened?.takeIf { images?.contains(it) == true }?.let { id ->
         AlertDialog(
