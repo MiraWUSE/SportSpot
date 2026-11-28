@@ -26,6 +26,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import java.net.InetAddress
 import java.net.ProtocolException
 import java.net.SocketTimeoutException
 import java.util.Locale
@@ -524,9 +525,16 @@ class RemoteSpotDataSourceTest {
         stubCommunity: Boolean = true,
         logger: NetworkLogger? = null,
     ): SpotRepository {
+        // MockWebServer binds to one localhost address. After a failed exchange, OkHttp can prefer the other address.
+        val boundHost = requireNotNull(InetAddress.getByName(server.hostName).hostAddress)
         val config =
             NetworkConfig(
-                baseUrl = server.url("/"),
+                baseUrl =
+                    server
+                        .url("/")
+                        .newBuilder()
+                        .host(boundHost)
+                        .build(),
                 publishableKey = testPublishableKey,
                 debugLogging = logger != null,
                 connectTimeoutMillis = 1000,
@@ -570,7 +578,7 @@ class RemoteSpotDataSourceTest {
         try {
             block()
         } catch (failure: NetworkException) {
-            assertEquals(expected, failure.error)
+            assertEquals("Network error cause: ${failure.cause?.javaClass?.simpleName}", expected, failure.error)
             return failure
         }
         throw AssertionError("Expected a typed network failure")
